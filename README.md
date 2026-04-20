@@ -1,6 +1,8 @@
 # ccweb-project
 
-Web3, crypto and AI education platform.
+The world's first AI-powered Web3 Academy and Business Engine.
+
+Core pillars: Learn -> Find -> Build -> Earn.
 
 ## Development setup
 

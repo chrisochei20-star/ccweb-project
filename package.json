@@ -16,5 +16,10 @@
     "education"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^1.8.0",
+    "recharts": "^3.8.1"
+  }
 }

@@ -274,24 +274,26 @@
 
       function renderAnalysis(payload) {
         analysisCards.innerHTML = "";
-        analyzeTarget.textContent = `${payload.business.name} - ${payload.summary}`;
+        analyzeTarget.textContent = `${payload.business.name} (${payload.business.city})`;
         payload.cards.forEach((card) => {
           const el = document.createElement("section");
           el.className = "card";
-          el.innerHTML = `<h3>${card.title}</h3><p>${card.issue}</p><p class="muted"><strong>Action:</strong> ${card.recommendation}</p>`;
+          el.innerHTML = `<h3>${card.title}</h3><p>${card.issue}</p><p class="muted"><strong>Impact:</strong> ${card.impact}</p><p class="muted"><strong>Action:</strong> ${card.recommendation}</p>`;
           analysisCards.appendChild(el);
         });
       }
 
       function renderDeal(payload) {
+        const deal = payload.deal || {};
+        const payout = payload.payout || {};
         const items = [
-          `Deal ${payload.deal.id}`,
-          `Status: ${payload.deal.status}`,
-          `Amount: $${payload.payout.totalAmount}`,
-          `Platform 8%: $${payload.payout.platformFee}`,
-          `Applicant 92%: $${payload.payout.applicantPayout}`,
-          `Escrow: ${payload.payout.escrowStatus}`,
-          `Auto release: ${payload.payout.autoReleaseEnabled ? "enabled" : "disabled"}`,
+          `Deal ${deal.id || "n/a"}`,
+          `Status: ${deal.status || "n/a"}`,
+          `Amount: $${payout.totalAmount ?? "n/a"}`,
+          `Platform 8%: $${payout.platformFee ?? "n/a"}`,
+          `Applicant payout: $${payout.applicantPayout ?? "n/a"}`,
+          `Fee rate: ${deal.feeRatePercent ?? 8}%`,
+          `Released at: ${deal.releasedAt ? deal.releasedAt : "awaiting client confirmation"}`,
         ];
 
         dealOutput.innerHTML = "";
@@ -321,9 +323,26 @@
           analyzeTarget.textContent = "Select a business first.";
           return;
         }
-        const response = await fetch(`/api/analyze/${encodeURIComponent(businessId)}`);
-        if (!response.ok) {
+        const selected = state.businesses.find((biz) => biz.id === businessId);
+        if (!selected) {
           analyzeTarget.textContent = "Business not found.";
+          return;
+        }
+        // Backend analyze endpoint accepts business context in JSON body.
+        const response = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            businessId,
+            businessName: selected.name,
+            city: selected.city,
+            category: selected.category,
+            rating: selected.rating,
+            reviewCount: selected.reviewCount,
+          }),
+        });
+        if (!response.ok) {
+          analyzeTarget.textContent = "Analyzer failed.";
           return;
         }
         const payload = await response.json();
@@ -341,16 +360,36 @@
           applicantName: applicantName.value.trim(),
           clientName: clientName.value.trim(),
           proposalText: proposalText.value.trim(),
-          amount: Number(dealAmount.value),
-          doneConfirmedByClient: doneConfirm.value === "true",
+          dealValue: Number(dealAmount.value),
         };
         const response = await fetch("/api/deals", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
+        if (!response.ok) {
+          const err = await response.json();
+          dealOutput.textContent = err.error || "Could not create deal.";
+          return;
+        }
         const payload = await response.json();
-        renderDeal(payload);
+        let current = payload;
+
+        if (doneConfirm.value === "true") {
+          const dealId = payload?.deal?.id;
+          if (!dealId) {
+            dealOutput.textContent = "Deal created but ID was missing from response.";
+            return;
+          }
+          const confirmRes = await fetch(`/api/deals/${encodeURIComponent(dealId)}/confirm`, {
+            method: "POST",
+          });
+          if (confirmRes.ok) {
+            current = await confirmRes.json();
+          }
+        }
+
+        renderDeal(current);
       }
 
       searchBtn.addEventListener("click", runSearch);

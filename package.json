@@ -1,7 +1,7 @@
 {
   "name": "ccweb-project",
   "version": "1.0.0",
-  "description": "Web3, crypto and AI education platform",
+  "description": "The world's first AI-powered Web3 Academy and Business Engine",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -12,8 +12,9 @@
   },
   "keywords": [
     "web3",
-    "crypto",
-    "education"
+    "ai",
+    "academy",
+    "business-engine"
   ],
   "author": "",
   "license": "MIT",

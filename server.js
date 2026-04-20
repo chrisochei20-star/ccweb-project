@@ -39,7 +39,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const urlPath = req.url === "/" ? "/index.html" : req.url;
+  const urlPath = req.url === "/" ? "/index.html" : req.url === "/about" ? "/about.html" : req.url;
   const safePath = path.normalize(urlPath).replace(/^(\.\.[/\\])+/, "");
   const filePath = path.join(__dirname, "public", safePath);
   await serveFile(filePath, res);

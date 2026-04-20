@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 32% 6%;
+    --foreground: 210 40% 98%;
+
+    --card: 240 30% 9%;
+    --card-foreground: 210 40% 98%;
+
+    --muted: 240 18% 14%;
+    --muted-foreground: 215 20% 70%;
+
+    --primary: 262 83% 68%;
+    --primary-foreground: 240 10% 5%;
+
+    --secondary: 189 94% 55%;
+    --secondary-foreground: 240 10% 5%;
+
+    --accent: 328 86% 66%;
+    --accent-foreground: 240 10% 5%;
+
+    --border: 240 20% 18%;
+    --input: 240 20% 18%;
+    --ring: 262 83% 68%;
+
+    --radius: 0.75rem;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    background: radial-gradient(1200px 600px at 80% -10%, hsl(262 83% 68% / 0.18), transparent 60%),
+      radial-gradient(900px 500px at 0% 10%, hsl(189 94% 55% / 0.12), transparent 60%),
+      hsl(var(--background));
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply container mx-auto px-6;
+  }
+
+  .glass {
+    @apply border border-white/10 bg-white/[0.04] backdrop-blur-md;
+  }
+
+  .gradient-text {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--primary)) 0%,
+      hsl(var(--secondary)) 50%,
+      hsl(var(--accent)) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-primary text-primary-foreground hover:bg-primary/90;
+  }
+  .btn-secondary {
+    @apply btn bg-secondary text-secondary-foreground hover:bg-secondary/90;
+  }
+  .btn-outline {
+    @apply btn border border-white/15 bg-white/[0.03] text-foreground hover:bg-white/[0.07];
+  }
+  .btn-ghost {
+    @apply btn text-foreground hover:bg-white/[0.06];
+  }
+
+  .card-surface {
+    @apply rounded-2xl border border-white/10 bg-card/60 p-6 shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] backdrop-blur;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-muted-foreground;
+  }
+}

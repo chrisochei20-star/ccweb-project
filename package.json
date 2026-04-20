@@ -1,0 +1,37 @@
+{
+  "name": "ccweb-project",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Web3, crypto and AI education platform",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chrisochei20-star/ccweb-project.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/chrisochei20-star/ccweb-project/issues"
+  },
+  "homepage": "https://github.com/chrisochei20-star/ccweb-project#readme",
+  "dependencies": {
+    "lucide-react": "^1.8.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "react-router-dom": "^7.14.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react-swc": "^4.3.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.9"
+  }
+}

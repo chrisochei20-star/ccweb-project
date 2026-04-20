@@ -1,4 +1,5 @@
-import { FormEvent, useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { QUICK_QUESTIONS, TOPICS } from '../data/courses'
 
@@ -23,6 +24,7 @@ export function AITutorPage() {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [input, setInput] = useState('')
   const [mode, setMode] = useState<'chat' | 'quiz'>('chat')
+  const idCounterRef = useRef(2)
 
   const hasMessages = useMemo(
     () => messages.some((message) => message.role === 'user'),
@@ -34,10 +36,15 @@ export function AITutorPage() {
       return
     }
 
+    const userMessageId = `user-${idCounterRef.current}`
+    idCounterRef.current += 1
+    const assistantMessageId = `assistant-${idCounterRef.current}`
+    idCounterRef.current += 1
+
     const nextMessages: Message[] = [
       ...messages,
-      { id: `user-${Date.now()}`, role: 'user', text },
-      { id: `assistant-${Date.now() + 1}`, role: 'assistant', text: cannedResponse }
+      { id: userMessageId, role: 'user', text },
+      { id: assistantMessageId, role: 'assistant', text: cannedResponse },
     ]
 
     setMessages(nextMessages)

@@ -21,8 +21,8 @@ export function CoursesTeaserSection() {
               <h3 className="heading-sm">{course.title}</h3>
               <p className="muted">{course.description}</p>
               <div className="row tiny muted">
-                <span>{course.lessons.length} lessons</span>
-                <span>{course.tokensReward} tokens reward</span>
+                <span>{course.lessonsCount} lessons</span>
+                <span>{course.rewardTokens} tokens reward</span>
               </div>
             </Link>
           ))}

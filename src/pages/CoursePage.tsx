@@ -180,9 +180,9 @@ export function CoursePage() {
               ) : (
                 <ul className="lesson-list">
                   {course.lessons.map((lesson, index) => (
-                    <li key={lesson}>
+                    <li key={lesson.id}>
                       <span>{index + 1}.</span>
-                      <span>{lesson}</span>
+                      <span>{lesson.title}</span>
                     </li>
                   ))}
                 </ul>
@@ -239,7 +239,7 @@ export function CoursePage() {
               ) : (
                 <div className="result">
                   <h3>Quiz Complete!</h3>
-                  <p className="score">{score}%</p>
+                  <p className="score">{Math.round((score / quizQuestions.length) * 100)}%</p>
                   <p>{score >= 2 ? 'Great job! Keep learning.' : 'Review the lesson and try again.'}</p>
                   <button type="button" className="button primary" onClick={handleResetQuiz}>
                     Retry Quiz

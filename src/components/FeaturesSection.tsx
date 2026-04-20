@@ -1,13 +1,17 @@
-import { FEATURES } from '../data/courses'
+import { platformFeatures } from '../data/courses'
 
 export function FeaturesSection() {
   return (
-    <section className="section section-muted">
+    <section className="section">
       <div className="container">
-        <h2 className="section-title">Why Learn With Us</h2>
-        <div className="feature-grid">
-          {FEATURES.map((feature) => (
-            <article className="card feature-card" key={feature.title}>
+        <h2>Why Learn With Us</h2>
+        <p className="section-subtitle">Crypto & AI Courses</p>
+        <div className="features-grid">
+          {platformFeatures.map((feature) => (
+            <article className="card" key={feature.title}>
+              <div className="feature-icon" aria-hidden>
+                *
+              </div>
               <h3>{feature.title}</h3>
               <p>{feature.description}</p>
             </article>

@@ -468,3 +468,18 @@ export const tutorSuggestions = [
   'Explain proof of stake vs proof of work',
 ] as const
 
+export const QUICK_QUESTIONS = tutorSuggestions
+
+export const TOPICS = [
+  'Blockchain Basics',
+  'DeFi Protocols',
+  'Crypto Trading',
+  'Smart Contracts',
+  'Web3 Security',
+  'AI & Machine Learning',
+] as const
+
+export const FEATURES = platformFeatures
+
+export const topCourses = courses.slice(0, 3)
+

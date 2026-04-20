@@ -1,12 +1,15 @@
 import { Link, useSearchParams } from 'react-router-dom'
 import { categories, courses } from '../data/courses'
+import type { CourseCategory } from '../data/courses'
 
 function CoursesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const selectedCategory = searchParams.get('category') ?? 'all'
+  const categoryParam = searchParams.get('category')
+  const selectedCategory: CourseCategory =
+    categories.find((category) => category === categoryParam) ?? 'All'
 
   const filteredCourses =
-    selectedCategory === 'all'
+    selectedCategory === 'All'
       ? courses
       : courses.filter((course) => course.category === selectedCategory)
 
@@ -23,11 +26,11 @@ function CoursesPage() {
                 key={category}
                 type="button"
                 onClick={() =>
-                  setSearchParams(category === 'all' ? {} : { category })
+                  setSearchParams(category === 'All' ? {} : { category })
                 }
                 className={`chip ${selectedCategory === category ? 'chip--active' : ''}`}
               >
-                {category === 'all' ? 'All Courses' : category}
+                {category === 'All' ? 'All Courses' : category}
               </button>
             ))}
           </div>
@@ -42,8 +45,8 @@ function CoursesPage() {
                   <h2>{course.title}</h2>
                   <p>{course.description}</p>
                   <div className="course-card__meta">
-                    <span>{course.lessons.length} lessons</span>
-                    <span>{course.tokensReward} tokens reward</span>
+                    <span>{course.lessonsCount} lessons</span>
+                    <span>{course.rewardTokens} tokens reward</span>
                   </div>
                 </Link>
               ))}

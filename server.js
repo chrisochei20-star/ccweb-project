@@ -11,9 +11,24 @@ const deals = new Map();
 const applicants = new Map();
 const streamRooms = new Map();
 const streamPayouts = new Map();
+const streamDistributions = new Map();
+const streamAttendances = new Map();
+const ccwebUsers = new Map();
+const notifications = new Map();
+const notificationInbox = new Map();
+const communityPosts = new Map();
+const communityChats = new Map();
+const communityReactions = new Map();
+const aiBlogs = new Map();
 let nextDealId = 1;
 let nextStreamRoomId = 1;
 let nextStreamPayoutId = 1;
+let nextStreamDistributionId = 1;
+let nextNotificationId = 1;
+let nextCommunityPostId = 1;
+let nextCommunityChatId = 1;
+let nextCommunityReactionId = 1;
+let nextAiBlogId = 1;
 
 const sampleBusinesses = [
   {
@@ -195,6 +210,719 @@ function generateLivekitToken() {
   return crypto.randomBytes(24).toString("hex");
 }
 
+function buildUserProfile(input, existing = null) {
+  const now = new Date().toISOString();
+  const fallbackId = existing?.id || `user-${crypto.randomUUID().slice(0, 8)}`;
+  const id = (input.id || input.userId || fallbackId).toString().trim();
+  const displayName = (input.displayName || existing?.displayName || id).toString().trim();
+  return {
+    id,
+    displayName,
+    isOrganic: input.isOrganic === undefined ? existing?.isOrganic ?? true : Boolean(input.isOrganic),
+    roles: Array.isArray(input.roles) && input.roles.length ? input.roles : existing?.roles || ["member"],
+    pushEnabled: input.pushEnabled === undefined ? existing?.pushEnabled ?? true : Boolean(input.pushEnabled),
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  };
+}
+
+function sanitizeUser(user) {
+  return {
+    id: user.id,
+    displayName: user.displayName,
+    isOrganic: user.isOrganic,
+    roles: user.roles,
+    pushEnabled: user.pushEnabled,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+}
+
+function ensureUser(userId, options = {}) {
+  const normalizedId = (userId || "").toString().trim();
+  if (!normalizedId) {
+    return null;
+  }
+  const existing = ccwebUsers.get(normalizedId);
+  if (existing) {
+    const hasUpdates =
+      options.displayName !== undefined ||
+      options.isOrganic !== undefined ||
+      options.roles !== undefined ||
+      options.pushEnabled !== undefined;
+    if (!hasUpdates) {
+      return existing;
+    }
+    const updated = buildUserProfile(
+      {
+        userId: normalizedId,
+        displayName: options.displayName ?? existing.displayName,
+        isOrganic: options.isOrganic ?? existing.isOrganic,
+        roles: options.roles ?? existing.roles,
+        pushEnabled: options.pushEnabled ?? existing.pushEnabled,
+      },
+      existing
+    );
+    ccwebUsers.set(normalizedId, updated);
+    if (!notificationInbox.has(normalizedId)) {
+      notificationInbox.set(normalizedId, []);
+    }
+    return updated;
+  }
+  const seeded = buildUserProfile(
+    {
+      userId: normalizedId,
+      displayName: options.displayName || normalizedId,
+      isOrganic: options.isOrganic === undefined ? true : options.isOrganic,
+      roles: options.roles || ["member"],
+      pushEnabled: options.pushEnabled === undefined ? true : options.pushEnabled,
+    },
+    null
+  );
+  ccwebUsers.set(normalizedId, seeded);
+  if (!notificationInbox.has(normalizedId)) {
+    notificationInbox.set(normalizedId, []);
+  }
+  return seeded;
+}
+
+function buildNotificationRecord(input, recipients) {
+  const now = new Date().toISOString();
+  const id = `notif-${String(nextNotificationId++).padStart(5, "0")}`;
+  return {
+    id,
+    type: (input.type || "platform_event").toString().trim(),
+    title: (input.title || "CCWEB notification").toString().trim(),
+    message: (input.message || "").toString().trim(),
+    channels: Array.isArray(input.channels) && input.channels.length ? input.channels : ["in_app", "push"],
+    metadata: input.metadata && typeof input.metadata === "object" ? input.metadata : {},
+    recipients,
+    createdAt: now,
+  };
+}
+
+function createNotification(input = {}) {
+  let targetUserIds = Array.isArray(input.targetUserIds) ? input.targetUserIds : [];
+  if (input.broadcast === true) {
+    targetUserIds = Array.from(ccwebUsers.keys());
+  }
+  const recipients = [...new Set(targetUserIds.map((value) => value.toString().trim()).filter(Boolean))];
+  if (!recipients.length) {
+    return null;
+  }
+
+  recipients.forEach((userId) => ensureUser(userId));
+  const record = buildNotificationRecord(input, recipients);
+  notifications.set(record.id, record);
+
+  recipients.forEach((userId) => {
+    if (!notificationInbox.has(userId)) {
+      notificationInbox.set(userId, []);
+    }
+    notificationInbox.get(userId).push({
+      notificationId: record.id,
+      read: false,
+      deliveredAt: record.createdAt,
+    });
+  });
+
+  return record;
+}
+
+function buildNotificationEnvelope(userId, inboxEntry) {
+  const notification = notifications.get(inboxEntry.notificationId);
+  if (!notification) {
+    return null;
+  }
+  return {
+    id: notification.id,
+    type: notification.type,
+    title: notification.title,
+    message: notification.message,
+    channels: notification.channels,
+    metadata: notification.metadata,
+    createdAt: notification.createdAt,
+    read: Boolean(inboxEntry.read),
+    deliveredAt: inboxEntry.deliveredAt,
+    recipientUserId: userId,
+  };
+}
+
+function summarizeAttendanceForRoom(roomId) {
+  const attendees = streamAttendances.get(roomId);
+  if (!attendees) {
+    return { activeAttenders: 0, activeOrganicAttenders: 0, totalTrackedAttenders: 0 };
+  }
+  const values = Array.from(attendees.values());
+  return {
+    activeAttenders: values.filter((entry) => entry.isActive).length,
+    activeOrganicAttenders: values.filter((entry) => entry.isActive && entry.isOrganic).length,
+    totalTrackedAttenders: values.length,
+  };
+}
+
+function updateRoomMetricsFromAttendance(room) {
+  const summary = summarizeAttendanceForRoom(room.id);
+  room.metrics.activeAttenders = summary.activeAttenders;
+  room.metrics.activeOrganicAttenders = summary.activeOrganicAttenders;
+  room.metrics.totalTrackedAttenders = summary.totalTrackedAttenders;
+  room.metrics.concurrentViewers = summary.activeAttenders;
+  room.updatedAt = new Date().toISOString();
+}
+
+function buildDistributionResponse(distribution) {
+  return {
+    id: distribution.id,
+    payoutId: distribution.payoutId,
+    roomId: distribution.roomId,
+    source: distribution.source,
+    poolAmountUsd: distribution.poolAmountUsd,
+    distributedAmountUsd: distribution.distributedAmountUsd,
+    undistributedAmountUsd: distribution.undistributedAmountUsd,
+    recipientCount: distribution.recipientCount,
+    status: distribution.status,
+    recipients: distribution.recipients,
+    createdAt: distribution.createdAt,
+  };
+}
+
+function distributeStreamingPoolToOrganicUsers(room, payout, poolOverride = null) {
+  const attendeesMap = streamAttendances.get(room.id) || new Map();
+  const eligibleOrganic = Array.from(attendeesMap.values())
+    .filter((entry) => entry.isActive && entry.isOrganic)
+    .sort((a, b) => b.watchMinutes - a.watchMinutes);
+  const poolAmountUsd = formatMoney(
+    Math.max(0, safeNumber(poolOverride === null ? payout.creatorRevenueUsd : poolOverride, payout.creatorRevenueUsd))
+  );
+  const createdAt = new Date().toISOString();
+  const id = `stream-dist-${String(nextStreamDistributionId++).padStart(4, "0")}`;
+
+  if (!eligibleOrganic.length || poolAmountUsd <= 0) {
+    const distribution = {
+      id,
+      payoutId: payout.id,
+      roomId: room.id,
+      source: "ai_streaming_creator_pool",
+      poolAmountUsd,
+      distributedAmountUsd: 0,
+      undistributedAmountUsd: poolAmountUsd,
+      recipientCount: 0,
+      status: "pending_no_organic_attenders",
+      recipients: [],
+      createdAt,
+    };
+    streamDistributions.set(id, distribution);
+    return distribution;
+  }
+
+  const totalWeight = eligibleOrganic.reduce((sum, entry) => sum + Math.max(1, entry.watchMinutes), 0);
+  let remaining = poolAmountUsd;
+  const recipients = eligibleOrganic.map((entry, index) => {
+    const weight = Math.max(1, entry.watchMinutes);
+    const share =
+      index === eligibleOrganic.length - 1 ? remaining : formatMoney((poolAmountUsd * weight) / totalWeight);
+    remaining = formatMoney(Math.max(0, remaining - share));
+    return {
+      userId: entry.userId,
+      displayName: entry.displayName,
+      watchMinutes: entry.watchMinutes,
+      weight,
+      shareUsd: share,
+      isOrganic: true,
+    };
+  });
+
+  const distributedAmountUsd = formatMoney(recipients.reduce((sum, entry) => sum + entry.shareUsd, 0));
+  const undistributedAmountUsd = formatMoney(Math.max(0, poolAmountUsd - distributedAmountUsd));
+  const distribution = {
+    id,
+    payoutId: payout.id,
+    roomId: room.id,
+    source: "ai_streaming_creator_pool",
+    poolAmountUsd,
+    distributedAmountUsd,
+    undistributedAmountUsd,
+    recipientCount: recipients.length,
+    status: distributedAmountUsd > 0 ? "distributed_to_organic_users" : "pending_no_organic_attenders",
+    recipients,
+    createdAt,
+  };
+  streamDistributions.set(id, distribution);
+  return distribution;
+}
+
+function distributeAndNotifyForPayout(room, payout, poolOverride = null) {
+  const distribution = distributeStreamingPoolToOrganicUsers(room, payout, poolOverride);
+  if (distribution.recipientCount > 0) {
+    distribution.recipients.forEach((recipient) => {
+      createNotification({
+        type: "ai_streaming_pool_distribution",
+        title: "AI streaming revenue share distributed",
+        message: `You received $${recipient.shareUsd} from ${room.roomName} organic streaming pool.`,
+        targetUserIds: [recipient.userId],
+        metadata: {
+          roomId: room.id,
+          roomName: room.roomName,
+          payoutId: payout.id,
+          distributionId: distribution.id,
+          shareUsd: recipient.shareUsd,
+          watchMinutes: recipient.watchMinutes,
+        },
+      });
+    });
+  }
+
+  const ownerId = (room.createdBy || "").toString().trim();
+  if (ownerId) {
+    createNotification({
+      type: "ai_streaming_payout_summary",
+      title: "Streaming payout completed",
+      message: `Payout ${payout.id} distributed to ${distribution.recipientCount} organic attenders from ${room.roomName}.`,
+      targetUserIds: [ownerId],
+      metadata: {
+        roomId: room.id,
+        roomName: room.roomName,
+        payoutId: payout.id,
+        distributionId: distribution.id,
+        distributedAmountUsd: distribution.distributedAmountUsd,
+        recipientCount: distribution.recipientCount,
+      },
+    });
+  }
+
+  return distribution;
+}
+
+function resolveNotificationTargetOwner(targetType, targetId) {
+  if (targetType === "community_post") {
+    return communityPosts.get(targetId)?.authorUserId || null;
+  }
+  if (targetType === "community_chat") {
+    return communityChats.get(targetId)?.authorUserId || null;
+  }
+  if (targetType === "ai_blog") {
+    return aiBlogs.get(targetId)?.authorUserId || null;
+  }
+  if (targetType === "stream_room") {
+    return streamRooms.get(targetId)?.createdBy || null;
+  }
+  return null;
+}
+
+function ensureInbox(userId) {
+  if (!notificationInbox.has(userId)) {
+    notificationInbox.set(userId, []);
+  }
+  return notificationInbox.get(userId);
+}
+
+function handleListUsers(res) {
+  const users = Array.from(ccwebUsers.values()).map(sanitizeUser);
+  sendJson(res, 200, { count: users.length, users });
+}
+
+async function handleUpsertUser(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const requestedId = (body.id || body.userId || "").toString().trim();
+  const existing = requestedId ? ccwebUsers.get(requestedId) : null;
+  const profile = buildUserProfile(body, existing);
+  ccwebUsers.set(profile.id, profile);
+  ensureInbox(profile.id);
+  sendJson(res, existing ? 200 : 201, sanitizeUser(profile));
+}
+
+function handleListNotifications(requestUrl, res) {
+  const userId = (requestUrl.searchParams.get("userId") || "").trim();
+  if (!userId) {
+    sendJson(res, 400, { error: "userId is required." });
+    return;
+  }
+  ensureUser(userId);
+  const unreadOnly = requestUrl.searchParams.get("unreadOnly") === "true";
+  const inbox = ensureInbox(userId);
+  const items = inbox
+    .map((entry) => buildNotificationEnvelope(userId, entry))
+    .filter(Boolean)
+    .filter((entry) => (unreadOnly ? !entry.read : true))
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  sendJson(res, 200, {
+    userId,
+    count: items.length,
+    unreadCount: items.filter((entry) => !entry.read).length,
+    notifications: items,
+  });
+}
+
+async function handleMarkNotificationsRead(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const userId = (body.userId || "").toString().trim();
+  if (!userId) {
+    sendJson(res, 400, { error: "userId is required." });
+    return;
+  }
+  ensureUser(userId);
+  const inbox = ensureInbox(userId);
+  const markAll = body.markAll === true;
+  const selected = new Set(Array.isArray(body.notificationIds) ? body.notificationIds.map((id) => id.toString()) : []);
+  let updated = 0;
+  inbox.forEach((entry) => {
+    if (!entry.read && (markAll || selected.has(entry.notificationId))) {
+      entry.read = true;
+      updated += 1;
+    }
+  });
+  sendJson(res, 200, { userId, updated });
+}
+
+function handleListCommunityPosts(res) {
+  const posts = Array.from(communityPosts.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  sendJson(res, 200, { count: posts.length, posts });
+}
+
+async function handleCreateCommunityPost(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const authorUserId = (body.authorUserId || "").toString().trim();
+  const title = (body.title || "").toString().trim();
+  const content = (body.content || "").toString().trim();
+  if (!authorUserId || !title || !content) {
+    sendJson(res, 400, { error: "authorUserId, title and content are required." });
+    return;
+  }
+
+  const author = ensureUser(authorUserId, { displayName: body.authorDisplayName });
+  const id = `post-${String(nextCommunityPostId++).padStart(4, "0")}`;
+  const post = {
+    id,
+    authorUserId: author.id,
+    authorDisplayName: author.displayName,
+    title,
+    content,
+    tags: Array.isArray(body.tags) ? body.tags.map((tag) => tag.toString()) : [],
+    createdAt: new Date().toISOString(),
+  };
+  communityPosts.set(id, post);
+
+  createNotification({
+    type: "community_post_created",
+    title: "New community post",
+    message: `${author.displayName} posted: ${title}`,
+    broadcast: true,
+    metadata: { postId: id, authorUserId: author.id },
+  });
+
+  sendJson(res, 201, post);
+}
+
+function handleListCommunityChats(requestUrl, res) {
+  const channelFilter = (requestUrl.searchParams.get("channel") || "").trim();
+  const chats = Array.from(communityChats.values())
+    .filter((chat) => (channelFilter ? chat.channel === channelFilter : true))
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  sendJson(res, 200, { count: chats.length, chats });
+}
+
+async function handleCreateCommunityChat(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const authorUserId = (body.authorUserId || "").toString().trim();
+  const message = (body.message || "").toString().trim();
+  const channel = (body.channel || "general").toString().trim();
+  if (!authorUserId || !message) {
+    sendJson(res, 400, { error: "authorUserId and message are required." });
+    return;
+  }
+
+  const author = ensureUser(authorUserId, { displayName: body.authorDisplayName });
+  const id = `chat-${String(nextCommunityChatId++).padStart(5, "0")}`;
+  const chat = {
+    id,
+    channel,
+    authorUserId: author.id,
+    authorDisplayName: author.displayName,
+    message,
+    createdAt: new Date().toISOString(),
+  };
+  communityChats.set(id, chat);
+
+  createNotification({
+    type: "community_chat_message",
+    title: `Chat update in #${channel}`,
+    message: `${author.displayName}: ${message.slice(0, 120)}`,
+    broadcast: true,
+    metadata: { chatId: id, channel, authorUserId: author.id },
+  });
+
+  sendJson(res, 201, chat);
+}
+
+function handleListCommunityReactions(requestUrl, res) {
+  const targetType = (requestUrl.searchParams.get("targetType") || "").trim();
+  const targetId = (requestUrl.searchParams.get("targetId") || "").trim();
+  const reactions = Array.from(communityReactions.values()).filter((reaction) => {
+    if (targetType && reaction.targetType !== targetType) {
+      return false;
+    }
+    if (targetId && reaction.targetId !== targetId) {
+      return false;
+    }
+    return true;
+  });
+  sendJson(res, 200, { count: reactions.length, reactions });
+}
+
+async function handleCreateCommunityReaction(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const authorUserId = (body.authorUserId || "").toString().trim();
+  const targetType = (body.targetType || "").toString().trim();
+  const targetId = (body.targetId || "").toString().trim();
+  const reaction = (body.reaction || "like").toString().trim();
+  if (!authorUserId || !targetType || !targetId) {
+    sendJson(res, 400, { error: "authorUserId, targetType and targetId are required." });
+    return;
+  }
+
+  const actor = ensureUser(authorUserId, { displayName: body.authorDisplayName });
+  const id = `react-${String(nextCommunityReactionId++).padStart(5, "0")}`;
+  const record = {
+    id,
+    authorUserId: actor.id,
+    authorDisplayName: actor.displayName,
+    targetType,
+    targetId,
+    reaction,
+    createdAt: new Date().toISOString(),
+  };
+  communityReactions.set(id, record);
+
+  const ownerId = resolveNotificationTargetOwner(targetType, targetId);
+  if (ownerId && ownerId !== actor.id) {
+    createNotification({
+      type: "community_reaction_received",
+      title: "New reaction on your CCWEB content",
+      message: `${actor.displayName} reacted with ${reaction}.`,
+      targetUserIds: [ownerId],
+      metadata: { reactionId: id, targetType, targetId, fromUserId: actor.id },
+    });
+  }
+
+  sendJson(res, 201, record);
+}
+
+function handleListAiBlogs(res) {
+  const blogs = Array.from(aiBlogs.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  sendJson(res, 200, { count: blogs.length, blogs });
+}
+
+async function handleCreateAiBlog(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const authorUserId = (body.authorUserId || "").toString().trim();
+  const title = (body.title || "").toString().trim();
+  const content = (body.content || "").toString().trim();
+  const topic = (body.topic || "AI & Web3").toString().trim();
+  if (!authorUserId || !title || !content) {
+    sendJson(res, 400, { error: "authorUserId, title and content are required." });
+    return;
+  }
+
+  const author = ensureUser(authorUserId, { displayName: body.authorDisplayName });
+  const id = `blog-${String(nextAiBlogId++).padStart(4, "0")}`;
+  const blog = {
+    id,
+    authorUserId: author.id,
+    authorDisplayName: author.displayName,
+    title,
+    content,
+    topic,
+    createdAt: new Date().toISOString(),
+  };
+  aiBlogs.set(id, blog);
+
+  createNotification({
+    type: "ai_blog_published",
+    title: "New AI blog published",
+    message: `${author.displayName} published "${title}" in ${topic}.`,
+    broadcast: true,
+    metadata: { blogId: id, topic, authorUserId: author.id },
+  });
+
+  sendJson(res, 201, blog);
+}
+
+function parseRoomIdFromPath(pathname, suffix) {
+  const match = pathname.match(new RegExp(`^/api/streaming/rooms/([^/]+)/${suffix}$`));
+  return match ? match[1] : null;
+}
+
+function handleListStreamAttendance(pathname, res) {
+  const roomId = parseRoomIdFromPath(pathname, "attendance");
+  if (!roomId) {
+    sendJson(res, 404, { error: "Attendance route not found." });
+    return;
+  }
+  const room = streamRooms.get(roomId);
+  if (!room) {
+    sendJson(res, 404, { error: "Streaming room not found." });
+    return;
+  }
+
+  const attendeesMap = streamAttendances.get(roomId) || new Map();
+  const attendees = Array.from(attendeesMap.values()).sort((a, b) => (a.joinedAt < b.joinedAt ? 1 : -1));
+  const summary = summarizeAttendanceForRoom(roomId);
+  sendJson(res, 200, { roomId, summary, attendees });
+}
+
+async function handleUpsertStreamAttendance(pathname, req, res) {
+  const roomId = parseRoomIdFromPath(pathname, "attendance");
+  if (!roomId) {
+    sendJson(res, 404, { error: "Attendance route not found." });
+    return;
+  }
+  const room = streamRooms.get(roomId);
+  if (!room) {
+    sendJson(res, 404, { error: "Streaming room not found." });
+    return;
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const userId = (body.userId || "").toString().trim();
+  if (!userId) {
+    sendJson(res, 400, { error: "userId is required." });
+    return;
+  }
+
+  const user = ensureUser(userId, {
+    displayName: body.displayName,
+    isOrganic: body.isOrganic,
+  });
+  const attendeesMap = streamAttendances.get(roomId) || new Map();
+  const now = new Date().toISOString();
+  const existing = attendeesMap.get(user.id);
+  const watchMinutes = Math.max(0, safeNumber(body.watchMinutes, existing?.watchMinutes || 0));
+  const entry = {
+    roomId,
+    userId: user.id,
+    displayName: user.displayName,
+    isOrganic: user.isOrganic,
+    watchMinutes,
+    isActive: body.isActive === undefined ? existing?.isActive ?? true : Boolean(body.isActive),
+    joinedAt: existing?.joinedAt || now,
+    updatedAt: now,
+  };
+
+  attendeesMap.set(user.id, entry);
+  streamAttendances.set(roomId, attendeesMap);
+  updateRoomMetricsFromAttendance(room);
+  streamRooms.set(roomId, room);
+
+  const ownerId = (room.createdBy || "").toString().trim();
+  if (ownerId) {
+    createNotification({
+      type: "ai_streaming_attendance_update",
+      title: "Streaming attendance updated",
+      message: `${room.metrics.activeAttenders} active attenders in ${room.roomName}.`,
+      targetUserIds: [ownerId],
+      metadata: {
+        roomId,
+        actorUserId: user.id,
+        activeAttenders: room.metrics.activeAttenders,
+        activeOrganicAttenders: room.metrics.activeOrganicAttenders,
+      },
+    });
+  }
+
+  sendJson(res, existing ? 200 : 201, { roomId, attendance: entry, metrics: room.metrics });
+}
+
+function handleListStreamDistributions(requestUrl, res) {
+  const roomId = (requestUrl.searchParams.get("roomId") || "").trim();
+  const payoutId = (requestUrl.searchParams.get("payoutId") || "").trim();
+  const distributions = Array.from(streamDistributions.values())
+    .filter((distribution) => (roomId ? distribution.roomId === roomId : true))
+    .filter((distribution) => (payoutId ? distribution.payoutId === payoutId : true))
+    .map(buildDistributionResponse);
+  sendJson(res, 200, { count: distributions.length, distributions });
+}
+
+async function handleDistributeStreamPayout(pathname, req, res) {
+  const match = pathname.match(/^\/api\/streaming\/payouts\/([^/]+)\/distribute$/);
+  if (!match) {
+    sendJson(res, 404, { error: "Distribution route not found." });
+    return;
+  }
+  const payoutId = match[1];
+  const payout = streamPayouts.get(payoutId);
+  if (!payout) {
+    sendJson(res, 404, { error: "Streaming payout not found." });
+    return;
+  }
+
+  let body = {};
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const room = streamRooms.get(payout.roomId);
+  if (!room) {
+    sendJson(res, 404, { error: "Streaming room not found for distribution." });
+    return;
+  }
+
+  const poolOverride = body.poolAmountUsd === undefined ? null : Math.max(0, safeNumber(body.poolAmountUsd, 0));
+  const distribution = distributeAndNotifyForPayout(room, payout, poolOverride);
+  sendJson(res, 201, buildDistributionResponse(distribution));
+}
+
 async function serveFile(filePath, res) {
   try {
     const data = await fs.readFile(filePath);
@@ -341,6 +1069,17 @@ function findBusinessById(businessId) {
 
 function handleSearchResponse(res, cityInput, queryInput) {
   const { city, query, results } = searchBusinesses(cityInput, queryInput);
+  createNotification({
+    type: "business_finder_results_ready",
+    title: "Business finder results ready",
+    message: `AI business finder returned ${results.length} results for ${(query || "all")} in ${(city || "any city")}.`,
+    broadcast: true,
+    metadata: {
+      city: city || "any",
+      query: query || "any",
+      resultCount: results.length,
+    },
+  });
 
   sendJson(res, 200, {
     mode: "google-maps-ai-search",
@@ -893,7 +1632,41 @@ async function handleCreateStreamRoom(req, res) {
     sendJson(res, result.status || 400, { error: result.error });
     return;
   }
-  sendJson(res, 201, buildStreamRoomResponse(result.room));
+  const room = result.room;
+  const owner = ensureUser(room.createdBy, { displayName: body.createdByDisplayName });
+  if (!streamAttendances.has(room.id)) {
+    streamAttendances.set(room.id, new Map());
+  }
+  updateRoomMetricsFromAttendance(room);
+  streamRooms.set(room.id, room);
+
+  if (owner) {
+    createNotification({
+      type: "ai_streaming_room_created",
+      title: "AI live stream activated",
+      message: `${room.roomName} is now live with topic: ${room.topic}.`,
+      targetUserIds: [owner.id],
+      metadata: {
+        roomId: room.id,
+        roomName: room.roomName,
+        topic: room.topic,
+        platformRevenueSharePercent: room.platformRevenueSharePercent,
+      },
+    });
+  }
+  createNotification({
+    type: "ai_streaming_live_alert",
+    title: "New CCWEB AI live stream",
+    message: `${room.roomName} started: ${room.topic}.`,
+    broadcast: true,
+    metadata: {
+      roomId: room.id,
+      roomName: room.roomName,
+      topic: room.topic,
+      createdBy: room.createdBy,
+    },
+  });
+  sendJson(res, 201, buildStreamRoomResponse(room));
 }
 
 function handleListStreamRooms(res) {
@@ -953,8 +1726,13 @@ async function handleCreateStreamPayout(req, res) {
     createdAt: new Date().toISOString(),
   };
 
+  const distribution = distributeAndNotifyForPayout(room, payout);
+  payout.payoutStatus = distribution.recipientCount > 0 ? "distributed_to_organic_users" : "pending_organic_distribution";
   streamPayouts.set(id, payout);
-  sendJson(res, 201, buildStreamingPayoutResponse(payout));
+  sendJson(res, 201, {
+    ...buildStreamingPayoutResponse(payout),
+    distribution: buildDistributionResponse(distribution),
+  });
 }
 
 function handleListStreamPayouts(requestUrl, res) {
@@ -1118,6 +1896,30 @@ function handleGetDeal(urlPath, res) {
   sendJson(res, 200, buildDealResponse(deal));
 }
 
+function seedUsers() {
+  ensureUser("ccweb-stream-studio", {
+    displayName: "CCWEB Stream Studio",
+    isOrganic: false,
+    roles: ["stream_creator", "platform_admin"],
+  });
+  ensureUser("user-organic-001", {
+    displayName: "Maya Organic Learner",
+    isOrganic: true,
+    roles: ["member", "organic_attender"],
+  });
+  ensureUser("user-organic-002", {
+    displayName: "Idris Organic Builder",
+    isOrganic: true,
+    roles: ["member", "organic_attender"],
+  });
+  ensureUser("user-pro-001", {
+    displayName: "Nora Pro Publisher",
+    isOrganic: false,
+    roles: ["member", "creator"],
+  });
+}
+
+seedUsers();
 seedApplicants();
 
 const server = http.createServer(async (req, res) => {
@@ -1182,6 +1984,66 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname === "/api/users" && req.method === "GET") {
+    handleListUsers(res);
+    return;
+  }
+
+  if (pathname === "/api/users" && req.method === "POST") {
+    await handleUpsertUser(req, res);
+    return;
+  }
+
+  if (pathname === "/api/notifications" && req.method === "GET") {
+    handleListNotifications(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/notifications/read" && req.method === "POST") {
+    await handleMarkNotificationsRead(req, res);
+    return;
+  }
+
+  if (pathname === "/api/community/posts" && req.method === "GET") {
+    handleListCommunityPosts(res);
+    return;
+  }
+
+  if (pathname === "/api/community/posts" && req.method === "POST") {
+    await handleCreateCommunityPost(req, res);
+    return;
+  }
+
+  if (pathname === "/api/community/chats" && req.method === "GET") {
+    handleListCommunityChats(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/community/chats" && req.method === "POST") {
+    await handleCreateCommunityChat(req, res);
+    return;
+  }
+
+  if (pathname === "/api/community/reactions" && req.method === "GET") {
+    handleListCommunityReactions(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/community/reactions" && req.method === "POST") {
+    await handleCreateCommunityReaction(req, res);
+    return;
+  }
+
+  if (pathname === "/api/blogs" && req.method === "GET") {
+    handleListAiBlogs(res);
+    return;
+  }
+
+  if (pathname === "/api/blogs" && req.method === "POST") {
+    await handleCreateAiBlog(req, res);
+    return;
+  }
+
   if (pathname === "/api/applicants" && req.method === "POST") {
     await handleUpsertApplicant(req, res);
     return;
@@ -1219,6 +2081,16 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname.match(/^\/api\/streaming\/rooms\/[^/]+\/attendance$/) && req.method === "GET") {
+    handleListStreamAttendance(pathname, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/streaming\/rooms\/[^/]+\/attendance$/) && req.method === "POST") {
+    await handleUpsertStreamAttendance(pathname, req, res);
+    return;
+  }
+
   if (pathname === "/api/streaming/payouts" && req.method === "POST") {
     await handleCreateStreamPayout(req, res);
     return;
@@ -1226,6 +2098,16 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === "/api/streaming/payouts" && req.method === "GET") {
     handleListStreamPayouts(requestUrl, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/streaming\/payouts\/[^/]+\/distribute$/) && req.method === "POST") {
+    await handleDistributeStreamPayout(pathname, req, res);
+    return;
+  }
+
+  if (pathname === "/api/streaming/distributions" && req.method === "GET") {
+    handleListStreamDistributions(requestUrl, res);
     return;
   }
 

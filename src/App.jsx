@@ -8,7 +8,7 @@ import {
   Routes,
   useParams,
 } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./styles.css";
 
 const navItems = [
@@ -289,10 +289,11 @@ function AiStreamingPage() {
     expectedAudience: 1800,
     expectedArppuUsd: 4.5,
     platformSharePercent: 37,
-    startDelayMinutes: 5,
-    intervalMinutes: 90,
-    breakMinutes: 10,
+    expectedSessionMinutes: 120,
+    tutoringIntervalMinutes: 20,
   });
+  const [rooms, setRooms] = useState([]);
+  const [selectedRoomId, setSelectedRoomId] = useState("");
   const [response, setResponse] = useState(null);
   const [joinPayload, setJoinPayload] = useState({
     userId: "user-organic-001",
@@ -305,6 +306,7 @@ function AiStreamingPage() {
   const [joinLoading, setJoinLoading] = useState(false);
   const [error, setError] = useState("");
   const [joinError, setJoinError] = useState("");
+  const [activeSessionLock, setActiveSessionLock] = useState(null);
 
   function updateField(field, value) {
     setPayload((prev) => ({ ...prev, [field]: value }));
@@ -330,6 +332,33 @@ function AiStreamingPage() {
     return ["Financial Literacy & Human Development", "Digital Business Systems", "AI Foundations"];
   }
 
+  async function loadRooms() {
+    try {
+      const res = await fetch("/api/streaming/rooms");
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Could not load rooms.");
+      }
+      setRooms(data.rooms || []);
+      if (!selectedRoomId && data.rooms?.length) {
+        setSelectedRoomId(data.rooms[0].id);
+      }
+    } catch (err) {
+      setJoinError(err.message);
+    }
+  }
+
+  useEffect(() => {
+    loadRooms();
+  }, []);
+
+  function getSelectedRoom() {
+    if (response?.room?.id && response.room.id === selectedRoomId) {
+      return response.room;
+    }
+    return rooms.find((room) => room.id === selectedRoomId) || response?.room || null;
+  }
+
   async function createRoom() {
     setLoading(true);
     setError("");
@@ -347,21 +376,20 @@ function AiStreamingPage() {
           aiHostName: payload.hostModel,
           curriculumTracks: curriculumToTracks(payload.curriculum),
           platformRevenueSharePercent: Number(payload.platformSharePercent),
-          startDelayMinutes: Number(payload.startDelayMinutes),
-          estimatedTeachingMinutes: Number(payload.intervalMinutes),
-          breakBetweenRoundsMinutes: Number(payload.breakMinutes),
+          expectedSessionMinutes: Number(payload.expectedSessionMinutes),
+          tutoringIntervalMinutes: Number(payload.tutoringIntervalMinutes),
           agenda: [
             {
               title: `${payload.curriculum} foundations`,
-              durationMinutes: Math.round(Number(payload.intervalMinutes) * 0.5),
+              durationMinutes: Math.round(Number(payload.expectedSessionMinutes) * 0.45),
             },
             {
               title: `${payload.curriculum} practical workshop`,
-              durationMinutes: Math.round(Number(payload.intervalMinutes) * 0.35),
+              durationMinutes: Math.round(Number(payload.expectedSessionMinutes) * 0.35),
             },
             {
               title: "Live Q&A and recap",
-              durationMinutes: Math.round(Number(payload.intervalMinutes) * 0.15),
+              durationMinutes: Math.round(Number(payload.expectedSessionMinutes) * 0.2),
             },
           ],
         }),
@@ -388,7 +416,10 @@ function AiStreamingPage() {
       }
 
       setResponse({ room: roomData, payout: payoutData });
+      setSelectedRoomId(roomData.id);
+      await loadRooms();
       setJoinState(null);
+      setActiveSessionLock(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -397,14 +428,14 @@ function AiStreamingPage() {
   }
 
   async function joinRoom() {
-    if (!response?.room?.id) {
-      setJoinError("Create a room before joining.");
+    if (!selectedRoomId) {
+      setJoinError("Select a room before joining.");
       return;
     }
     setJoinLoading(true);
     setJoinError("");
     try {
-      const res = await fetch(`/api/streaming/rooms/${response.room.id}/attendance`, {
+      const res = await fetch(`/api/streaming/rooms/${selectedRoomId}/attendance`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -417,9 +448,14 @@ function AiStreamingPage() {
       });
       const data = await res.json();
       if (!res.ok) {
+        if (data.activeSession) {
+          setActiveSessionLock(data.activeSession);
+        }
         throw new Error(data.error || "Could not join this stream.");
       }
       setJoinState(data);
+      setActiveSessionLock(null);
+      await loadRooms();
     } catch (err) {
       setJoinError(err.message);
     } finally {
@@ -428,14 +464,14 @@ function AiStreamingPage() {
   }
 
   async function leaveRoom() {
-    if (!response?.room?.id) {
-      setJoinError("No room to leave.");
+    if (!selectedRoomId) {
+      setJoinError("Select a room before leaving.");
       return;
     }
     setJoinLoading(true);
     setJoinError("");
     try {
-      const res = await fetch(`/api/streaming/rooms/${response.room.id}/attendance`, {
+      const res = await fetch(`/api/streaming/rooms/${selectedRoomId}/attendance`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -451,12 +487,54 @@ function AiStreamingPage() {
         throw new Error(data.error || "Could not leave this stream.");
       }
       setJoinState(data);
+      if (selectedRoomId && activeSessionLock?.roomId === selectedRoomId) {
+        setActiveSessionLock(null);
+      }
+      await loadRooms();
     } catch (err) {
       setJoinError(err.message);
     } finally {
       setJoinLoading(false);
     }
   }
+
+  async function finishRoom() {
+    if (!selectedRoomId) {
+      setJoinError("Select a room before finishing.");
+      return;
+    }
+    setJoinLoading(true);
+    setJoinError("");
+    try {
+      const res = await fetch(`/api/streaming/rooms/${selectedRoomId}/finish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          finishedBy: "ccweb-stream-studio",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Could not finish this stream.");
+      }
+      await loadRooms();
+      if (response?.room?.id === selectedRoomId) {
+        setResponse((prev) => (prev ? { ...prev, room: data.room } : prev));
+      }
+      setJoinState((prev) =>
+        prev ? { ...prev, metrics: data.room.metrics, roomId: data.room.id } : prev
+      );
+      if (activeSessionLock?.roomId === selectedRoomId) {
+        setActiveSessionLock(null);
+      }
+    } catch (err) {
+      setJoinError(err.message);
+    } finally {
+      setJoinLoading(false);
+    }
+  }
+
+  const selectedRoom = getSelectedRoom();
 
   return (
     <section>
@@ -543,39 +621,37 @@ function AiStreamingPage() {
             />
           </div>
           <div className="auth-row">
-            <label htmlFor="start-delay">Starts in (minutes)</label>
+            <label htmlFor="expected-session-minutes">Expected full session (minutes)</label>
             <input
-              id="start-delay"
+              id="expected-session-minutes"
               type="number"
-              min="1"
-              value={payload.startDelayMinutes}
-              onChange={(event) => updateField("startDelayMinutes", event.target.value)}
+              min="15"
+              max="480"
+              value={payload.expectedSessionMinutes}
+              onChange={(event) => updateField("expectedSessionMinutes", event.target.value)}
             />
           </div>
           <div className="auth-row">
-            <label htmlFor="interval-minutes">AI tutor live interval (minutes)</label>
+            <label htmlFor="interval-minutes">Tutor round interval (minutes)</label>
             <input
               id="interval-minutes"
               type="number"
-              min="15"
-              max="240"
-              value={payload.intervalMinutes}
-              onChange={(event) => updateField("intervalMinutes", event.target.value)}
-            />
-          </div>
-          <div className="auth-row">
-            <label htmlFor="break-minutes">Break between rounds (minutes)</label>
-            <input
-              id="break-minutes"
-              type="number"
-              min="0"
-              max="60"
-              value={payload.breakMinutes}
-              onChange={(event) => updateField("breakMinutes", event.target.value)}
+              min="5"
+              max="90"
+              value={payload.tutoringIntervalMinutes}
+              onChange={(event) => updateField("tutoringIntervalMinutes", event.target.value)}
             />
           </div>
           <button type="button" className="btn btn-primary" onClick={createRoom} disabled={loading}>
             {loading ? "Creating..." : "Create AI Live Room"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={loadRooms}
+            style={{ marginLeft: "0.5rem" }}
+          >
+            Refresh rooms
           </button>
           {error ? <p className="muted" style={{ color: "#ff8c8c" }}>{error}</p> : null}
         </article>
@@ -589,17 +665,38 @@ function AiStreamingPage() {
             </p>
           ) : (
             <>
-              <p><strong>Room:</strong> {response.room.roomName}</p>
-              <p><strong>LiveKit SID hint:</strong> {response.room.livekit.roomSidHint}</p>
-              <p><strong>Status:</strong> {response.room.status}</p>
-              <p><strong>Topic:</strong> {response.room.topic}</p>
-              <p><strong>AI Host:</strong> {response.room.aiHost.displayName}</p>
-              <p><strong>Starts at:</strong> {response.room.schedule?.startsAtIso || "TBD"}</p>
-              <p><strong>Ends at:</strong> {response.room.schedule?.endsAtIso || "TBD"}</p>
+              <div className="auth-row">
+                <label htmlFor="active-room">Select active room</label>
+                <select
+                  id="active-room"
+                  value={selectedRoomId}
+                  onChange={(event) => setSelectedRoomId(event.target.value)}
+                >
+                  {rooms.length ? null : (
+                    <option value={response.room.id}>{response.room.roomName}</option>
+                  )}
+                  {rooms.map((room) => (
+                    <option key={room.id} value={room.id}>
+                      {room.roomName} ({room.status})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p><strong>Room:</strong> {selectedRoom?.roomName || response.room.roomName}</p>
+              <p><strong>LiveKit SID hint:</strong> {selectedRoom?.livekit?.roomSidHint || response.room.livekit.roomSidHint}</p>
+              <p><strong>Status:</strong> {selectedRoom?.status || response.room.status}</p>
+              <p><strong>Topic:</strong> {selectedRoom?.topic || response.room.topic}</p>
+              <p><strong>AI Host:</strong> {selectedRoom?.aiHost?.displayName || response.room.aiHost.displayName}</p>
+              <p><strong>Starts at:</strong> {selectedRoom?.tutoringSchedule?.startedAt || "TBD"}</p>
+              <p><strong>Estimated end:</strong> {selectedRoom?.tutoringSchedule?.estimatedEndAt || "TBD"}</p>
               <p>
-                <strong>Teaching interval:</strong> {response.room.schedule?.estimatedTeachingMinutes || 0} minutes
+                <strong>Expected session:</strong> {selectedRoom?.tutoringSchedule?.expectedSessionMinutes || 0} minutes
                 {" · "}
-                <strong>Break:</strong> {response.room.schedule?.breakBetweenRoundsMinutes || 0} minutes
+                <strong>Tutor interval:</strong> {selectedRoom?.tutoringSchedule?.tutoringIntervalMinutes || 0} minutes
+              </p>
+              <p>
+                <strong>Estimated teaching rounds:</strong>{" "}
+                {selectedRoom?.tutoringSchedule?.estimatedSegments || 0}
               </p>
               <p><strong>Platform share:</strong> {response.payout.platformRevenueSharePercent}%</p>
               <p><strong>Estimated gross:</strong> ${response.payout.grossRevenueUsd}</p>
@@ -661,8 +758,29 @@ function AiStreamingPage() {
                 <button type="button" className="btn btn-outline" onClick={leaveRoom} disabled={joinLoading}>
                   Leave stream
                 </button>
+                <button type="button" className="btn btn-outline" onClick={finishRoom} disabled={joinLoading}>
+                  Finish selected room
+                </button>
               </div>
+              {activeSessionLock ? (
+                <div className="stream-lock-box">
+                  <p><strong>Active session lock:</strong> {activeSessionLock.roomName}</p>
+                  <p>
+                    You must leave or finish that session before joining another one.
+                  </p>
+                  <p className="muted">
+                    Estimated end: {activeSessionLock.estimatedEndAt || "Not available"}
+                  </p>
+                </div>
+              ) : null}
               {joinError ? <p className="muted" style={{ color: "#ff8c8c" }}>{joinError}</p> : null}
+              {activeStreamLock ? (
+                <div className="stream-session-box">
+                  <p><strong>Active session lock:</strong> {activeStreamLock.roomName}</p>
+                  <p><strong>Status:</strong> {activeStreamLock.status}</p>
+                  <p><strong>Estimated end:</strong> {activeStreamLock.estimatedEndAt || "TBD"}</p>
+                </div>
+              ) : null}
               {joinState ? (
                 <div className="stream-session-box">
                   <p><strong>Session room:</strong> {joinState.roomId}</p>
@@ -673,7 +791,7 @@ function AiStreamingPage() {
               ) : null}
               <h4 style={{ marginBottom: "0.4rem" }}>AI host curriculum coverage</h4>
               <ul className="list">
-                {response.room.aiHost.curriculumCoverage.map((item) => (
+                {(selectedRoom?.aiHost?.curriculumCoverage || response.room.aiHost.curriculumCoverage).map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>

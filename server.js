@@ -931,7 +931,7 @@ async function handleUpsertStreamAttendance(pathname, req, res) {
     return;
   }
 
-  if (requestedActive) {
+  if (requestedActive && (!existing || existing.isActive !== true)) {
     const activeStream = getUserActiveStream(user.id, { excludeRoomId: roomId });
     if (activeStream) {
       sendJson(res, 409, {
@@ -1755,8 +1755,16 @@ function createRoomFromPayload(body) {
   );
   const creatorRevenueSharePercent = formatMoney(100 - platformRevenueSharePercent);
   const now = new Date().toISOString();
-  const expectedSessionMinutes = clamp(safeNumber(body.expectedSessionMinutes, 120), 15, 480);
-  const tutoringIntervalMinutes = clamp(safeNumber(body.tutoringIntervalMinutes, 15), 5, 90);
+  const expectedSessionMinutes = clamp(
+    safeNumber(body.expectedSessionMinutes ?? body.estimatedTeachingMinutes ?? body.intervalMinutes, 120),
+    15,
+    480
+  );
+  const tutoringIntervalMinutes = clamp(
+    safeNumber(body.tutoringIntervalMinutes ?? body.breakBetweenRoundsMinutes ?? body.startDelayMinutes, 15),
+    5,
+    90
+  );
   const estimatedEndAt = new Date(Date.parse(now) + expectedSessionMinutes * 60 * 1000).toISOString();
 
   if (!roomName) {
@@ -1855,9 +1863,9 @@ async function handleCreateStreamRoom(req, res) {
         roomName: room.roomName,
         topic: room.topic,
         platformRevenueSharePercent: room.platformRevenueSharePercent,
-          expectedSessionMinutes: room.tutoringSchedule.expectedSessionMinutes,
-          tutoringIntervalMinutes: room.tutoringSchedule.tutoringIntervalMinutes,
-          estimatedEndAt: room.tutoringSchedule.estimatedEndAt,
+        expectedSessionMinutes: room.tutoringSchedule.expectedSessionMinutes,
+        tutoringIntervalMinutes: room.tutoringSchedule.tutoringIntervalMinutes,
+        estimatedEndAt: room.tutoringSchedule.estimatedEndAt,
       },
     });
   }

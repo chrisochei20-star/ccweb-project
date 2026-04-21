@@ -402,14 +402,6 @@ a {
   box-shadow: 0 0 0 1px rgba(48, 201, 130, 0.25);
 }
 
-.stream-session-box {
-  margin-top: 0.55rem;
-  border: 1px solid rgba(106, 155, 222, 0.28);
-  border-radius: 0.75rem;
-  padding: 0.6rem 0.75rem;
-  background: rgba(8, 18, 38, 0.65);
-}
-
 .stream-lock-box {
   margin-top: 0.55rem;
   border: 1px solid rgba(255, 164, 86, 0.35);

@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const http = require("http");
 const fs = require("fs/promises");
 const path = require("path");
@@ -5,7 +6,9 @@ const { URL } = require("url");
 
 const PORT = Number(process.env.PORT || 3000);
 const PLATFORM_FEE_RATE = 0.08;
+
 const deals = new Map();
+const applicants = new Map();
 let nextDealId = 1;
 
 const sampleBusinesses = [
@@ -123,6 +126,16 @@ const sampleBusinesses = [
   },
 ];
 
+const categorySkillMap = {
+  "dental clinic": ["local seo", "review management", "conversion copy", "google maps"],
+  gym: ["lead generation", "social media", "crm", "landing pages"],
+  "med spa": ["paid ads", "funnel optimization", "booking automation", "review management"],
+  "law firm": ["content strategy", "seo", "lead qualification", "intake automation"],
+  "veterinary clinic": ["local seo", "sms campaigns", "customer retention"],
+  restaurant: ["reputation management", "menu optimization", "maps seo"],
+  "auto service": ["google maps", "call tracking", "follow-up automation"],
+};
+
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -130,6 +143,38 @@ const MIME_TYPES = {
   ".json": "application/json; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",
 };
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function safeNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function formatMoney(value) {
+  return Number(value.toFixed(2));
+}
+
+function slugify(value) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function tokenHint(token) {
+  if (!token || token.length < 8) {
+    return "***";
+  }
+  return `${token.slice(0, 4)}...${token.slice(-2)}`;
+}
+
+function generateReleaseToken() {
+  return crypto.randomBytes(16).toString("hex");
+}
 
 async function serveFile(filePath, res) {
   try {
@@ -154,23 +199,6 @@ async function serveFile(filePath, res) {
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(payload));
-}
-
-function safeNumber(value, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function formatMoney(value) {
-  return Number(value.toFixed(2));
-}
-
-function slugify(value) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }
 
 async function readJsonBody(req) {
@@ -288,6 +316,10 @@ function searchBusinesses(cityInput, queryInput) {
   };
 }
 
+function findBusinessById(businessId) {
+  return sampleBusinesses.find((business) => business.id === businessId) || null;
+}
+
 function handleSearchResponse(res, cityInput, queryInput) {
   const { city, query, results } = searchBusinesses(cityInput, queryInput);
 
@@ -298,10 +330,6 @@ function handleSearchResponse(res, cityInput, queryInput) {
     count: results.length,
     results,
   });
-}
-
-function findBusinessById(businessId) {
-  return sampleBusinesses.find((business) => business.id === businessId) || null;
 }
 
 function normalizeAnalyzerCard(card) {
@@ -365,29 +393,342 @@ async function handleAnalyze(req, res, businessIdFromPath = null) {
   sendJson(res, 200, buildAnalyzeResponse(body));
 }
 
-function buildDealResponse(deal) {
-  const escrowStatus = deal.status === "released_to_applicant" ? "released" : "funded";
+function normalizeSkills(skillsInput) {
+  if (!skillsInput) {
+    return [];
+  }
+
+  const entries = Array.isArray(skillsInput) ? skillsInput : skillsInput.toString().split(",");
+
+  return entries
+    .map((entry) => {
+      if (typeof entry === "string") {
+        const [namePart, capacityPart] = entry.split(":");
+        return {
+          name: (namePart || "").trim(),
+          capacity: clamp(safeNumber(capacityPart, 70), 1, 100),
+        };
+      }
+
+      return {
+        name: (entry.name || "").toString().trim(),
+        capacity: clamp(safeNumber(entry.capacity, 70), 1, 100),
+      };
+    })
+    .filter((skill) => Boolean(skill.name));
+}
+
+function normalizeCertificates(certsInput) {
+  if (!certsInput) {
+    return [];
+  }
+
+  const entries = Array.isArray(certsInput) ? certsInput : certsInput.toString().split(",");
+  return entries.map((entry) => entry.toString().trim()).filter(Boolean);
+}
+
+function buildApplicantProfile(body, existing = null) {
+  const now = new Date().toISOString();
+  const fallbackId = existing?.id || `app-${slugify(body.fullName || "applicant") || crypto.randomUUID().slice(0, 8)}`;
+  const id = (body.id || body.applicantId || fallbackId).toString().trim();
+  const fullName = (body.fullName || existing?.fullName || "").toString().trim();
+
   return {
+    id,
+    fullName,
+    headline: (body.headline || existing?.headline || "").toString().trim(),
+    city: (body.city || existing?.city || "Global").toString().trim(),
+    skills: normalizeSkills(body.skills || existing?.skills || []),
+    certificates: normalizeCertificates(body.certificates || existing?.certificates || []),
+    capacity: {
+      weeklyHours: clamp(safeNumber(body.weeklyHours ?? body.capacity?.weeklyHours ?? existing?.capacity?.weeklyHours, 30), 1, 80),
+      maxConcurrentDeals: clamp(
+        safeNumber(body.maxConcurrentDeals ?? body.capacity?.maxConcurrentDeals ?? existing?.capacity?.maxConcurrentDeals, 3),
+        1,
+        20
+      ),
+      currentActiveDeals: clamp(
+        safeNumber(body.currentActiveDeals ?? body.capacity?.currentActiveDeals ?? existing?.capacity?.currentActiveDeals, 0),
+        0,
+        20
+      ),
+    },
+    stats: {
+      jobsCompleted: Math.max(0, safeNumber(body.jobsCompleted ?? body.stats?.jobsCompleted ?? existing?.stats?.jobsCompleted, 0)),
+      totalEarningsUsd: Math.max(
+        0,
+        safeNumber(body.totalEarningsUsd ?? body.stats?.totalEarningsUsd ?? existing?.stats?.totalEarningsUsd, 0)
+      ),
+      avgRating: clamp(safeNumber(body.avgRating ?? body.stats?.avgRating ?? existing?.stats?.avgRating, 4.2), 1, 5),
+      onTimeRate: clamp(safeNumber(body.onTimeRate ?? body.stats?.onTimeRate ?? existing?.stats?.onTimeRate, 92), 0, 100),
+    },
+    paymentProfile: {
+      payoutCurrency: (body.payoutCurrency || existing?.paymentProfile?.payoutCurrency || "USD").toString(),
+      payoutCadence: (body.payoutCadence || existing?.paymentProfile?.payoutCadence || "weekly").toString(),
+      roles: ["applicant", "client_approver", "platform_admin"],
+      securityTier: (body.securityTier || existing?.paymentProfile?.securityTier || "enhanced").toString(),
+    },
+    updatedAt: now,
+    createdAt: existing?.createdAt || now,
+  };
+}
+
+function sanitizeApplicant(applicant) {
+  return {
+    ...applicant,
+    compatibilityTags: applicant.skills.map((skill) => skill.name.toLowerCase()),
+  };
+}
+
+function seedApplicants() {
+  const initial = buildApplicantProfile({
+    applicantId: "app-001",
+    fullName: "Amina Growth Ops",
+    headline: "Web3 growth operator for local businesses",
+    city: "London",
+    skills: ["Local SEO:90", "Review Management:88", "Lead Generation:86", "Google Maps:84"],
+    certificates: ["Google Business Profile Optimization", "HubSpot Inbound Marketing", "Web3 GTM Strategy"],
+    weeklyHours: 35,
+    maxConcurrentDeals: 4,
+    currentActiveDeals: 0,
+    jobsCompleted: 42,
+    totalEarningsUsd: 78500,
+    avgRating: 4.8,
+    onTimeRate: 97,
+    securityTier: "enhanced",
+  });
+  applicants.set(initial.id, initial);
+}
+
+function buildMatchReasons(business, applicant) {
+  const categoryKey = business.category.toLowerCase();
+  const neededSkills = categorySkillMap[categoryKey] || ["local seo", "review management", "lead generation"];
+  const applicantSkills = applicant.skills.map((skill) => skill.name.toLowerCase());
+
+  const matchedSkills = neededSkills.filter((needed) =>
+    applicantSkills.some((appSkill) => appSkill.includes(needed) || needed.includes(appSkill))
+  );
+
+  return {
+    neededSkills,
+    matchedSkills,
+    coveragePercent: formatMoney((matchedSkills.length / neededSkills.length) * 100),
+  };
+}
+
+function scoreOpportunity(applicant, business) {
+  const reasons = buildMatchReasons(business, applicant);
+  const capacityRoom = Math.max(0, applicant.capacity.maxConcurrentDeals - applicant.capacity.currentActiveDeals);
+  const capacityScore = clamp(capacityRoom * 7, 0, 21);
+  const skillScore = clamp((reasons.coveragePercent / 100) * 55, 0, 55);
+  const demandScore = clamp((5 - safeNumber(business.rating, 4)) * 10, 5, 20);
+  const velocityScore = clamp(safeNumber(business.reviewCount, 100) / 30, 0, 12);
+
+  const totalScore = Math.round(skillScore + capacityScore + demandScore + velocityScore);
+  const projectedGrossDeal = formatMoney(600 + totalScore * 15);
+  const platformFee = formatMoney(projectedGrossDeal * PLATFORM_FEE_RATE);
+  const applicantNet = formatMoney(projectedGrossDeal - platformFee);
+
+  return {
+    score: clamp(totalScore, 1, 100),
+    reasons,
+    projectedIncome: {
+      grossDealUsd: projectedGrossDeal,
+      platformFeeUsd: platformFee,
+      applicantNetUsd: applicantNet,
+    },
+  };
+}
+
+function handleApplicantList(res) {
+  const list = Array.from(applicants.values()).map(sanitizeApplicant);
+  sendJson(res, 200, { count: list.length, applicants: list });
+}
+
+function handleGetApplicant(applicantId, res) {
+  const applicant = applicants.get(applicantId);
+  if (!applicant) {
+    sendJson(res, 404, { error: "Applicant not found." });
+    return;
+  }
+
+  sendJson(res, 200, sanitizeApplicant(applicant));
+}
+
+async function handleUpsertApplicant(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const requestedId = (body.id || body.applicantId || "").toString().trim();
+  const existing = requestedId ? applicants.get(requestedId) : null;
+  const profile = buildApplicantProfile(body, existing);
+
+  if (!profile.id || !profile.fullName) {
+    sendJson(res, 400, { error: "applicantId and fullName are required." });
+    return;
+  }
+
+  if (profile.capacity.currentActiveDeals > profile.capacity.maxConcurrentDeals) {
+    sendJson(res, 400, {
+      error: "currentActiveDeals cannot exceed maxConcurrentDeals.",
+    });
+    return;
+  }
+
+  applicants.set(profile.id, profile);
+  sendJson(res, existing ? 200 : 201, sanitizeApplicant(profile));
+}
+
+function handleEngineMatch(requestUrl, res) {
+  const applicantId = (requestUrl.searchParams.get("applicantId") || "").trim();
+  if (!applicantId) {
+    sendJson(res, 400, { error: "applicantId is required." });
+    return;
+  }
+
+  const applicant = applicants.get(applicantId);
+  if (!applicant) {
+    sendJson(res, 404, { error: "Applicant not found." });
+    return;
+  }
+
+  const city = requestUrl.searchParams.get("city");
+  const query = requestUrl.searchParams.get("query");
+  const { results } = searchBusinesses(city, query);
+
+  const ranked = results
+    .map((business) => {
+      const score = scoreOpportunity(applicant, business);
+      return {
+        business,
+        compatibilityScore: score.score,
+        neededSkills: score.reasons.neededSkills,
+        matchedSkills: score.reasons.matchedSkills,
+        skillCoveragePercent: score.reasons.coveragePercent,
+        projectedIncome: score.projectedIncome,
+      };
+    })
+    .sort((a, b) => b.compatibilityScore - a.compatibilityScore);
+
+  sendJson(res, 200, {
+    mode: "ai-business-finder-income-engine",
+    applicant: sanitizeApplicant(applicant),
+    city: city || "any",
+    query: query || "any",
+    opportunities: ranked,
+  });
+}
+
+function decrementApplicantLoad(applicantId) {
+  if (!applicantId) {
+    return;
+  }
+  const applicant = applicants.get(applicantId);
+  if (!applicant) {
+    return;
+  }
+  applicant.capacity.currentActiveDeals = Math.max(0, applicant.capacity.currentActiveDeals - 1);
+  applicant.updatedAt = new Date().toISOString();
+  applicants.set(applicantId, applicant);
+}
+
+function maybeIncrementApplicantLoad(applicantId) {
+  if (!applicantId) {
+    return { ok: true };
+  }
+
+  const applicant = applicants.get(applicantId);
+  if (!applicant) {
+    return { ok: false, status: 404, error: "Applicant profile not found for deal." };
+  }
+
+  if (applicant.capacity.currentActiveDeals >= applicant.capacity.maxConcurrentDeals) {
+    return {
+      ok: false,
+      status: 409,
+      error: "Applicant is at capacity; increase maxConcurrentDeals or complete active deals first.",
+    };
+  }
+
+  applicant.capacity.currentActiveDeals += 1;
+  applicant.updatedAt = new Date().toISOString();
+  applicants.set(applicantId, applicant);
+  return { ok: true };
+}
+
+function releaseDeal(deal, role, reason = "") {
+  const now = new Date().toISOString();
+  const releasePercent = deal.payoutMode === "split_release" ? clamp(deal.splitReleasePercent, 10, 100) : 100;
+  const releasedAmount = formatMoney((deal.applicantPayout * releasePercent) / 100);
+  const pendingAmount = formatMoney(deal.applicantPayout - releasedAmount);
+
+  deal.releasedAmount = releasedAmount;
+  deal.pendingAmount = pendingAmount;
+  deal.releasedAt = now;
+  deal.updatedAt = now;
+  deal.status = pendingAmount > 0 ? "partially_released_to_applicant" : "released_to_applicant";
+  deal.auditTrail.push({
+    at: now,
+    role,
+    event: "payout_release_authorized",
+    note: reason || "",
+  });
+
+  decrementApplicantLoad(deal.applicantId);
+}
+
+function buildDealResponse(deal, options = {}) {
+  const { includeReleaseToken = false } = options;
+  const escrowStatus = deal.status.includes("released")
+    ? deal.pendingAmount > 0
+      ? "partially_released"
+      : "released"
+    : "funded";
+  const response = {
     deal: {
       id: deal.id,
       businessId: deal.businessId,
       businessName: deal.businessName,
       clientName: deal.clientName,
+      applicantId: deal.applicantId,
       applicantName: deal.applicantName,
       proposalText: deal.proposalText,
       feeRatePercent: deal.feeRatePercent,
       status: deal.status,
+      payoutMode: deal.payoutMode,
+      splitReleasePercent: deal.splitReleasePercent,
       createdAt: deal.createdAt,
       releasedAt: deal.releasedAt,
+      updatedAt: deal.updatedAt,
     },
     payout: {
       totalAmount: deal.dealValue,
       platformFee: deal.platformFee,
       applicantPayout: deal.applicantPayout,
+      releasedAmount: deal.releasedAmount,
+      pendingAmount: deal.pendingAmount,
       escrowStatus,
       autoReleaseEnabled: true,
     },
+    security: {
+      requiredApproverRole: "client_approver",
+      fallbackApproverRole: "platform_admin",
+      escrowProtection: "enabled",
+      releaseTokenRequired: true,
+      releaseTokenHint: tokenHint(deal.releaseToken),
+    },
   };
+
+  if (includeReleaseToken) {
+    response.security.releaseToken = deal.releaseToken;
+  }
+
+  return response;
 }
 
 async function handleCreateDeal(req, res) {
@@ -399,30 +740,20 @@ async function handleCreateDeal(req, res) {
     return;
   }
 
-  const dealId = body.dealId ? body.dealId.toString() : null;
-  if (dealId && deals.has(dealId)) {
-    const existingDeal = deals.get(dealId);
-    existingDeal.clientName = (body.clientName || existingDeal.clientName || "").toString().trim();
-    existingDeal.applicantName = (body.applicantName || existingDeal.applicantName || "").toString().trim();
-    existingDeal.proposalText = (body.proposalText || existingDeal.proposalText || "").toString().trim();
-
-    if (body.doneConfirmedByClient === true || body.doneConfirmedByClient === "true") {
-      existingDeal.status = "released_to_applicant";
-      existingDeal.releasedAt = new Date().toISOString();
-    }
-
-    deals.set(dealId, existingDeal);
-    sendJson(res, 200, buildDealResponse(existingDeal));
-    return;
-  }
-
   const businessId = (body.businessId || "").toString().trim();
   const business = businessId ? findBusinessById(businessId) : null;
+  const applicantId = (body.applicantId || "").toString().trim() || null;
+  const applicantProfile = applicantId ? applicants.get(applicantId) : null;
   const clientName = (body.clientName || "").toString().trim();
-  const applicantName = (body.applicantName || "").toString().trim();
+  const applicantName = (
+    body.applicantName ||
+    applicantProfile?.fullName ||
+    ""
+  ).toString().trim();
   const proposalText = (body.proposalText || "").toString().trim();
   const dealValue = safeNumber(body.amount ?? body.dealValue, 0);
-  const doneConfirmedByClient = body.doneConfirmedByClient === true || body.doneConfirmedByClient === "true";
+  const payoutMode = body.payoutMode === "split_release" ? "split_release" : "single_release";
+  const splitReleasePercent = payoutMode === "split_release" ? clamp(safeNumber(body.splitReleasePercent, 70), 10, 100) : 100;
 
   if (!clientName || !applicantName || !proposalText || dealValue <= 0) {
     sendJson(res, 400, {
@@ -431,34 +762,60 @@ async function handleCreateDeal(req, res) {
     return;
   }
 
+  const loadResult = maybeIncrementApplicantLoad(applicantId);
+  if (!loadResult.ok) {
+    sendJson(res, loadResult.status, { error: loadResult.error });
+    return;
+  }
+
   const platformFee = formatMoney(dealValue * PLATFORM_FEE_RATE);
   const applicantPayout = formatMoney(dealValue - platformFee);
-  const id = dealId || String(nextDealId++);
+  const id = String(nextDealId++);
+  const now = new Date().toISOString();
+  const releaseToken = generateReleaseToken();
 
   const deal = {
     id,
     businessId: businessId || null,
     businessName: business?.name || (body.businessName || "Unknown business"),
     clientName,
+    applicantId,
     applicantName,
     proposalText,
     dealValue: formatMoney(dealValue),
     platformFee,
     applicantPayout,
+    releasedAmount: 0,
+    pendingAmount: applicantPayout,
     feeRatePercent: PLATFORM_FEE_RATE * 100,
-    status: doneConfirmedByClient ? "released_to_applicant" : "funded_in_ccweb_escrow",
-    createdAt: new Date().toISOString(),
-    releasedAt: doneConfirmedByClient ? new Date().toISOString() : null,
+    status: "funded_in_ccweb_escrow",
+    payoutMode,
+    splitReleasePercent,
+    createdAt: now,
+    releasedAt: null,
+    updatedAt: now,
+    releaseToken,
+    auditTrail: [
+      { at: now, role: "system", event: "deal_created_in_escrow", note: "Client funded CCWEB escrow." },
+    ],
   };
 
   deals.set(id, deal);
-  sendJson(res, 201, buildDealResponse(deal));
+  sendJson(res, 201, buildDealResponse(deal, { includeReleaseToken: true }));
 }
 
-function handleConfirmDeal(urlPath, res) {
+async function handleConfirmDeal(urlPath, req, res) {
   const match = urlPath.match(/^\/api\/deals\/([^/]+)\/confirm$/);
   if (!match) {
     sendJson(res, 404, { error: "Deal route not found." });
+    return;
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
     return;
   }
 
@@ -470,13 +827,43 @@ function handleConfirmDeal(urlPath, res) {
     return;
   }
 
-  if (deal.status === "released_to_applicant") {
+  if (deal.status.includes("released")) {
     sendJson(res, 200, buildDealResponse(deal));
     return;
   }
 
-  deal.status = "released_to_applicant";
-  deal.releasedAt = new Date().toISOString();
+  const paymentRole = (body.paymentRole || "").toString().trim();
+  if (paymentRole !== "client_approver" && paymentRole !== "platform_admin") {
+    sendJson(res, 403, {
+      error: "paymentRole must be client_approver or platform_admin.",
+    });
+    return;
+  }
+
+  if (paymentRole === "client_approver") {
+    const confirmed = body.clientConfirmed === true || body.clientConfirmed === "true";
+    if (!confirmed) {
+      sendJson(res, 400, { error: "clientConfirmed must be true for client_approver release." });
+      return;
+    }
+
+    const providedToken = (body.releaseToken || "").toString().trim();
+    if (!providedToken || providedToken !== deal.releaseToken) {
+      sendJson(res, 403, {
+        error: "Invalid release token for secure payout release.",
+      });
+      return;
+    }
+  }
+
+  if (paymentRole === "platform_admin" && !(body.adminOverrideReason || "").toString().trim()) {
+    sendJson(res, 400, {
+      error: "adminOverrideReason is required for platform_admin release.",
+    });
+    return;
+  }
+
+  releaseDeal(deal, paymentRole, (body.adminOverrideReason || "").toString().trim());
   deals.set(dealId, deal);
   sendJson(res, 200, buildDealResponse(deal));
 }
@@ -496,6 +883,8 @@ function handleGetDeal(urlPath, res) {
 
   sendJson(res, 200, buildDealResponse(deal));
 }
+
+seedApplicants();
 
 const server = http.createServer(async (req, res) => {
   if (!req.url) {
@@ -530,11 +919,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (pathname === "/api/analyze" && req.method === "POST") {
-    await handleAnalyze(req, res);
-    return;
-  }
-
   if (pathname === "/api/search" && req.method === "POST") {
     let body;
     try {
@@ -548,9 +932,35 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname === "/api/analyze" && req.method === "POST") {
+    await handleAnalyze(req, res);
+    return;
+  }
+
   if (pathname.match(/^\/api\/analyze\/[^/]+$/) && req.method === "GET") {
     const businessId = pathname.split("/").pop();
     await handleAnalyze(req, res, businessId);
+    return;
+  }
+
+  if (pathname === "/api/applicants" && req.method === "GET") {
+    handleApplicantList(res);
+    return;
+  }
+
+  if (pathname === "/api/applicants" && req.method === "POST") {
+    await handleUpsertApplicant(req, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/applicants\/[^/]+$/) && req.method === "GET") {
+    const applicantId = pathname.split("/").pop();
+    handleGetApplicant(applicantId, res);
+    return;
+  }
+
+  if (pathname === "/api/engine/match" && req.method === "GET") {
+    handleEngineMatch(requestUrl, res);
     return;
   }
 
@@ -560,7 +970,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname.match(/^\/api\/deals\/[^/]+\/confirm$/) && req.method === "POST") {
-    handleConfirmDeal(pathname, res);
+    await handleConfirmDeal(pathname, req, res);
     return;
   }
 

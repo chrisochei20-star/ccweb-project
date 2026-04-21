@@ -8,6 +8,7 @@ import {
   Routes,
   useParams,
 } from "react-router-dom";
+import { useState } from "react";
 import "./styles.css";
 
 const navItems = [
@@ -280,7 +281,7 @@ function AiTutorPage() {
 }
 
 function AiStreamingPage() {
-  const [payload, setPayload] = React.useState({
+  const [payload, setPayload] = useState({
     roomTitle: "AI Web3 Fundamentals Live",
     curriculum: "AI",
     hostModel: "Claude-CCWEB-Host",
@@ -289,37 +290,75 @@ function AiStreamingPage() {
     expectedArppuUsd: 4.5,
     platformSharePercent: 37,
   });
-  const [response, setResponse] = React.useState(null);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState("");
+  const [response, setResponse] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   function updateField(field, value) {
     setPayload((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function curriculumToTracks(curriculum) {
+    const normalized = curriculum.toLowerCase();
+    if (normalized === "ai") {
+      return ["AI Foundations", "Machine Learning", "Digital Business Systems"];
+    }
+    if (normalized === "blockchain") {
+      return ["Blockchain Fundamentals", "Smart Contracts", "Web3 Product Development"];
+    }
+    if (normalized === "web3") {
+      return ["Web3 Product Development", "Smart Contracts", "Digital Business Systems"];
+    }
+    if (normalized === "crypto") {
+      return ["Crypto Markets", "Blockchain Fundamentals", "Financial Literacy & Human Development"];
+    }
+    if (normalized === "business") {
+      return ["Digital Business Systems", "Financial Literacy & Human Development", "AI Foundations"];
+    }
+    return ["Financial Literacy & Human Development", "Digital Business Systems", "AI Foundations"];
   }
 
   async function createRoom() {
     setLoading(true);
     setError("");
     try {
+      const expectedGross = Number(payload.expectedAudience) * Number(payload.expectedArppuUsd);
       const res = await fetch("/api/streaming/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          roomTitle: payload.roomTitle,
-          curriculum: payload.curriculum,
-          aiHostModel: payload.hostModel,
-          hostLocale: payload.hostLocale,
-          expectedAudience: Number(payload.expectedAudience),
-          expectedArppuUsd: Number(payload.expectedArppuUsd),
-          platformSharePercent: Number(payload.platformSharePercent),
+          roomName: payload.roomTitle,
+          topic: `${payload.curriculum} live masterclass`,
+          city: "Global",
+          region: payload.hostLocale,
+          createdBy: "ccweb-stream-studio",
+          aiHostName: payload.hostModel,
+          curriculumTracks: curriculumToTracks(payload.curriculum),
+          platformRevenueSharePercent: Number(payload.platformSharePercent),
         }),
       });
 
-      const data = await res.json();
+      const roomData = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Could not create room.");
+        throw new Error(roomData.error || "Could not create room.");
       }
-      setResponse(data);
+
+      const payoutRes = await fetch("/api/streaming/payouts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomId: roomData.id,
+          periodLabel: "Projected first live cycle",
+          grossRevenueUsd: expectedGross,
+          platformRevenueSharePercent: Number(payload.platformSharePercent),
+        }),
+      });
+      const payoutData = await payoutRes.json();
+      if (!payoutRes.ok) {
+        throw new Error(payoutData.error || "Could not compute payout.");
+      }
+
+      setResponse({ room: roomData, payout: payoutData });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -426,18 +465,18 @@ function AiStreamingPage() {
             </p>
           ) : (
             <>
-              <p><strong>Room:</strong> {response.room.roomTitle}</p>
-              <p><strong>LiveKit room:</strong> {response.livekit.roomName}</p>
+              <p><strong>Room:</strong> {response.room.roomName}</p>
+              <p><strong>LiveKit SID hint:</strong> {response.room.livekit.roomSidHint}</p>
               <p><strong>Status:</strong> {response.room.status}</p>
-              <p><strong>Curriculum:</strong> {response.room.curriculum}</p>
-              <p><strong>AI Host:</strong> {response.room.aiHostModel}</p>
-              <p><strong>Platform share:</strong> {response.room.platformSharePercent}%</p>
-              <p><strong>Estimated gross:</strong> ${response.revenueProjection.grossRevenueUsd}</p>
-              <p><strong>CCWEB revenue:</strong> ${response.revenueProjection.platformRevenueUsd}</p>
-              <p><strong>Creator pool:</strong> ${response.revenueProjection.creatorRevenuePoolUsd}</p>
+              <p><strong>Topic:</strong> {response.room.topic}</p>
+              <p><strong>AI Host:</strong> {response.room.aiHost.displayName}</p>
+              <p><strong>Platform share:</strong> {response.payout.platformRevenueSharePercent}%</p>
+              <p><strong>Estimated gross:</strong> ${response.payout.grossRevenueUsd}</p>
+              <p><strong>CCWEB revenue:</strong> ${response.payout.platformRevenueUsd}</p>
+              <p><strong>Creator pool:</strong> ${response.payout.creatorRevenueUsd}</p>
               <h4 style={{ marginBottom: "0.4rem" }}>AI host curriculum coverage</h4>
               <ul className="list">
-                {response.aiHostCapabilities.map((item) => (
+                {response.room.aiHost.curriculumCoverage.map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>

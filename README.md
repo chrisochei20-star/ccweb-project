@@ -29,3 +29,13 @@ Then open `http://localhost:3000`.
 Run:
 
 `npm start`
+
+## Business applicant + income engine APIs
+
+The prototype now includes applicant profile and secure payout workflow APIs:
+
+- `GET /api/applicants` - list applicant profiles, stats, skill capacity, certificates
+- `GET /api/applicants/:id` - fetch one applicant profile
+- `POST /api/applicants` - create/update applicant profile with capacity and certificates
+- `POST /api/business-finder/matches` - AI business finder style compatibility matching
+- `POST /api/deals/:id/release` - secure payout release with role + secret token checks

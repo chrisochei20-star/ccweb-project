@@ -115,6 +115,15 @@
         font-size: 0.86rem;
       }
 
+      .pill-list {
+        margin: 0.45rem 0 0;
+        padding-left: 0;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+
       .muted {
         color: #94a3b8;
       }
@@ -173,6 +182,55 @@
 
       <div class="grid">
         <section class="card">
+          <h2>Applicant Profile + AI Income Engine Fit</h2>
+          <p class="muted">
+            Secure profile setup for skills, capacity, certificates, and AI business
+            compatibility scoring.
+          </p>
+          <label for="profileApplicantId">Applicant ID</label>
+          <input id="profileApplicantId" value="app-amina" />
+          <div class="row">
+            <div>
+              <label for="profileName">Name</label>
+              <input id="profileName" value="Amina Growth Ops" />
+            </div>
+            <div>
+              <label for="profileTier">Tier</label>
+              <select id="profileTier">
+                <option value="trusted" selected>trusted</option>
+                <option value="verified">verified</option>
+                <option value="starter">starter</option>
+              </select>
+            </div>
+          </div>
+          <label for="profileSkills">Skills (comma separated)</label>
+          <input
+            id="profileSkills"
+            value="Local SEO, Reputation Management, Funnel Copywriting, CRM Automation"
+          />
+          <div class="row">
+            <div>
+              <label for="profileWeeklyCapacity">Weekly capacity (hours)</label>
+              <input id="profileWeeklyCapacity" type="number" min="1" value="30" />
+            </div>
+            <div>
+              <label for="profileOpenSlots">Open slots</label>
+              <input id="profileOpenSlots" type="number" min="1" value="3" />
+            </div>
+          </div>
+          <label for="profileCertificates">Certificates (one per line)</label>
+          <textarea id="profileCertificates">Google Business Profile Specialist
+HubSpot Revenue Operations
+Meta Performance Marketing</textarea>
+          <button id="saveProfileBtn">Save Profile</button>
+          <button id="loadProfileBtn">Load Profile Stats</button>
+          <div id="profileMeta" class="muted"></div>
+          <div id="profileSummary" class="chips"></div>
+          <ul id="profileSkillList" class="pill-list"></ul>
+          <ul id="profileCertList" class="pill-list"></ul>
+        </section>
+
+        <section class="card">
           <h2>3) Contact + Proposal + Payment</h2>
           <p class="muted">
             Submit proposal, client pays in CCWEB escrow, then payout auto-releases when deal is
@@ -204,6 +262,18 @@
                 <option value="true">Confirmed by client</option>
               </select>
             </div>
+            <div>
+              <label for="confirmRole">Confirmation role</label>
+              <select id="confirmRole">
+                <option value="client" selected>client</option>
+                <option value="applicant">applicant</option>
+                <option value="viewer">viewer</option>
+              </select>
+            </div>
+            <div>
+              <label for="confirmToken">Payment roll token</label>
+              <input id="confirmToken" placeholder="required when confirming deal" />
+            </div>
           </div>
           <button id="createDealBtn">Create / Update Deal</button>
           <div id="dealOutput" class="chips"></div>
@@ -215,7 +285,15 @@
             <li>Client payment goes to CCWEB escrow.</li>
             <li>CCWEB fee = <code>8%</code> of total deal amount.</li>
             <li>Applicant payout = <code>92%</code> after done confirmation.</li>
-            <li>Status transitions: <code>proposal_submitted</code> -> <code>in_escrow</code> -> <code>released</code>.</li>
+            <li>
+              Status transitions:
+              <code>proposal_submitted</code> -> <code>in_escrow</code> ->
+              <code>released</code>.
+            </li>
+            <li>
+              Confirmation is role-gated and token-protected:
+              <code>role=client</code> + <code>X-CCWEB-PAYROLL-TOKEN</code>.
+            </li>
           </ul>
           <p class="muted">This prototype uses in-memory storage for demo behavior.</p>
         </section>
@@ -243,8 +321,23 @@
       const proposalText = document.getElementById("proposalText");
       const dealAmount = document.getElementById("dealAmount");
       const doneConfirm = document.getElementById("doneConfirm");
+      const confirmRole = document.getElementById("confirmRole");
+      const confirmToken = document.getElementById("confirmToken");
       const createDealBtn = document.getElementById("createDealBtn");
       const dealOutput = document.getElementById("dealOutput");
+      const profileApplicantId = document.getElementById("profileApplicantId");
+      const profileName = document.getElementById("profileName");
+      const profileTier = document.getElementById("profileTier");
+      const profileSkills = document.getElementById("profileSkills");
+      const profileWeeklyCapacity = document.getElementById("profileWeeklyCapacity");
+      const profileOpenSlots = document.getElementById("profileOpenSlots");
+      const profileCertificates = document.getElementById("profileCertificates");
+      const saveProfileBtn = document.getElementById("saveProfileBtn");
+      const loadProfileBtn = document.getElementById("loadProfileBtn");
+      const profileMeta = document.getElementById("profileMeta");
+      const profileSummary = document.getElementById("profileSummary");
+      const profileSkillList = document.getElementById("profileSkillList");
+      const profileCertList = document.getElementById("profileCertList");
 
       function renderSearch(list) {
         searchResults.innerHTML = "";
@@ -302,6 +395,47 @@
           chip.className = "chip";
           chip.textContent = text;
           dealOutput.appendChild(chip);
+        });
+      }
+
+      function renderProfile(profilePayload) {
+        const profile = profilePayload.profile;
+        profileMeta.textContent = `Profile loaded for ${profile.applicantName} (${profile.applicantId}).`;
+        profileSummary.innerHTML = "";
+        profileSkillList.innerHTML = "";
+        profileCertList.innerHTML = "";
+
+        const summary = [
+          `Tier: ${profile.tier}`,
+          `Trust score: ${profile.trustScore}`,
+          `Capacity score: ${profile.capacityScore}`,
+          `Jobs done: ${profile.stats.jobsCompleted}`,
+          `Active deals: ${profile.stats.activeDeals}`,
+          `Total earned: $${profile.stats.totalEarned}`,
+          `Success rate: ${profile.stats.successRate}%`,
+          `Avg turnaround: ${profile.stats.averageTurnaroundDays} days`,
+          `Compatibility: ${profile.incomeEngineMatch.matchSummary}`,
+        ];
+
+        summary.forEach((text) => {
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          chip.textContent = text;
+          profileSummary.appendChild(chip);
+        });
+
+        profile.skills.forEach((skill) => {
+          const li = document.createElement("li");
+          li.className = "chip";
+          li.textContent = `Skill: ${skill}`;
+          profileSkillList.appendChild(li);
+        });
+
+        profile.certifications.forEach((certificate) => {
+          const li = document.createElement("li");
+          li.className = "chip";
+          li.textContent = `Certificate: ${certificate}`;
+          profileCertList.appendChild(li);
         });
       }
 
@@ -381,26 +515,89 @@
             dealOutput.textContent = "Deal created but ID was missing from response.";
             return;
           }
+          const token = confirmToken.value.trim();
+          if (!token) {
+            dealOutput.textContent = "Payment roll token is required for confirmation.";
+            return;
+          }
           const confirmRes = await fetch(`/api/deals/${encodeURIComponent(dealId)}/confirm`, {
             method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CCWEB-PAYROLL-TOKEN": token,
+            },
+            body: JSON.stringify({ role: confirmRole.value }),
           });
           if (confirmRes.ok) {
             current = await confirmRes.json();
+          } else {
+            const err = await confirmRes.json();
+            dealOutput.textContent = err.error || "Could not confirm deal.";
+            return;
           }
         }
 
         renderDeal(current);
       }
 
+      async function saveProfile() {
+        const body = {
+          applicantId: profileApplicantId.value.trim(),
+          applicantName: profileName.value.trim(),
+          tier: profileTier.value,
+          weeklyCapacityHours: Number(profileWeeklyCapacity.value),
+          openSlots: Number(profileOpenSlots.value),
+          skills: profileSkills.value
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean),
+          certifications: profileCertificates.value
+            .split("\n")
+            .map((value) => value.trim())
+            .filter(Boolean),
+        };
+        const response = await fetch("/api/applicants", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) {
+          const err = await response.json();
+          profileMeta.textContent = err.error || "Could not save profile.";
+          return;
+        }
+        const payload = await response.json();
+        renderProfile(payload);
+      }
+
+      async function loadProfile() {
+        const applicantId = profileApplicantId.value.trim();
+        if (!applicantId) {
+          profileMeta.textContent = "Applicant ID is required.";
+          return;
+        }
+        const response = await fetch(`/api/applicants/${encodeURIComponent(applicantId)}`);
+        if (!response.ok) {
+          const err = await response.json();
+          profileMeta.textContent = err.error || "Profile not found.";
+          return;
+        }
+        const payload = await response.json();
+        renderProfile(payload);
+      }
+
       searchBtn.addEventListener("click", runSearch);
       analyzeBtn.addEventListener("click", runAnalysis);
       createDealBtn.addEventListener("click", createOrUpdateDeal);
+      saveProfileBtn.addEventListener("click", saveProfile);
+      loadProfileBtn.addEventListener("click", loadProfile);
       businessSelect.addEventListener("change", () => {
         state.selectedBusinessId = businessSelect.value;
         if (businessSelect.value) dealBusinessId.value = businessSelect.value;
       });
 
       runSearch();
+      loadProfile();
     </script>
   </body>
 </html>

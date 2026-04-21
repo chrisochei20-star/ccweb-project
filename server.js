@@ -9,7 +9,11 @@ const PLATFORM_FEE_RATE = 0.08;
 
 const deals = new Map();
 const applicants = new Map();
+const streamRooms = new Map();
+const streamPayouts = new Map();
 let nextDealId = 1;
+let nextStreamRoomId = 1;
+let nextStreamPayoutId = 1;
 
 const sampleBusinesses = [
   {
@@ -136,6 +140,17 @@ const categorySkillMap = {
   "auto service": ["google maps", "call tracking", "follow-up automation"],
 };
 
+const curriculumTracks = [
+  "AI Foundations",
+  "Machine Learning",
+  "Blockchain Fundamentals",
+  "Smart Contracts",
+  "Web3 Product Development",
+  "Crypto Markets",
+  "Digital Business Systems",
+  "Financial Literacy & Human Development",
+];
+
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -174,6 +189,10 @@ function tokenHint(token) {
 
 function generateReleaseToken() {
   return crypto.randomBytes(16).toString("hex");
+}
+
+function generateLivekitToken() {
+  return crypto.randomBytes(24).toString("hex");
 }
 
 async function serveFile(filePath, res) {
@@ -731,6 +750,221 @@ function buildDealResponse(deal, options = {}) {
   return response;
 }
 
+function sanitizeRoomTopic(value) {
+  return (value || "")
+    .toString()
+    .trim()
+    .slice(0, 120);
+}
+
+function normalizeCurriculumTracks(inputTracks) {
+  if (!inputTracks) {
+    return curriculumTracks.slice(0, 4);
+  }
+  const tracks = Array.isArray(inputTracks)
+    ? inputTracks
+    : inputTracks
+        .toString()
+        .split(",")
+        .map((track) => track.trim());
+  const uniqueTracks = [...new Set(tracks.filter(Boolean))];
+  return uniqueTracks.length ? uniqueTracks : curriculumTracks.slice(0, 4);
+}
+
+function normalizePlatformRevenueSharePercent(value) {
+  return clamp(safeNumber(value, 37), 35, 40);
+}
+
+function buildStreamingAiHost(hostName, tracks) {
+  return {
+    displayName: hostName || "CCWEB AI Host",
+    capabilitySummary:
+      "Multilingual AI host capable to tutor all CCWEB curriculum tracks with adaptive live explanations.",
+    curriculumCoverage: tracks,
+  };
+}
+
+function buildStreamRoomResponse(room) {
+  return {
+    id: room.id,
+    roomName: room.roomName,
+    city: room.city,
+    region: room.region,
+    topic: room.topic,
+    createdBy: room.createdBy,
+    status: room.status,
+    streamingMode: "livekit-webstream",
+    livekit: {
+      wsUrl: room.livekitWsUrl,
+      token: room.livekitToken,
+      roomSidHint: room.roomSidHint,
+    },
+    aiHost: room.aiHost,
+    monetization: {
+      mode: room.monetizationMode,
+      platformRevenueSharePercent: room.platformRevenueSharePercent,
+      creatorRevenueSharePercent: room.creatorRevenueSharePercent,
+      target: "organic_revenue_youtube_like",
+    },
+    metrics: room.metrics,
+    createdAt: room.createdAt,
+    updatedAt: room.updatedAt,
+  };
+}
+
+function createRoomFromPayload(body) {
+  const roomName = (body.roomName || "").toString().trim();
+  const city = (body.city || "").toString().trim() || "Global";
+  const region = (body.region || "").toString().trim() || "Worldwide";
+  const topic = sanitizeRoomTopic(body.topic || "AI + Web3 live tutorial");
+  const createdBy = (body.createdBy || "ccweb-studio").toString().trim();
+  const tracks = normalizeCurriculumTracks(body.curriculumTracks);
+  const platformRevenueSharePercent = normalizePlatformRevenueSharePercent(
+    body.platformRevenueSharePercent
+  );
+  const creatorRevenueSharePercent = formatMoney(100 - platformRevenueSharePercent);
+  const now = new Date().toISOString();
+
+  if (!roomName) {
+    return {
+      error: "roomName is required.",
+      status: 400,
+    };
+  }
+
+  const id = `stream-${String(nextStreamRoomId++).padStart(4, "0")}`;
+  const livekitToken = generateLivekitToken();
+  const room = {
+    id,
+    roomName,
+    city,
+    region,
+    topic,
+    createdBy,
+    status: "live",
+    livekitWsUrl: "wss://livekit.ccweb-stream.example",
+    livekitToken,
+    roomSidHint: `${id}-lk`,
+    aiHost: buildStreamingAiHost((body.aiHostName || "").toString().trim(), tracks),
+    monetizationMode: "organic_revenue_share",
+    platformRevenueSharePercent,
+    creatorRevenueSharePercent,
+    metrics: {
+      concurrentViewers: Math.max(1, Math.round(80 + Math.random() * 320)),
+      avgWatchMinutes: Math.round(12 + Math.random() * 18),
+      engagementRatePercent: Math.round(52 + Math.random() * 35),
+      estimatedOrganicRevenueUsd: formatMoney(900 + Math.random() * 4600),
+    },
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  streamRooms.set(id, room);
+  return { room };
+}
+
+function buildStreamingPayoutResponse(payout) {
+  return {
+    id: payout.id,
+    roomId: payout.roomId,
+    periodLabel: payout.periodLabel,
+    grossRevenueUsd: payout.grossRevenueUsd,
+    platformRevenueUsd: payout.platformRevenueUsd,
+    creatorRevenueUsd: payout.creatorRevenueUsd,
+    platformRevenueSharePercent: payout.platformRevenueSharePercent,
+    creatorRevenueSharePercent: payout.creatorRevenueSharePercent,
+    payoutStatus: payout.payoutStatus,
+    payoutMethod: payout.payoutMethod,
+    createdAt: payout.createdAt,
+  };
+}
+
+async function handleCreateStreamRoom(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const result = createRoomFromPayload(body);
+  if (result.error) {
+    sendJson(res, result.status || 400, { error: result.error });
+    return;
+  }
+  sendJson(res, 201, buildStreamRoomResponse(result.room));
+}
+
+function handleListStreamRooms(res) {
+  const rooms = Array.from(streamRooms.values()).map(buildStreamRoomResponse);
+  sendJson(res, 200, { count: rooms.length, rooms });
+}
+
+function handleGetStreamRoom(roomId, res) {
+  const room = streamRooms.get(roomId);
+  if (!room) {
+    sendJson(res, 404, { error: "Streaming room not found." });
+    return;
+  }
+  sendJson(res, 200, buildStreamRoomResponse(room));
+}
+
+async function handleCreateStreamPayout(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const roomId = (body.roomId || "").toString().trim();
+  const room = streamRooms.get(roomId);
+  if (!room) {
+    sendJson(res, 404, { error: "Streaming room not found for payout." });
+    return;
+  }
+
+  const grossRevenueUsd = Math.max(0, safeNumber(body.grossRevenueUsd, 0));
+  if (grossRevenueUsd <= 0) {
+    sendJson(res, 400, { error: "grossRevenueUsd must be greater than 0." });
+    return;
+  }
+
+  const platformRevenueSharePercent = normalizePlatformRevenueSharePercent(
+    body.platformRevenueSharePercent ?? room.platformRevenueSharePercent
+  );
+  const creatorRevenueSharePercent = formatMoney(100 - platformRevenueSharePercent);
+  const platformRevenueUsd = formatMoney((grossRevenueUsd * platformRevenueSharePercent) / 100);
+  const creatorRevenueUsd = formatMoney(grossRevenueUsd - platformRevenueUsd);
+  const id = `stream-pay-${String(nextStreamPayoutId++).padStart(4, "0")}`;
+  const payout = {
+    id,
+    roomId,
+    periodLabel: (body.periodLabel || "Current live session").toString().trim(),
+    grossRevenueUsd: formatMoney(grossRevenueUsd),
+    platformRevenueUsd,
+    creatorRevenueUsd,
+    platformRevenueSharePercent,
+    creatorRevenueSharePercent,
+    payoutStatus: "scheduled",
+    payoutMethod: "ccweb-settlement-ledger",
+    createdAt: new Date().toISOString(),
+  };
+
+  streamPayouts.set(id, payout);
+  sendJson(res, 201, buildStreamingPayoutResponse(payout));
+}
+
+function handleListStreamPayouts(requestUrl, res) {
+  const roomIdFilter = (requestUrl.searchParams.get("roomId") || "").trim();
+  const payouts = Array.from(streamPayouts.values())
+    .filter((payout) => (roomIdFilter ? payout.roomId === roomIdFilter : true))
+    .map(buildStreamingPayoutResponse);
+  sendJson(res, 200, { count: payouts.length, payouts });
+}
+
 async function handleCreateDeal(req, res) {
   let body;
   try {
@@ -966,6 +1200,32 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === "/api/deals" && req.method === "POST") {
     await handleCreateDeal(req, res);
+    return;
+  }
+
+  if (pathname === "/api/streaming/rooms" && req.method === "POST") {
+    await handleCreateStreamRoom(req, res);
+    return;
+  }
+
+  if (pathname === "/api/streaming/rooms" && req.method === "GET") {
+    handleListStreamRooms(res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/streaming\/rooms\/[^/]+$/) && req.method === "GET") {
+    const roomId = pathname.split("/").pop();
+    handleGetStreamRoom(roomId, res);
+    return;
+  }
+
+  if (pathname === "/api/streaming/payouts" && req.method === "POST") {
+    await handleCreateStreamPayout(req, res);
+    return;
+  }
+
+  if (pathname === "/api/streaming/payouts" && req.method === "GET") {
+    handleListStreamPayouts(requestUrl, res);
     return;
   }
 

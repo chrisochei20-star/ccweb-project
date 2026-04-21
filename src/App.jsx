@@ -14,6 +14,7 @@ const navItems = [
   { label: "Home", to: "/" },
   { label: "Courses", to: "/courses" },
   { label: "AI Tutor", to: "/ai-tutor" },
+  { label: "AI Streaming", to: "/ai-streaming" },
   { label: "Pricing", to: "/pricing" },
   { label: "Tokens", to: "/tokens" },
   { label: "Affiliates", to: "/affiliates" },
@@ -71,6 +72,7 @@ function App() {
           <Route path="courses" element={<CoursesPage />} />
           <Route path="courses/:id" element={<CourseNotFoundPage />} />
           <Route path="ai-tutor" element={<AiTutorPage />} />
+          <Route path="ai-streaming" element={<AiStreamingPage />} />
           <Route path="pricing" element={<PricingPage />} />
           <Route path="tokens" element={<TokensPage />} />
           <Route path="affiliates" element={<AffiliatesPage />} />
@@ -271,6 +273,176 @@ function AiTutorPage() {
           <Link to="/login" className="btn btn-outline">
             Sign In
           </Link>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function AiStreamingPage() {
+  const [payload, setPayload] = React.useState({
+    roomTitle: "AI Web3 Fundamentals Live",
+    curriculum: "AI",
+    hostModel: "Claude-CCWEB-Host",
+    hostLocale: "English",
+    expectedAudience: 1800,
+    expectedArppuUsd: 4.5,
+    platformSharePercent: 37,
+  });
+  const [response, setResponse] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  function updateField(field, value) {
+    setPayload((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function createRoom() {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/streaming/rooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomTitle: payload.roomTitle,
+          curriculum: payload.curriculum,
+          aiHostModel: payload.hostModel,
+          hostLocale: payload.hostLocale,
+          expectedAudience: Number(payload.expectedAudience),
+          expectedArppuUsd: Number(payload.expectedArppuUsd),
+          platformSharePercent: Number(payload.platformSharePercent),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Could not create room.");
+      }
+      setResponse(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <section>
+      <header className="page-header">
+        <h1 className="section-title">AI Web Streaming</h1>
+        <p className="muted">
+          LiveKit-powered rooms with AI hosts that can tutor across AI, Blockchain, Web3,
+          Crypto, Business, and Finance curricula.
+        </p>
+      </header>
+
+      <div className="card-grid">
+        <article className="panel">
+          <h3>Live room configuration</h3>
+          <div className="auth-row">
+            <label htmlFor="room-title">Room title</label>
+            <input
+              id="room-title"
+              value={payload.roomTitle}
+              onChange={(event) => updateField("roomTitle", event.target.value)}
+            />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="curriculum">Curriculum</label>
+            <select
+              id="curriculum"
+              value={payload.curriculum}
+              onChange={(event) => updateField("curriculum", event.target.value)}
+            >
+              <option>AI</option>
+              <option>Blockchain</option>
+              <option>Web3</option>
+              <option>Crypto</option>
+              <option>Business</option>
+              <option>Finance</option>
+            </select>
+          </div>
+          <div className="auth-row">
+            <label htmlFor="host-model">AI host model</label>
+            <input
+              id="host-model"
+              value={payload.hostModel}
+              onChange={(event) => updateField("hostModel", event.target.value)}
+            />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="host-locale">Host locale</label>
+            <input
+              id="host-locale"
+              value={payload.hostLocale}
+              onChange={(event) => updateField("hostLocale", event.target.value)}
+            />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="expected-audience">Expected audience</label>
+            <input
+              id="expected-audience"
+              type="number"
+              min="1"
+              value={payload.expectedAudience}
+              onChange={(event) => updateField("expectedAudience", event.target.value)}
+            />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="arppu">Expected ARPPU (USD)</label>
+            <input
+              id="arppu"
+              type="number"
+              min="0.1"
+              step="0.1"
+              value={payload.expectedArppuUsd}
+              onChange={(event) => updateField("expectedArppuUsd", event.target.value)}
+            />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="platform-share">CCWEB platform share % (35-40)</label>
+            <input
+              id="platform-share"
+              type="number"
+              min="35"
+              max="40"
+              value={payload.platformSharePercent}
+              onChange={(event) => updateField("platformSharePercent", event.target.value)}
+            />
+          </div>
+          <button type="button" className="btn btn-primary" onClick={createRoom} disabled={loading}>
+            {loading ? "Creating..." : "Create AI Live Room"}
+          </button>
+          {error ? <p className="muted" style={{ color: "#ff8c8c" }}>{error}</p> : null}
+        </article>
+
+        <article className="panel">
+          <h3>Revenue and capability preview</h3>
+          {!response ? (
+            <p className="muted">
+              Create a room to preview LiveKit session details, curriculum coverage,
+              and organic revenue projections.
+            </p>
+          ) : (
+            <>
+              <p><strong>Room:</strong> {response.room.roomTitle}</p>
+              <p><strong>LiveKit room:</strong> {response.livekit.roomName}</p>
+              <p><strong>Status:</strong> {response.room.status}</p>
+              <p><strong>Curriculum:</strong> {response.room.curriculum}</p>
+              <p><strong>AI Host:</strong> {response.room.aiHostModel}</p>
+              <p><strong>Platform share:</strong> {response.room.platformSharePercent}%</p>
+              <p><strong>Estimated gross:</strong> ${response.revenueProjection.grossRevenueUsd}</p>
+              <p><strong>CCWEB revenue:</strong> ${response.revenueProjection.platformRevenueUsd}</p>
+              <p><strong>Creator pool:</strong> ${response.revenueProjection.creatorRevenuePoolUsd}</p>
+              <h4 style={{ marginBottom: "0.4rem" }}>AI host curriculum coverage</h4>
+              <ul className="list">
+                {response.aiHostCapabilities.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </>
+          )}
         </article>
       </div>
     </section>

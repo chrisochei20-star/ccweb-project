@@ -361,6 +361,10 @@ function summarizeAttendanceForRoom(roomId) {
   };
 }
 
+function isRoomFinished(room) {
+  return Boolean(room && room.status === "finished");
+}
+
 function updateRoomMetricsFromAttendance(room) {
   const summary = summarizeAttendanceForRoom(room.id);
   room.metrics.activeAttenders = summary.activeAttenders;
@@ -368,6 +372,55 @@ function updateRoomMetricsFromAttendance(room) {
   room.metrics.totalTrackedAttenders = summary.totalTrackedAttenders;
   room.metrics.concurrentViewers = summary.activeAttenders;
   room.updatedAt = new Date().toISOString();
+}
+
+function getUserActiveStream(userId, options = {}) {
+  const normalizedUserId = (userId || "").toString().trim();
+  if (!normalizedUserId) {
+    return null;
+  }
+  const excludeRoomId = (options.excludeRoomId || "").toString().trim();
+
+  for (const [roomId, attendeesMap] of streamAttendances.entries()) {
+    if (excludeRoomId && roomId === excludeRoomId) {
+      continue;
+    }
+    const attendance = attendeesMap.get(normalizedUserId);
+    if (!attendance || !attendance.isActive) {
+      continue;
+    }
+    const room = streamRooms.get(roomId);
+    if (!room || isRoomFinished(room)) {
+      continue;
+    }
+    return { room, attendance };
+  }
+
+  return null;
+}
+
+function closeRoomAttendances(roomId, reason = "room_finished") {
+  const attendeesMap = streamAttendances.get(roomId);
+  if (!attendeesMap) {
+    return [];
+  }
+  const now = new Date().toISOString();
+  const changed = [];
+  attendeesMap.forEach((entry, userId) => {
+    if (!entry.isActive) {
+      return;
+    }
+    const updated = {
+      ...entry,
+      isActive: false,
+      leftReason: reason,
+      updatedAt: now,
+    };
+    attendeesMap.set(userId, updated);
+    changed.push(updated);
+  });
+  streamAttendances.set(roomId, attendeesMap);
+  return changed;
 }
 
 function buildDistributionResponse(distribution) {
@@ -794,6 +847,28 @@ function parseRoomIdFromPath(pathname, suffix) {
   return match ? match[1] : null;
 }
 
+function handleGetActiveStreamSession(requestUrl, res) {
+  const userId = (requestUrl.searchParams.get("userId") || "").trim();
+  if (!userId) {
+    sendJson(res, 400, { error: "userId is required." });
+    return;
+  }
+  const active = getUserActiveStream(userId);
+  if (!active) {
+    sendJson(res, 200, { userId, hasActiveStream: false, activeSession: null });
+    return;
+  }
+
+  sendJson(res, 200, {
+    userId,
+    hasActiveStream: true,
+    activeSession: {
+      room: buildStreamRoomResponse(active.room),
+      attendance: active.attendance,
+    },
+  });
+}
+
 function handleListStreamAttendance(pathname, res) {
   const roomId = parseRoomIdFromPath(pathname, "attendance");
   if (!roomId) {
@@ -845,6 +920,33 @@ async function handleUpsertStreamAttendance(pathname, req, res) {
   const attendeesMap = streamAttendances.get(roomId) || new Map();
   const now = new Date().toISOString();
   const existing = attendeesMap.get(user.id);
+  const requestedActive = body.isActive === undefined ? existing?.isActive ?? true : Boolean(body.isActive);
+
+  if (requestedActive && isRoomFinished(room)) {
+    sendJson(res, 409, {
+      error: "This streaming session is finished. Join a live session instead.",
+      roomId,
+      roomStatus: room.status,
+    });
+    return;
+  }
+
+  if (requestedActive) {
+    const activeStream = getUserActiveStream(user.id, { excludeRoomId: roomId });
+    if (activeStream) {
+      sendJson(res, 409, {
+        error: "User can join only one active stream at a time until that program is finished.",
+        activeSession: {
+          roomId: activeStream.room.id,
+          roomName: activeStream.room.roomName,
+          status: activeStream.room.status,
+          estimatedEndAt: activeStream.room.tutoringSchedule?.estimatedEndAt || null,
+        },
+      });
+      return;
+    }
+  }
+
   const watchMinutes = Math.max(0, safeNumber(body.watchMinutes, existing?.watchMinutes || 0));
   const entry = {
     roomId,
@@ -852,7 +954,7 @@ async function handleUpsertStreamAttendance(pathname, req, res) {
     displayName: user.displayName,
     isOrganic: user.isOrganic,
     watchMinutes,
-    isActive: body.isActive === undefined ? existing?.isActive ?? true : Boolean(body.isActive),
+    isActive: requestedActive,
     joinedAt: existing?.joinedAt || now,
     updatedAt: now,
   };
@@ -879,6 +981,74 @@ async function handleUpsertStreamAttendance(pathname, req, res) {
   }
 
   sendJson(res, existing ? 200 : 201, { roomId, attendance: entry, metrics: room.metrics });
+}
+
+async function handleFinishStreamRoom(pathname, req, res) {
+  const roomId = parseRoomIdFromPath(pathname, "finish");
+  if (!roomId) {
+    sendJson(res, 404, { error: "Finish route not found." });
+    return;
+  }
+  const room = streamRooms.get(roomId);
+  if (!room) {
+    sendJson(res, 404, { error: "Streaming room not found." });
+    return;
+  }
+
+  let body = {};
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  if (isRoomFinished(room)) {
+    sendJson(res, 200, {
+      room: buildStreamRoomResponse(room),
+      closedAttendances: 0,
+      message: "Room already finished.",
+    });
+    return;
+  }
+
+  const finishedBy = (body.finishedBy || room.createdBy || "system").toString().trim();
+  const now = new Date().toISOString();
+  room.status = "finished";
+  room.finishedAt = now;
+  room.updatedAt = now;
+  room.tutoringSchedule = {
+    ...room.tutoringSchedule,
+    actualEndedAt: now,
+  };
+
+  const closed = closeRoomAttendances(roomId, "room_finished");
+  updateRoomMetricsFromAttendance(room);
+  streamRooms.set(roomId, room);
+
+  const recipientSet = new Set([
+    room.createdBy,
+    ...closed.map((entry) => entry.userId),
+  ]);
+  createNotification({
+    type: "ai_streaming_room_finished",
+    title: "AI live stream finished",
+    message: `${room.roomName} has finished. You can now join another stream.`,
+    targetUserIds: Array.from(recipientSet).filter(Boolean),
+    metadata: {
+      roomId: room.id,
+      roomName: room.roomName,
+      finishedAt: room.finishedAt,
+      finishedBy,
+      closedAttendances: closed.length,
+    },
+  });
+
+  sendJson(res, 200, {
+    room: buildStreamRoomResponse(room),
+    closedAttendances: closed.length,
+    finishedBy,
+  });
 }
 
 function handleListStreamDistributions(requestUrl, res) {
@@ -1559,6 +1729,8 @@ function buildStreamRoomResponse(room) {
       roomSidHint: room.roomSidHint,
     },
     aiHost: room.aiHost,
+    tutoringSchedule: room.tutoringSchedule,
+    finishedAt: room.finishedAt || null,
     monetization: {
       mode: room.monetizationMode,
       platformRevenueSharePercent: room.platformRevenueSharePercent,
@@ -1583,6 +1755,9 @@ function createRoomFromPayload(body) {
   );
   const creatorRevenueSharePercent = formatMoney(100 - platformRevenueSharePercent);
   const now = new Date().toISOString();
+  const expectedSessionMinutes = clamp(safeNumber(body.expectedSessionMinutes, 120), 15, 480);
+  const tutoringIntervalMinutes = clamp(safeNumber(body.tutoringIntervalMinutes, 15), 5, 90);
+  const estimatedEndAt = new Date(Date.parse(now) + expectedSessionMinutes * 60 * 1000).toISOString();
 
   if (!roomName) {
     return {
@@ -1601,10 +1776,19 @@ function createRoomFromPayload(body) {
     topic,
     createdBy,
     status: "live",
+    finishedAt: null,
     livekitWsUrl: "wss://livekit.ccweb-stream.example",
     livekitToken,
     roomSidHint: `${id}-lk`,
     aiHost: buildStreamingAiHost((body.aiHostName || "").toString().trim(), tracks),
+    tutoringSchedule: {
+      startedAt: now,
+      estimatedEndAt,
+      expectedSessionMinutes,
+      tutoringIntervalMinutes,
+      estimatedSegments: Math.max(1, Math.ceil(expectedSessionMinutes / tutoringIntervalMinutes)),
+      curriculumFields: tracks,
+    },
     monetizationMode: "organic_revenue_share",
     platformRevenueSharePercent,
     creatorRevenueSharePercent,
@@ -1671,6 +1855,9 @@ async function handleCreateStreamRoom(req, res) {
         roomName: room.roomName,
         topic: room.topic,
         platformRevenueSharePercent: room.platformRevenueSharePercent,
+          expectedSessionMinutes: room.tutoringSchedule.expectedSessionMinutes,
+          tutoringIntervalMinutes: room.tutoringSchedule.tutoringIntervalMinutes,
+          estimatedEndAt: room.tutoringSchedule.estimatedEndAt,
       },
     });
   }
@@ -1684,6 +1871,9 @@ async function handleCreateStreamRoom(req, res) {
       roomName: room.roomName,
       topic: room.topic,
       createdBy: room.createdBy,
+      expectedSessionMinutes: room.tutoringSchedule.expectedSessionMinutes,
+      tutoringIntervalMinutes: room.tutoringSchedule.tutoringIntervalMinutes,
+      estimatedEndAt: room.tutoringSchedule.estimatedEndAt,
     },
   });
   sendJson(res, 201, buildStreamRoomResponse(room));
@@ -2095,6 +2285,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname === "/api/streaming/active-session" && req.method === "GET") {
+    handleGetActiveStreamSession(requestUrl, res);
+    return;
+  }
+
   if (pathname.match(/^\/api\/streaming\/rooms\/[^/]+$/) && req.method === "GET") {
     const roomId = pathname.split("/").pop();
     handleGetStreamRoom(roomId, res);
@@ -2108,6 +2303,11 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname.match(/^\/api\/streaming\/rooms\/[^/]+\/attendance$/) && req.method === "POST") {
     await handleUpsertStreamAttendance(pathname, req, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/streaming\/rooms\/[^/]+\/finish$/) && req.method === "POST") {
+    await handleFinishStreamRoom(pathname, req, res);
     return;
   }
 

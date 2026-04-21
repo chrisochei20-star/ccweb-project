@@ -214,8 +214,12 @@
               <input id="profileWeeklyCapacity" type="number" min="1" value="30" />
             </div>
             <div>
-              <label for="profileOpenSlots">Open slots</label>
-              <input id="profileOpenSlots" type="number" min="1" value="3" />
+              <label for="profileMaxDeals">Max concurrent deals</label>
+              <input id="profileMaxDeals" type="number" min="1" value="4" />
+            </div>
+            <div>
+              <label for="profileActiveDeals">Current active deals</label>
+              <input id="profileActiveDeals" type="number" min="0" value="1" />
             </div>
           </div>
           <label for="profileCertificates">Certificates (one per line)</label>
@@ -224,10 +228,13 @@ HubSpot Revenue Operations
 Meta Performance Marketing</textarea>
           <button id="saveProfileBtn">Save Profile</button>
           <button id="loadProfileBtn">Load Profile Stats</button>
+          <button id="runMatchBtn">Run AI Compatibility Match</button>
           <div id="profileMeta" class="muted"></div>
           <div id="profileSummary" class="chips"></div>
           <ul id="profileSkillList" class="pill-list"></ul>
           <ul id="profileCertList" class="pill-list"></ul>
+          <div id="matchMeta" class="muted"></div>
+          <ul id="matchOpportunityList" class="pill-list"></ul>
         </section>
 
         <section class="card">
@@ -238,6 +245,8 @@ Meta Performance Marketing</textarea>
           </p>
           <label for="dealBusinessId">Business ID</label>
           <input id="dealBusinessId" placeholder="e.g. biz-ldn-1" />
+          <label for="dealApplicantId">Applicant ID</label>
+          <input id="dealApplicantId" value="app-amina" />
           <div class="row">
             <div>
               <label for="applicantName">Applicant</label>
@@ -265,14 +274,25 @@ Meta Performance Marketing</textarea>
             <div>
               <label for="confirmRole">Confirmation role</label>
               <select id="confirmRole">
-                <option value="client" selected>client</option>
+                <option value="client_approver" selected>client_approver</option>
                 <option value="applicant">applicant</option>
-                <option value="viewer">viewer</option>
+                <option value="platform_admin">platform_admin</option>
               </select>
             </div>
             <div>
               <label for="confirmToken">Payment roll token</label>
               <input id="confirmToken" placeholder="required when confirming deal" />
+            </div>
+            <div>
+              <label for="payoutMode">Payout mode</label>
+              <select id="payoutMode">
+                <option value="single_release" selected>single_release</option>
+                <option value="split_release">split_release</option>
+              </select>
+            </div>
+            <div>
+              <label for="splitReleasePercent">Split release percent</label>
+              <input id="splitReleasePercent" type="number" min="10" max="100" value="70" />
             </div>
           </div>
           <button id="createDealBtn">Create / Update Deal</button>
@@ -323,21 +343,28 @@ Meta Performance Marketing</textarea>
       const doneConfirm = document.getElementById("doneConfirm");
       const confirmRole = document.getElementById("confirmRole");
       const confirmToken = document.getElementById("confirmToken");
+      const payoutMode = document.getElementById("payoutMode");
+      const splitReleasePercent = document.getElementById("splitReleasePercent");
       const createDealBtn = document.getElementById("createDealBtn");
       const dealOutput = document.getElementById("dealOutput");
+      const dealApplicantId = document.getElementById("dealApplicantId");
       const profileApplicantId = document.getElementById("profileApplicantId");
       const profileName = document.getElementById("profileName");
       const profileTier = document.getElementById("profileTier");
       const profileSkills = document.getElementById("profileSkills");
       const profileWeeklyCapacity = document.getElementById("profileWeeklyCapacity");
-      const profileOpenSlots = document.getElementById("profileOpenSlots");
+      const profileMaxDeals = document.getElementById("profileMaxDeals");
+      const profileActiveDeals = document.getElementById("profileActiveDeals");
       const profileCertificates = document.getElementById("profileCertificates");
       const saveProfileBtn = document.getElementById("saveProfileBtn");
       const loadProfileBtn = document.getElementById("loadProfileBtn");
+      const runMatchBtn = document.getElementById("runMatchBtn");
       const profileMeta = document.getElementById("profileMeta");
       const profileSummary = document.getElementById("profileSummary");
       const profileSkillList = document.getElementById("profileSkillList");
       const profileCertList = document.getElementById("profileCertList");
+      const matchMeta = document.getElementById("matchMeta");
+      const matchOpportunityList = document.getElementById("matchOpportunityList");
 
       function renderSearch(list) {
         searchResults.innerHTML = "";
@@ -379,13 +406,21 @@ Meta Performance Marketing</textarea>
       function renderDeal(payload) {
         const deal = payload.deal || {};
         const payout = payload.payout || {};
+        const security = payload.security || {};
         const items = [
           `Deal ${deal.id || "n/a"}`,
           `Status: ${deal.status || "n/a"}`,
           `Amount: $${payout.totalAmount ?? "n/a"}`,
           `Platform 8%: $${payout.platformFee ?? "n/a"}`,
           `Applicant payout: $${payout.applicantPayout ?? "n/a"}`,
+          `Released: $${payout.releasedAmount ?? 0}`,
+          `Pending: $${payout.pendingAmount ?? 0}`,
+          `Escrow: ${payout.escrowStatus || "n/a"}`,
           `Fee rate: ${deal.feeRatePercent ?? 8}%`,
+          `Payout mode: ${deal.payoutMode || "single_release"}`,
+          `Split %: ${deal.splitReleasePercent ?? 100}`,
+          `Secure role: ${security.requiredApproverRole || "client_approver"}`,
+          `Token hint: ${security.releaseTokenHint || "n/a"}`,
           `Released at: ${deal.releasedAt ? deal.releasedAt : "awaiting client confirmation"}`,
         ];
 
@@ -398,23 +433,55 @@ Meta Performance Marketing</textarea>
         });
       }
 
+      function renderMatch(payload) {
+        matchOpportunityList.innerHTML = "";
+        const opportunities = payload.opportunities || [];
+        matchMeta.textContent = `Compatibility run for ${payload.applicant.fullName}. Opportunities found: ${opportunities.length}.`;
+
+        if (!opportunities.length) {
+          const li = document.createElement("li");
+          li.className = "chip";
+          li.textContent = "No opportunities found for the current search scope.";
+          matchOpportunityList.appendChild(li);
+          return;
+        }
+
+        opportunities.slice(0, 3).forEach((opp) => {
+          const li = document.createElement("li");
+          li.className = "chip";
+          li.textContent = `${opp.business.name} | Score ${opp.compatibilityScore} | Coverage ${opp.skillCoveragePercent}% | Net $${opp.projectedIncome.applicantNetUsd}`;
+          matchOpportunityList.appendChild(li);
+        });
+      }
+
       function renderProfile(profilePayload) {
-        const profile = profilePayload.profile;
-        profileMeta.textContent = `Profile loaded for ${profile.applicantName} (${profile.applicantId}).`;
+        const profile = profilePayload;
+        profileMeta.textContent = `Profile loaded for ${profile.fullName} (${profile.id}).`;
         profileSummary.innerHTML = "";
         profileSkillList.innerHTML = "";
         profileCertList.innerHTML = "";
+        matchOpportunityList.innerHTML = "";
+        matchMeta.textContent = "";
+
+        profileApplicantId.value = profile.id;
+        dealApplicantId.value = profile.id;
+        profileName.value = profile.fullName;
+        profileWeeklyCapacity.value = String(profile.capacity.weeklyHours);
+        profileMaxDeals.value = String(profile.capacity.maxConcurrentDeals);
+        profileActiveDeals.value = String(profile.capacity.currentActiveDeals);
+        profileSkills.value = profile.skills.map((skill) => skill.name).join(", ");
+        profileCertificates.value = profile.certificates.join("\n");
 
         const summary = [
-          `Tier: ${profile.tier}`,
-          `Trust score: ${profile.trustScore}`,
-          `Capacity score: ${profile.capacityScore}`,
+          `Security tier: ${profile.paymentProfile.securityTier}`,
+          `Roles: ${profile.paymentProfile.roles.join(", ")}`,
           `Jobs done: ${profile.stats.jobsCompleted}`,
-          `Active deals: ${profile.stats.activeDeals}`,
-          `Total earned: $${profile.stats.totalEarned}`,
-          `Success rate: ${profile.stats.successRate}%`,
-          `Avg turnaround: ${profile.stats.averageTurnaroundDays} days`,
-          `Compatibility: ${profile.incomeEngineMatch.matchSummary}`,
+          `Active deals: ${profile.capacity.currentActiveDeals}`,
+          `Max deals: ${profile.capacity.maxConcurrentDeals}`,
+          `Total earned: $${profile.stats.totalEarningsUsd}`,
+          `On-time rate: ${profile.stats.onTimeRate}%`,
+          `Average rating: ${profile.stats.avgRating}`,
+          `Weekly hours: ${profile.capacity.weeklyHours}`,
         ];
 
         summary.forEach((text) => {
@@ -427,7 +494,7 @@ Meta Performance Marketing</textarea>
         profile.skills.forEach((skill) => {
           const li = document.createElement("li");
           li.className = "chip";
-          li.textContent = `Skill: ${skill}`;
+          li.textContent = `Skill: ${skill.name} (${skill.capacity}%)`;
           profileSkillList.appendChild(li);
         });
 
@@ -491,10 +558,13 @@ Meta Performance Marketing</textarea>
         }
         const body = {
           businessId,
+          applicantId: dealApplicantId.value.trim(),
           applicantName: applicantName.value.trim(),
           clientName: clientName.value.trim(),
           proposalText: proposalText.value.trim(),
           dealValue: Number(dealAmount.value),
+          payoutMode: payoutMode.value,
+          splitReleasePercent: Number(splitReleasePercent.value),
         };
         const response = await fetch("/api/deals", {
           method: "POST",
@@ -522,11 +592,14 @@ Meta Performance Marketing</textarea>
           }
           const confirmRes = await fetch(`/api/deals/${encodeURIComponent(dealId)}/confirm`, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-CCWEB-PAYROLL-TOKEN": token,
-            },
-            body: JSON.stringify({ role: confirmRole.value }),
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              paymentRole: confirmRole.value,
+              clientConfirmed: confirmRole.value === "client_approver",
+              releaseToken: token,
+              adminOverrideReason:
+                confirmRole.value === "platform_admin" ? "Manual override via secure admin review" : "",
+            }),
           });
           if (confirmRes.ok) {
             current = await confirmRes.json();
@@ -541,12 +614,20 @@ Meta Performance Marketing</textarea>
       }
 
       async function saveProfile() {
+        const maxDeals = Number(profileMaxDeals.value);
+        const activeDeals = Number(profileActiveDeals.value);
+        if (activeDeals > maxDeals) {
+          profileMeta.textContent = "Current active deals cannot exceed max concurrent deals.";
+          return;
+        }
         const body = {
           applicantId: profileApplicantId.value.trim(),
-          applicantName: profileName.value.trim(),
-          tier: profileTier.value,
-          weeklyCapacityHours: Number(profileWeeklyCapacity.value),
-          openSlots: Number(profileOpenSlots.value),
+          fullName: profileName.value.trim(),
+          headline: `${profileTier.value} business operator`,
+          city: "Global",
+          weeklyHours: Number(profileWeeklyCapacity.value),
+          maxConcurrentDeals: maxDeals,
+          currentActiveDeals: activeDeals,
           skills: profileSkills.value
             .split(",")
             .map((value) => value.trim())
@@ -570,6 +651,27 @@ Meta Performance Marketing</textarea>
         renderProfile(payload);
       }
 
+      async function runCompatibilityMatch() {
+        const applicantId = profileApplicantId.value.trim();
+        if (!applicantId) {
+          matchMeta.textContent = "Applicant ID is required for compatibility matching.";
+          return;
+        }
+        const params = new URLSearchParams({
+          applicantId,
+          city: searchCity.value.trim(),
+          query: searchQuery.value.trim(),
+        });
+        const response = await fetch(`/api/engine/match?${params.toString()}`);
+        if (!response.ok) {
+          const err = await response.json();
+          matchMeta.textContent = err.error || "Compatibility match failed.";
+          return;
+        }
+        const payload = await response.json();
+        renderMatch(payload);
+      }
+
       async function loadProfile() {
         const applicantId = profileApplicantId.value.trim();
         if (!applicantId) {
@@ -591,6 +693,7 @@ Meta Performance Marketing</textarea>
       createDealBtn.addEventListener("click", createOrUpdateDeal);
       saveProfileBtn.addEventListener("click", saveProfile);
       loadProfileBtn.addEventListener("click", loadProfile);
+      runMatchBtn.addEventListener("click", runCompatibilityMatch);
       businessSelect.addEventListener("change", () => {
         state.selectedBusinessId = businessSelect.value;
         if (businessSelect.value) dealBusinessId.value = businessSelect.value;

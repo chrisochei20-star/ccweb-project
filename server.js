@@ -1357,6 +1357,7 @@ function handleEngineMatch(requestUrl, res) {
 
   const city = requestUrl.searchParams.get("city");
   const query = requestUrl.searchParams.get("query");
+  const viewerUserId = (requestUrl.searchParams.get("viewerUserId") || "").trim();
   const { results } = searchBusinesses(city, query);
 
   const ranked = results
@@ -1373,13 +1374,32 @@ function handleEngineMatch(requestUrl, res) {
     })
     .sort((a, b) => b.compatibilityScore - a.compatibilityScore);
 
-  sendJson(res, 200, {
+  const responsePayload = {
     mode: "ai-business-finder-income-engine",
     applicant: sanitizeApplicant(applicant),
     city: city || "any",
     query: query || "any",
     opportunities: ranked,
-  });
+  };
+  sendJson(res, 200, responsePayload);
+
+  if (viewerUserId) {
+    const viewer = ensureUser(viewerUserId);
+    if (viewer) {
+      createNotification({
+        type: "business_finder_results_ready",
+        title: "AI business finder results ready",
+        message: `Found ${ranked.length} compatibility-matched opportunities in ${city || "any city"}.`,
+        targetUserIds: [viewer.id],
+        metadata: {
+          applicantId,
+          city: city || "any",
+          query: query || "any",
+          resultCount: ranked.length,
+        },
+      });
+    }
+  }
 }
 
 function decrementApplicantLoad(applicantId) {

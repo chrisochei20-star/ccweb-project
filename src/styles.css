@@ -376,6 +376,24 @@ a {
   color: #ff9ea8;
 }
 
+.stream-session-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.stream-session-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+}
+
+.room-item.active-room {
+  border-color: rgba(48, 201, 130, 0.45);
+  box-shadow: 0 0 0 1px rgba(48, 201, 130, 0.25);
+}
+
 .footer {
   border-top: 1px solid rgba(117, 160, 214, 0.16);
   margin-top: 2rem;

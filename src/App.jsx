@@ -289,10 +289,22 @@ function AiStreamingPage() {
     expectedAudience: 1800,
     expectedArppuUsd: 4.5,
     platformSharePercent: 37,
+    startDelayMinutes: 5,
+    intervalMinutes: 90,
+    breakMinutes: 10,
   });
   const [response, setResponse] = useState(null);
+  const [joinPayload, setJoinPayload] = useState({
+    userId: "user-organic-001",
+    displayName: "Maya Organic Learner",
+    watchMinutes: 15,
+    isOrganic: true,
+  });
+  const [joinState, setJoinState] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [joinLoading, setJoinLoading] = useState(false);
   const [error, setError] = useState("");
+  const [joinError, setJoinError] = useState("");
 
   function updateField(field, value) {
     setPayload((prev) => ({ ...prev, [field]: value }));
@@ -335,6 +347,23 @@ function AiStreamingPage() {
           aiHostName: payload.hostModel,
           curriculumTracks: curriculumToTracks(payload.curriculum),
           platformRevenueSharePercent: Number(payload.platformSharePercent),
+          startDelayMinutes: Number(payload.startDelayMinutes),
+          estimatedTeachingMinutes: Number(payload.intervalMinutes),
+          breakBetweenRoundsMinutes: Number(payload.breakMinutes),
+          agenda: [
+            {
+              title: `${payload.curriculum} foundations`,
+              durationMinutes: Math.round(Number(payload.intervalMinutes) * 0.5),
+            },
+            {
+              title: `${payload.curriculum} practical workshop`,
+              durationMinutes: Math.round(Number(payload.intervalMinutes) * 0.35),
+            },
+            {
+              title: "Live Q&A and recap",
+              durationMinutes: Math.round(Number(payload.intervalMinutes) * 0.15),
+            },
+          ],
         }),
       });
 
@@ -359,10 +388,73 @@ function AiStreamingPage() {
       }
 
       setResponse({ room: roomData, payout: payoutData });
+      setJoinState(null);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function joinRoom() {
+    if (!response?.room?.id) {
+      setJoinError("Create a room before joining.");
+      return;
+    }
+    setJoinLoading(true);
+    setJoinError("");
+    try {
+      const res = await fetch(`/api/streaming/rooms/${response.room.id}/attendance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: joinPayload.userId,
+          displayName: joinPayload.displayName,
+          watchMinutes: Number(joinPayload.watchMinutes),
+          isOrganic: Boolean(joinPayload.isOrganic),
+          isActive: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Could not join this stream.");
+      }
+      setJoinState(data);
+    } catch (err) {
+      setJoinError(err.message);
+    } finally {
+      setJoinLoading(false);
+    }
+  }
+
+  async function leaveRoom() {
+    if (!response?.room?.id) {
+      setJoinError("No room to leave.");
+      return;
+    }
+    setJoinLoading(true);
+    setJoinError("");
+    try {
+      const res = await fetch(`/api/streaming/rooms/${response.room.id}/attendance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: joinPayload.userId,
+          displayName: joinPayload.displayName,
+          watchMinutes: Number(joinPayload.watchMinutes),
+          isOrganic: Boolean(joinPayload.isOrganic),
+          isActive: false,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Could not leave this stream.");
+      }
+      setJoinState(data);
+    } catch (err) {
+      setJoinError(err.message);
+    } finally {
+      setJoinLoading(false);
     }
   }
 
@@ -450,6 +542,38 @@ function AiStreamingPage() {
               onChange={(event) => updateField("platformSharePercent", event.target.value)}
             />
           </div>
+          <div className="auth-row">
+            <label htmlFor="start-delay">Starts in (minutes)</label>
+            <input
+              id="start-delay"
+              type="number"
+              min="1"
+              value={payload.startDelayMinutes}
+              onChange={(event) => updateField("startDelayMinutes", event.target.value)}
+            />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="interval-minutes">AI tutor live interval (minutes)</label>
+            <input
+              id="interval-minutes"
+              type="number"
+              min="15"
+              max="240"
+              value={payload.intervalMinutes}
+              onChange={(event) => updateField("intervalMinutes", event.target.value)}
+            />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="break-minutes">Break between rounds (minutes)</label>
+            <input
+              id="break-minutes"
+              type="number"
+              min="0"
+              max="60"
+              value={payload.breakMinutes}
+              onChange={(event) => updateField("breakMinutes", event.target.value)}
+            />
+          </div>
           <button type="button" className="btn btn-primary" onClick={createRoom} disabled={loading}>
             {loading ? "Creating..." : "Create AI Live Room"}
           </button>
@@ -470,10 +594,83 @@ function AiStreamingPage() {
               <p><strong>Status:</strong> {response.room.status}</p>
               <p><strong>Topic:</strong> {response.room.topic}</p>
               <p><strong>AI Host:</strong> {response.room.aiHost.displayName}</p>
+              <p><strong>Starts at:</strong> {response.room.schedule?.startsAtIso || "TBD"}</p>
+              <p><strong>Ends at:</strong> {response.room.schedule?.endsAtIso || "TBD"}</p>
+              <p>
+                <strong>Teaching interval:</strong> {response.room.schedule?.estimatedTeachingMinutes || 0} minutes
+                {" · "}
+                <strong>Break:</strong> {response.room.schedule?.breakBetweenRoundsMinutes || 0} minutes
+              </p>
               <p><strong>Platform share:</strong> {response.payout.platformRevenueSharePercent}%</p>
               <p><strong>Estimated gross:</strong> ${response.payout.grossRevenueUsd}</p>
               <p><strong>CCWEB revenue:</strong> ${response.payout.platformRevenueUsd}</p>
               <p><strong>Creator pool:</strong> ${response.payout.creatorRevenueUsd}</p>
+              <h4 style={{ marginBottom: "0.4rem", marginTop: "1rem" }}>Join/leave session</h4>
+              <div className="auth-row">
+                <label htmlFor="join-user-id">User ID</label>
+                <input
+                  id="join-user-id"
+                  value={joinPayload.userId}
+                  onChange={(event) =>
+                    setJoinPayload((prev) => ({ ...prev, userId: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="auth-row">
+                <label htmlFor="join-display-name">Display name</label>
+                <input
+                  id="join-display-name"
+                  value={joinPayload.displayName}
+                  onChange={(event) =>
+                    setJoinPayload((prev) => ({ ...prev, displayName: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="auth-row">
+                <label htmlFor="join-watch-minutes">Watch minutes</label>
+                <input
+                  id="join-watch-minutes"
+                  type="number"
+                  min="0"
+                  value={joinPayload.watchMinutes}
+                  onChange={(event) =>
+                    setJoinPayload((prev) => ({ ...prev, watchMinutes: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="auth-row">
+                <label htmlFor="join-is-organic">Organic user</label>
+                <select
+                  id="join-is-organic"
+                  value={joinPayload.isOrganic ? "true" : "false"}
+                  onChange={(event) =>
+                    setJoinPayload((prev) => ({
+                      ...prev,
+                      isOrganic: event.target.value === "true",
+                    }))
+                  }
+                >
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
+              <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+                <button type="button" className="btn btn-primary" onClick={joinRoom} disabled={joinLoading}>
+                  {joinLoading ? "Joining..." : "Join stream"}
+                </button>
+                <button type="button" className="btn btn-outline" onClick={leaveRoom} disabled={joinLoading}>
+                  Leave stream
+                </button>
+              </div>
+              {joinError ? <p className="muted" style={{ color: "#ff8c8c" }}>{joinError}</p> : null}
+              {joinState ? (
+                <div className="stream-session-box">
+                  <p><strong>Session room:</strong> {joinState.roomId}</p>
+                  <p><strong>User active:</strong> {joinState.attendance?.isActive ? "yes" : "no"}</p>
+                  <p><strong>Active attenders:</strong> {joinState.metrics?.activeAttenders ?? 0}</p>
+                  <p><strong>Active organic attenders:</strong> {joinState.metrics?.activeOrganicAttenders ?? 0}</p>
+                </div>
+              ) : null}
               <h4 style={{ marginBottom: "0.4rem" }}>AI host curriculum coverage</h4>
               <ul className="list">
                 {response.room.aiHost.curriculumCoverage.map((item) => (

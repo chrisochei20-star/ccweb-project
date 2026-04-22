@@ -468,10 +468,31 @@ function distributeStreamingPoolToOrganicUsers(room, payout, poolOverride = null
     return distribution;
   }
 
-  const totalWeight = eligibleOrganic.reduce((sum, entry) => sum + Math.max(1, entry.watchMinutes), 0);
+  const totalWeight = eligibleOrganic.reduce((sum, entry) => {
+    const participationScore = Math.max(
+      0,
+      safeNumber(entry.interactionScore, 0) +
+        safeNumber(entry.reactionCount, 0) * 2 +
+        safeNumber(entry.chatMessageCount, 0) * 3
+    );
+    const weight = Math.max(
+      1,
+      safeNumber(entry.watchMinutes, 0) + Math.round(participationScore * 0.35)
+    );
+    return sum + weight;
+  }, 0);
   let remaining = poolAmountUsd;
   const recipients = eligibleOrganic.map((entry, index) => {
-    const weight = Math.max(1, entry.watchMinutes);
+    const participationScore = Math.max(
+      0,
+      safeNumber(entry.interactionScore, 0) +
+        safeNumber(entry.reactionCount, 0) * 2 +
+        safeNumber(entry.chatMessageCount, 0) * 3
+    );
+    const weight = Math.max(
+      1,
+      safeNumber(entry.watchMinutes, 0) + Math.round(participationScore * 0.35)
+    );
     const share =
       index === eligibleOrganic.length - 1 ? remaining : formatMoney((poolAmountUsd * weight) / totalWeight);
     remaining = formatMoney(Math.max(0, remaining - share));
@@ -479,6 +500,7 @@ function distributeStreamingPoolToOrganicUsers(room, payout, poolOverride = null
       userId: entry.userId,
       displayName: entry.displayName,
       watchMinutes: entry.watchMinutes,
+      participationScore,
       weight,
       shareUsd: share,
       isOrganic: true,
@@ -948,12 +970,27 @@ async function handleUpsertStreamAttendance(pathname, req, res) {
   }
 
   const watchMinutes = Math.max(0, safeNumber(body.watchMinutes, existing?.watchMinutes || 0));
+  const interactionScore = Math.max(
+    0,
+    safeNumber(body.interactionScore, existing?.interactionScore || 0)
+  );
+  const reactionCount = Math.max(
+    0,
+    Math.round(safeNumber(body.reactionCount, existing?.reactionCount || 0))
+  );
+  const chatMessageCount = Math.max(
+    0,
+    Math.round(safeNumber(body.chatMessageCount, existing?.chatMessageCount || 0))
+  );
   const entry = {
     roomId,
     userId: user.id,
     displayName: user.displayName,
     isOrganic: user.isOrganic,
     watchMinutes,
+    interactionScore,
+    reactionCount,
+    chatMessageCount,
     isActive: requestedActive,
     joinedAt: existing?.joinedAt || now,
     updatedAt: now,
@@ -1704,6 +1741,109 @@ function normalizePlatformRevenueSharePercent(value) {
   return clamp(safeNumber(value, 37), 35, 40);
 }
 
+const courseLoadProfiles = {
+  foundation: {
+    expectedSessionMinutes: 60,
+    tutoringIntervalMinutes: 12,
+    estimatedArppuUsd: 2.8,
+    engagementMultiplier: 1.0,
+  },
+  standard: {
+    expectedSessionMinutes: 90,
+    tutoringIntervalMinutes: 15,
+    estimatedArppuUsd: 3.9,
+    engagementMultiplier: 1.08,
+  },
+  advanced: {
+    expectedSessionMinutes: 120,
+    tutoringIntervalMinutes: 20,
+    estimatedArppuUsd: 4.9,
+    engagementMultiplier: 1.15,
+  },
+  intensive: {
+    expectedSessionMinutes: 150,
+    tutoringIntervalMinutes: 25,
+    estimatedArppuUsd: 5.8,
+    engagementMultiplier: 1.24,
+  },
+  marathon: {
+    expectedSessionMinutes: 180,
+    tutoringIntervalMinutes: 30,
+    estimatedArppuUsd: 6.6,
+    engagementMultiplier: 1.32,
+  },
+};
+
+function normalizeCourseLoad(value) {
+  const normalized = (value || "standard").toString().trim().toLowerCase();
+  return courseLoadProfiles[normalized] ? normalized : "standard";
+}
+
+function normalizeSessionCapacity(value) {
+  return clamp(Math.round(safeNumber(value, 1200)), 50, 25000);
+}
+
+function deriveStreamingAutoPlan(body, tracks) {
+  const courseLoad = normalizeCourseLoad(body.courseLoad);
+  const profile = courseLoadProfiles[courseLoad];
+  const sessionCapacity = normalizeSessionCapacity(body.sessionCapacity ?? body.expectedAudience);
+  const fillRatePercent = clamp(
+    safeNumber(body.expectedFillRatePercent, 62),
+    15,
+    100
+  );
+  const expectedSessionMinutes = clamp(
+    safeNumber(
+      body.expectedSessionMinutes ??
+        body.estimatedTeachingMinutes ??
+        body.intervalMinutes ??
+        profile.expectedSessionMinutes,
+      profile.expectedSessionMinutes
+    ),
+    15,
+    480
+  );
+  const tutoringIntervalMinutes = clamp(
+    safeNumber(
+      body.tutoringIntervalMinutes ??
+        body.breakBetweenRoundsMinutes ??
+        body.startDelayMinutes ??
+        profile.tutoringIntervalMinutes,
+      profile.tutoringIntervalMinutes
+    ),
+    5,
+    90
+  );
+  const trackComplexityBoost = 1 + Math.max(0, tracks.length - 3) * 0.03;
+  const projectedActiveAttenders = Math.max(
+    1,
+    Math.round((sessionCapacity * fillRatePercent) / 100)
+  );
+  const estimatedArppuUsd = formatMoney(
+    Math.max(
+      0.5,
+      safeNumber(body.estimatedArppuUsd, profile.estimatedArppuUsd) *
+        profile.engagementMultiplier *
+        trackComplexityBoost
+    )
+  );
+  const estimatedGrossRevenueUsd = formatMoney(
+    projectedActiveAttenders * estimatedArppuUsd
+  );
+
+  return {
+    autoScalingEnabled: body.autoScalingEnabled !== false,
+    courseLoad,
+    sessionCapacity,
+    fillRatePercent: formatMoney(fillRatePercent),
+    expectedSessionMinutes,
+    tutoringIntervalMinutes,
+    projectedActiveAttenders,
+    estimatedArppuUsd,
+    estimatedGrossRevenueUsd,
+  };
+}
+
 function buildStreamingAiHost(hostName, tracks) {
   return {
     displayName: hostName || "CCWEB AI Host",
@@ -1735,7 +1875,22 @@ function buildStreamRoomResponse(room) {
       mode: room.monetizationMode,
       platformRevenueSharePercent: room.platformRevenueSharePercent,
       creatorRevenueSharePercent: room.creatorRevenueSharePercent,
+      autoScalingEnabled: room.autoPlan?.autoScalingEnabled ?? true,
+      autoCourseLoad: room.autoPlan?.courseLoad || "standard",
+      autoSessionCapacity: room.autoPlan?.sessionCapacity || 0,
+      autoCapacityFillRatePercent: room.autoPlan?.fillRatePercent || 0,
+      autoProjectedAttenders: room.autoPlan?.projectedActiveAttenders || 0,
+      autoEstimatedArppuUsd: room.autoPlan?.estimatedArppuUsd || 0,
+      autoEstimatedGrossRevenueUsd: room.autoPlan?.estimatedGrossRevenueUsd || 0,
+      autoCapacityUtilizationPercent: room.autoPlan?.fillRatePercent || 0,
+      organicDistributionModel: "watch_time_and_participation_weighted",
       target: "organic_revenue_youtube_like",
+    },
+    configuration: {
+      courseLoad: room.autoPlan?.courseLoad || "standard",
+      sessionCapacity: room.autoPlan?.sessionCapacity || 0,
+      expectedAudience: room.autoPlan?.projectedActiveAttenders || 0,
+      estimatedArppuUsd: room.autoPlan?.estimatedArppuUsd || 0,
     },
     metrics: room.metrics,
     createdAt: room.createdAt,
@@ -1755,16 +1910,9 @@ function createRoomFromPayload(body) {
   );
   const creatorRevenueSharePercent = formatMoney(100 - platformRevenueSharePercent);
   const now = new Date().toISOString();
-  const expectedSessionMinutes = clamp(
-    safeNumber(body.expectedSessionMinutes ?? body.estimatedTeachingMinutes ?? body.intervalMinutes, 120),
-    15,
-    480
-  );
-  const tutoringIntervalMinutes = clamp(
-    safeNumber(body.tutoringIntervalMinutes ?? body.breakBetweenRoundsMinutes ?? body.startDelayMinutes, 15),
-    5,
-    90
-  );
+  const autoPlan = deriveStreamingAutoPlan(body, tracks);
+  const expectedSessionMinutes = autoPlan.expectedSessionMinutes;
+  const tutoringIntervalMinutes = autoPlan.tutoringIntervalMinutes;
   const estimatedEndAt = new Date(Date.parse(now) + expectedSessionMinutes * 60 * 1000).toISOString();
 
   if (!roomName) {
@@ -1789,6 +1937,7 @@ function createRoomFromPayload(body) {
     livekitToken,
     roomSidHint: `${id}-lk`,
     aiHost: buildStreamingAiHost((body.aiHostName || "").toString().trim(), tracks),
+    autoPlan,
     tutoringSchedule: {
       startedAt: now,
       estimatedEndAt,
@@ -1801,10 +1950,10 @@ function createRoomFromPayload(body) {
     platformRevenueSharePercent,
     creatorRevenueSharePercent,
     metrics: {
-      concurrentViewers: Math.max(1, Math.round(80 + Math.random() * 320)),
+      concurrentViewers: autoPlan.projectedActiveAttenders,
       avgWatchMinutes: Math.round(12 + Math.random() * 18),
       engagementRatePercent: Math.round(52 + Math.random() * 35),
-      estimatedOrganicRevenueUsd: formatMoney(900 + Math.random() * 4600),
+      estimatedOrganicRevenueUsd: autoPlan.estimatedGrossRevenueUsd,
     },
     createdAt: now,
     updatedAt: now,

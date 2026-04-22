@@ -284,6 +284,8 @@ function AiStreamingPage() {
   const [payload, setPayload] = useState({
     roomTitle: "AI Web3 Fundamentals Live",
     curriculum: "AI",
+    courseLoad: "standard",
+    sessionCapacity: 250,
     hostModel: "Claude-CCWEB-Host",
     hostLocale: "English",
     expectedAudience: 1800,
@@ -332,6 +334,63 @@ function AiStreamingPage() {
     return ["Financial Literacy & Human Development", "Digital Business Systems", "AI Foundations"];
   }
 
+  function autoDurationForCourseLoad(load) {
+    if (load === "foundation") {
+      return 60;
+    }
+    if (load === "standard") {
+      return 90;
+    }
+    if (load === "advanced") {
+      return 120;
+    }
+    if (load === "intensive") {
+      return 150;
+    }
+    return 180;
+  }
+
+  function autoIntervalForCourseLoad(load) {
+    if (load === "foundation") {
+      return 12;
+    }
+    if (load === "standard") {
+      return 15;
+    }
+    if (load === "advanced") {
+      return 20;
+    }
+    if (load === "intensive") {
+      return 25;
+    }
+    return 30;
+  }
+
+  function autoAudienceByCapacity(capacity) {
+    const safeCapacity = Math.max(20, Number(capacity) || 20);
+    return Math.round(safeCapacity * 0.72);
+  }
+
+  function autoArppuByCurriculum(curriculum) {
+    const key = curriculum.toLowerCase();
+    if (key === "ai") {
+      return 5.2;
+    }
+    if (key === "blockchain") {
+      return 5.1;
+    }
+    if (key === "web3") {
+      return 4.9;
+    }
+    if (key === "crypto") {
+      return 5.4;
+    }
+    if (key === "business") {
+      return 4.6;
+    }
+    return 4.5;
+  }
+
   async function loadRooms() {
     try {
       const res = await fetch("/api/streaming/rooms");
@@ -376,6 +435,8 @@ function AiStreamingPage() {
           aiHostName: payload.hostModel,
           curriculumTracks: curriculumToTracks(payload.curriculum),
           platformRevenueSharePercent: Number(payload.platformSharePercent),
+          courseLoad: payload.courseLoad,
+          sessionCapacity: Number(payload.sessionCapacity),
           expectedSessionMinutes: Number(payload.expectedSessionMinutes),
           tutoringIntervalMinutes: Number(payload.tutoringIntervalMinutes),
           agenda: [
@@ -562,7 +623,11 @@ function AiStreamingPage() {
             <select
               id="curriculum"
               value={payload.curriculum}
-              onChange={(event) => updateField("curriculum", event.target.value)}
+              onChange={(event) => {
+                const value = event.target.value;
+                updateField("curriculum", value);
+                updateField("expectedArppuUsd", autoArppuByCurriculum(value));
+              }}
             >
               <option>AI</option>
               <option>Blockchain</option>
@@ -571,6 +636,40 @@ function AiStreamingPage() {
               <option>Business</option>
               <option>Finance</option>
             </select>
+          </div>
+          <div className="auth-row">
+            <label htmlFor="course-load">Course load template</label>
+            <select
+              id="course-load"
+              value={payload.courseLoad}
+              onChange={(event) => {
+                const value = event.target.value;
+                updateField("courseLoad", value);
+                updateField("expectedSessionMinutes", autoDurationForCourseLoad(value));
+                updateField("tutoringIntervalMinutes", autoIntervalForCourseLoad(value));
+              }}
+            >
+              <option value="foundation">Foundation load</option>
+              <option value="standard">Standard load</option>
+              <option value="advanced">Advanced load</option>
+              <option value="intensive">Intensive load</option>
+              <option value="marathon">Marathon load</option>
+            </select>
+          </div>
+          <div className="auth-row">
+            <label htmlFor="session-capacity">Session capacity</label>
+            <input
+              id="session-capacity"
+              type="number"
+              min="20"
+              max="10000"
+              value={payload.sessionCapacity}
+              onChange={(event) => {
+                const nextCapacity = event.target.value;
+                updateField("sessionCapacity", nextCapacity);
+                updateField("expectedAudience", autoAudienceByCapacity(nextCapacity));
+              }}
+            />
           </div>
           <div className="auth-row">
             <label htmlFor="host-model">AI host model</label>
@@ -687,6 +786,8 @@ function AiStreamingPage() {
               <p><strong>Status:</strong> {selectedRoom?.status || response.room.status}</p>
               <p><strong>Topic:</strong> {selectedRoom?.topic || response.room.topic}</p>
               <p><strong>AI Host:</strong> {selectedRoom?.aiHost?.displayName || response.room.aiHost.displayName}</p>
+              <p><strong>Course load:</strong> {selectedRoom?.configuration?.courseLoad || "standard"}</p>
+              <p><strong>Session capacity:</strong> {selectedRoom?.configuration?.sessionCapacity || payload.sessionCapacity}</p>
               <p><strong>Starts at:</strong> {selectedRoom?.tutoringSchedule?.startedAt || "TBD"}</p>
               <p><strong>Estimated end:</strong> {selectedRoom?.tutoringSchedule?.estimatedEndAt || "TBD"}</p>
               <p>
@@ -702,6 +803,14 @@ function AiStreamingPage() {
               <p><strong>Estimated gross:</strong> ${response.payout.grossRevenueUsd}</p>
               <p><strong>CCWEB revenue:</strong> ${response.payout.platformRevenueUsd}</p>
               <p><strong>Creator pool:</strong> ${response.payout.creatorRevenueUsd}</p>
+              <p>
+                <strong>Auto capacity utilization:</strong>{" "}
+                {selectedRoom?.monetization?.autoCapacityUtilizationPercent ?? "n/a"}%
+              </p>
+              <p>
+                <strong>Participation weighting:</strong>{" "}
+                {selectedRoom?.monetization?.organicDistributionModel || "watch_minutes_weighted"}
+              </p>
               <h4 style={{ marginBottom: "0.4rem", marginTop: "1rem" }}>Join/leave session</h4>
               <div className="auth-row">
                 <label htmlFor="join-user-id">User ID</label>
@@ -774,13 +883,6 @@ function AiStreamingPage() {
                 </div>
               ) : null}
               {joinError ? <p className="muted" style={{ color: "#ff8c8c" }}>{joinError}</p> : null}
-              {activeStreamLock ? (
-                <div className="stream-session-box">
-                  <p><strong>Active session lock:</strong> {activeStreamLock.roomName}</p>
-                  <p><strong>Status:</strong> {activeStreamLock.status}</p>
-                  <p><strong>Estimated end:</strong> {activeStreamLock.estimatedEndAt || "TBD"}</p>
-                </div>
-              ) : null}
               {joinState ? (
                 <div className="stream-session-box">
                   <p><strong>Session room:</strong> {joinState.roomId}</p>

@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CCWEB 3-Part System</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 1.25rem;
+      }
+
+      .hero {
+        background: linear-gradient(135deg, #1e293b, #111827);
+        border: 1px solid #334155;
+        border-radius: 14px;
+        padding: 1.25rem;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin-top: 0;
+      }
+
+      .grid {
+        margin-top: 1rem;
+        display: grid;
+        gap: 0.9rem;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      }
+
+      .card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 1rem;
+      }
+
+      label {
+        display: block;
+        margin-top: 0.55rem;
+        margin-bottom: 0.2rem;
+        font-size: 0.93rem;
+        color: #cbd5e1;
+      }
+
+      input,
+      select,
+      textarea,
+      button {
+        width: 100%;
+        border-radius: 8px;
+        border: 1px solid #475569;
+        background: #0f172a;
+        color: #e2e8f0;
+        padding: 0.58rem 0.65rem;
+        font: inherit;
+      }
+
+      textarea {
+        min-height: 96px;
+        resize: vertical;
+      }
+
+      button {
+        margin-top: 0.7rem;
+        cursor: pointer;
+        background: #2563eb;
+        border-color: #1d4ed8;
+      }
+
+      button:hover {
+        background: #1d4ed8;
+      }
+
+      ul {
+        padding-left: 1rem;
+      }
+
+      .row {
+        display: grid;
+        gap: 0.6rem;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-top: 0.5rem;
+      }
+
+      .chip {
+        background: #334155;
+        border: 1px solid #475569;
+        border-radius: 999px;
+        padding: 0.2rem 0.58rem;
+        font-size: 0.86rem;
+      }
+
+      .pill-list {
+        margin: 0.45rem 0 0;
+        padding-left: 0;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+
+      .muted {
+        color: #94a3b8;
+      }
+
+      code {
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 7px;
+        padding: 0.08rem 0.35rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="hero">
+        <h1>CCWEB 3-Part System Prototype</h1>
+        <p>
+          <strong>1) Google Maps AI Search</strong> -> <strong>2) AI Analyzer</strong> ->
+          <strong>3) Contact + Proposal + Payment</strong>
+        </p>
+        <p class="muted">
+          Platform fee is fixed at <strong>8%</strong> of each deal; applicant receives
+          the remainder after client confirms completion.
+        </p>
+      </section>
+
+      <div class="grid">
+        <section class="card">
+          <h2>1) Google Maps AI Search</h2>
+          <p class="muted">
+            Find businesses in any city worldwide (prototype dataset + AI query scoring).
+          </p>
+          <label for="searchQuery">Business type / keywords</label>
+          <input id="searchQuery" value="Dental clinic" />
+          <label for="searchCity">City</label>
+          <input id="searchCity" value="London" />
+          <button id="searchBtn">Run AI Search</button>
+          <div id="searchMeta" class="muted"></div>
+          <ul id="searchResults"></ul>
+        </section>
+
+        <section class="card">
+          <h2>2) AI Analyzer (Claude-style)</h2>
+          <p class="muted">
+            Reads reviews + online presence and returns a 6-card problem report.
+          </p>
+          <label for="businessSelect">Select business from search</label>
+          <select id="businessSelect">
+            <option value="">Run search first</option>
+          </select>
+          <button id="analyzeBtn">Generate 6-Card Report</button>
+          <div id="analyzeTarget" class="muted"></div>
+          <div id="analysisCards" class="grid"></div>
+        </section>
+      </div>
+
+      <div class="grid">
+        <section class="card">
+          <h2>Applicant Profile + AI Income Engine Fit</h2>
+          <p class="muted">
+            Secure profile setup for skills, capacity, certificates, and AI business
+            compatibility scoring.
+          </p>
+          <label for="profileApplicantId">Applicant ID</label>
+          <input id="profileApplicantId" value="app-amina" />
+          <div class="row">
+            <div>
+              <label for="profileName">Name</label>
+              <input id="profileName" value="Amina Growth Ops" />
+            </div>
+            <div>
+              <label for="profileTier">Tier</label>
+              <select id="profileTier">
+                <option value="trusted" selected>trusted</option>
+                <option value="verified">verified</option>
+                <option value="starter">starter</option>
+              </select>
+            </div>
+          </div>
+          <label for="profileSkills">Skills (comma separated)</label>
+          <input
+            id="profileSkills"
+            value="Local SEO, Reputation Management, Funnel Copywriting, CRM Automation"
+          />
+          <div class="row">
+            <div>
+              <label for="profileWeeklyCapacity">Weekly capacity (hours)</label>
+              <input id="profileWeeklyCapacity" type="number" min="1" value="30" />
+            </div>
+            <div>
+              <label for="profileMaxDeals">Max concurrent deals</label>
+              <input id="profileMaxDeals" type="number" min="1" value="4" />
+            </div>
+            <div>
+              <label for="profileActiveDeals">Current active deals</label>
+              <input id="profileActiveDeals" type="number" min="0" value="1" />
+            </div>
+          </div>
+          <label for="profileCertificates">Certificates (one per line)</label>
+          <textarea id="profileCertificates">Google Business Profile Specialist
+HubSpot Revenue Operations
+Meta Performance Marketing</textarea>
+          <button id="saveProfileBtn">Save Profile</button>
+          <button id="loadProfileBtn">Load Profile Stats</button>
+          <button id="runMatchBtn">Run AI Compatibility Match</button>
+          <div id="profileMeta" class="muted"></div>
+          <div id="profileSummary" class="chips"></div>
+          <ul id="profileSkillList" class="pill-list"></ul>
+          <ul id="profileCertList" class="pill-list"></ul>
+          <div id="matchMeta" class="muted"></div>
+          <ul id="matchOpportunityList" class="pill-list"></ul>
+        </section>
+
+        <section class="card">
+          <h2>3) Contact + Proposal + Payment</h2>
+          <p class="muted">
+            Submit proposal, client pays in CCWEB escrow, then payout auto-releases when deal is
+            marked done.
+          </p>
+          <label for="dealBusinessId">Business ID</label>
+          <input id="dealBusinessId" placeholder="e.g. biz-ldn-1" />
+          <label for="dealApplicantId">Applicant ID</label>
+          <input id="dealApplicantId" value="app-amina" />
+          <div class="row">
+            <div>
+              <label for="applicantName">Applicant</label>
+              <input id="applicantName" value="Amina Growth Ops" />
+            </div>
+            <div>
+              <label for="clientName">Client</label>
+              <input id="clientName" value="Clinic Owner" />
+            </div>
+          </div>
+          <label for="proposalText">Proposal</label>
+          <textarea id="proposalText">I will optimize your listings, fix response flow, and launch local conversion landing pages in 7 days.</textarea>
+          <div class="row">
+            <div>
+              <label for="dealAmount">Deal amount (USD)</label>
+              <input id="dealAmount" type="number" min="1" value="1200" />
+            </div>
+            <div>
+              <label for="doneConfirm">Deal done confirmation</label>
+              <select id="doneConfirm">
+                <option value="false" selected>Not yet</option>
+                <option value="true">Confirmed by client</option>
+              </select>
+            </div>
+            <div>
+              <label for="confirmRole">Confirmation role</label>
+              <select id="confirmRole">
+                <option value="client_approver" selected>client_approver</option>
+                <option value="applicant">applicant</option>
+                <option value="platform_admin">platform_admin</option>
+              </select>
+            </div>
+            <div>
+              <label for="confirmToken">Payment roll token</label>
+              <input id="confirmToken" placeholder="required when confirming deal" />
+            </div>
+            <div>
+              <label for="payoutMode">Payout mode</label>
+              <select id="payoutMode">
+                <option value="single_release" selected>single_release</option>
+                <option value="split_release">split_release</option>
+              </select>
+            </div>
+            <div>
+              <label for="splitReleasePercent">Split release percent</label>
+              <input id="splitReleasePercent" type="number" min="10" max="100" value="70" />
+            </div>
+          </div>
+          <button id="createDealBtn">Create / Update Deal</button>
+          <div id="dealOutput" class="chips"></div>
+        </section>
+
+        <section class="card">
+          <h3>How the payout logic works</h3>
+          <ul>
+            <li>Client payment goes to CCWEB escrow.</li>
+            <li>CCWEB fee = <code>8%</code> of total deal amount.</li>
+            <li>Applicant payout = <code>92%</code> after done confirmation.</li>
+            <li>
+              Status transitions:
+              <code>proposal_submitted</code> -> <code>in_escrow</code> ->
+              <code>released</code>.
+            </li>
+            <li>
+              Confirmation is role-gated and token-protected:
+              <code>role=client</code> + <code>X-CCWEB-PAYROLL-TOKEN</code>.
+            </li>
+          </ul>
+          <p class="muted">This prototype uses in-memory storage for demo behavior.</p>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      const state = {
+        businesses: [],
+        selectedBusinessId: "",
+      };
+
+      const searchQuery = document.getElementById("searchQuery");
+      const searchCity = document.getElementById("searchCity");
+      const searchBtn = document.getElementById("searchBtn");
+      const searchMeta = document.getElementById("searchMeta");
+      const searchResults = document.getElementById("searchResults");
+      const businessSelect = document.getElementById("businessSelect");
+      const analyzeBtn = document.getElementById("analyzeBtn");
+      const analyzeTarget = document.getElementById("analyzeTarget");
+      const analysisCards = document.getElementById("analysisCards");
+      const dealBusinessId = document.getElementById("dealBusinessId");
+      const applicantName = document.getElementById("applicantName");
+      const clientName = document.getElementById("clientName");
+      const proposalText = document.getElementById("proposalText");
+      const dealAmount = document.getElementById("dealAmount");
+      const doneConfirm = document.getElementById("doneConfirm");
+      const confirmRole = document.getElementById("confirmRole");
+      const confirmToken = document.getElementById("confirmToken");
+      const payoutMode = document.getElementById("payoutMode");
+      const splitReleasePercent = document.getElementById("splitReleasePercent");
+      const createDealBtn = document.getElementById("createDealBtn");
+      const dealOutput = document.getElementById("dealOutput");
+      const dealApplicantId = document.getElementById("dealApplicantId");
+      const profileApplicantId = document.getElementById("profileApplicantId");
+      const profileName = document.getElementById("profileName");
+      const profileTier = document.getElementById("profileTier");
+      const profileSkills = document.getElementById("profileSkills");
+      const profileWeeklyCapacity = document.getElementById("profileWeeklyCapacity");
+      const profileMaxDeals = document.getElementById("profileMaxDeals");
+      const profileActiveDeals = document.getElementById("profileActiveDeals");
+      const profileCertificates = document.getElementById("profileCertificates");
+      const saveProfileBtn = document.getElementById("saveProfileBtn");
+      const loadProfileBtn = document.getElementById("loadProfileBtn");
+      const runMatchBtn = document.getElementById("runMatchBtn");
+      const profileMeta = document.getElementById("profileMeta");
+      const profileSummary = document.getElementById("profileSummary");
+      const profileSkillList = document.getElementById("profileSkillList");
+      const profileCertList = document.getElementById("profileCertList");
+      const matchMeta = document.getElementById("matchMeta");
+      const matchOpportunityList = document.getElementById("matchOpportunityList");
+
+      function renderSearch(list) {
+        searchResults.innerHTML = "";
+        businessSelect.innerHTML = "";
+
+        if (!list.length) {
+          searchResults.innerHTML = "<li>No businesses found for this query/city.</li>";
+          businessSelect.innerHTML = "<option value=\"\">No businesses available</option>";
+          return;
+        }
+
+        list.forEach((biz, idx) => {
+          const li = document.createElement("li");
+          li.innerHTML = `<strong>${biz.name}</strong> (${biz.city}) - ${biz.category} - Rating ${biz.rating}`;
+          searchResults.appendChild(li);
+
+          const option = document.createElement("option");
+          option.value = biz.id;
+          option.textContent = `${biz.name} (${biz.city})`;
+          if (idx === 0) option.selected = true;
+          businessSelect.appendChild(option);
+        });
+
+        state.selectedBusinessId = list[0].id;
+        dealBusinessId.value = list[0].id;
+      }
+
+      function renderAnalysis(payload) {
+        analysisCards.innerHTML = "";
+        analyzeTarget.textContent = `${payload.business.name} (${payload.business.city})`;
+        payload.cards.forEach((card) => {
+          const el = document.createElement("section");
+          el.className = "card";
+          el.innerHTML = `<h3>${card.title}</h3><p>${card.issue}</p><p class="muted"><strong>Impact:</strong> ${card.impact}</p><p class="muted"><strong>Action:</strong> ${card.recommendation}</p>`;
+          analysisCards.appendChild(el);
+        });
+      }
+
+      function renderDeal(payload) {
+        const deal = payload.deal || {};
+        const payout = payload.payout || {};
+        const security = payload.security || {};
+        const items = [
+          `Deal ${deal.id || "n/a"}`,
+          `Status: ${deal.status || "n/a"}`,
+          `Amount: $${payout.totalAmount ?? "n/a"}`,
+          `Platform 8%: $${payout.platformFee ?? "n/a"}`,
+          `Applicant payout: $${payout.applicantPayout ?? "n/a"}`,
+          `Released: $${payout.releasedAmount ?? 0}`,
+          `Pending: $${payout.pendingAmount ?? 0}`,
+          `Escrow: ${payout.escrowStatus || "n/a"}`,
+          `Fee rate: ${deal.feeRatePercent ?? 8}%`,
+          `Payout mode: ${deal.payoutMode || "single_release"}`,
+          `Split %: ${deal.splitReleasePercent ?? 100}`,
+          `Secure role: ${security.requiredApproverRole || "client_approver"}`,
+          `Token hint: ${security.releaseTokenHint || "n/a"}`,
+          `Released at: ${deal.releasedAt ? deal.releasedAt : "awaiting client confirmation"}`,
+        ];
+
+        dealOutput.innerHTML = "";
+        items.forEach((text) => {
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          chip.textContent = text;
+          dealOutput.appendChild(chip);
+        });
+      }
+
+      function renderMatch(payload) {
+        matchOpportunityList.innerHTML = "";
+        const opportunities = payload.opportunities || [];
+        matchMeta.textContent = `Compatibility run for ${payload.applicant.fullName}. Opportunities found: ${opportunities.length}.`;
+
+        if (!opportunities.length) {
+          const li = document.createElement("li");
+          li.className = "chip";
+          li.textContent = "No opportunities found for the current search scope.";
+          matchOpportunityList.appendChild(li);
+          return;
+        }
+
+        opportunities.slice(0, 3).forEach((opp) => {
+          const li = document.createElement("li");
+          li.className = "chip";
+          li.textContent = `${opp.business.name} | Score ${opp.compatibilityScore} | Coverage ${opp.skillCoveragePercent}% | Net $${opp.projectedIncome.applicantNetUsd}`;
+          matchOpportunityList.appendChild(li);
+        });
+      }
+
+      function renderProfile(profilePayload) {
+        const profile = profilePayload;
+        profileMeta.textContent = `Profile loaded for ${profile.fullName} (${profile.id}).`;
+        profileSummary.innerHTML = "";
+        profileSkillList.innerHTML = "";
+        profileCertList.innerHTML = "";
+        matchOpportunityList.innerHTML = "";
+        matchMeta.textContent = "";
+
+        profileApplicantId.value = profile.id;
+        dealApplicantId.value = profile.id;
+        profileName.value = profile.fullName;
+        profileWeeklyCapacity.value = String(profile.capacity.weeklyHours);
+        profileMaxDeals.value = String(profile.capacity.maxConcurrentDeals);
+        profileActiveDeals.value = String(profile.capacity.currentActiveDeals);
+        profileSkills.value = profile.skills.map((skill) => skill.name).join(", ");
+        profileCertificates.value = profile.certificates.join("\n");
+
+        const summary = [
+          `Security tier: ${profile.paymentProfile.securityTier}`,
+          `Roles: ${profile.paymentProfile.roles.join(", ")}`,
+          `Jobs done: ${profile.stats.jobsCompleted}`,
+          `Active deals: ${profile.capacity.currentActiveDeals}`,
+          `Max deals: ${profile.capacity.maxConcurrentDeals}`,
+          `Total earned: $${profile.stats.totalEarningsUsd}`,
+          `On-time rate: ${profile.stats.onTimeRate}%`,
+          `Average rating: ${profile.stats.avgRating}`,
+          `Weekly hours: ${profile.capacity.weeklyHours}`,
+        ];
+
+        summary.forEach((text) => {
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          chip.textContent = text;
+          profileSummary.appendChild(chip);
+        });
+
+        profile.skills.forEach((skill) => {
+          const li = document.createElement("li");
+          li.className = "chip";
+          li.textContent = `Skill: ${skill.name} (${skill.capacity}%)`;
+          profileSkillList.appendChild(li);
+        });
+
+        profile.certifications.forEach((certificate) => {
+          const li = document.createElement("li");
+          li.className = "chip";
+          li.textContent = `Certificate: ${certificate}`;
+          profileCertList.appendChild(li);
+        });
+      }
+
+      async function runSearch() {
+        const params = new URLSearchParams({
+          query: searchQuery.value.trim(),
+          city: searchCity.value.trim(),
+        });
+        const response = await fetch(`/api/maps-search?${params.toString()}`);
+        const payload = await response.json();
+        state.businesses = payload.results;
+        searchMeta.textContent = `Matched ${payload.results.length} businesses for "${payload.query}" in ${payload.city}.`;
+        renderSearch(payload.results);
+      }
+
+      async function runAnalysis() {
+        const businessId = businessSelect.value || state.selectedBusinessId;
+        if (!businessId) {
+          analyzeTarget.textContent = "Select a business first.";
+          return;
+        }
+        const selected = state.businesses.find((biz) => biz.id === businessId);
+        if (!selected) {
+          analyzeTarget.textContent = "Business not found.";
+          return;
+        }
+        // Backend analyze endpoint accepts business context in JSON body.
+        const response = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            businessId,
+            businessName: selected.name,
+            city: selected.city,
+            category: selected.category,
+            rating: selected.rating,
+            reviewCount: selected.reviewCount,
+          }),
+        });
+        if (!response.ok) {
+          analyzeTarget.textContent = "Analyzer failed.";
+          return;
+        }
+        const payload = await response.json();
+        renderAnalysis(payload);
+      }
+
+      async function createOrUpdateDeal() {
+        const businessId = dealBusinessId.value.trim();
+        if (!businessId) {
+          dealOutput.textContent = "Business ID is required.";
+          return;
+        }
+        const body = {
+          businessId,
+          applicantId: dealApplicantId.value.trim(),
+          applicantName: applicantName.value.trim(),
+          clientName: clientName.value.trim(),
+          proposalText: proposalText.value.trim(),
+          dealValue: Number(dealAmount.value),
+          payoutMode: payoutMode.value,
+          splitReleasePercent: Number(splitReleasePercent.value),
+        };
+        const response = await fetch("/api/deals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) {
+          const err = await response.json();
+          dealOutput.textContent = err.error || "Could not create deal.";
+          return;
+        }
+        const payload = await response.json();
+        let current = payload;
+
+        if (doneConfirm.value === "true") {
+          const dealId = payload?.deal?.id;
+          if (!dealId) {
+            dealOutput.textContent = "Deal created but ID was missing from response.";
+            return;
+          }
+          const token = confirmToken.value.trim();
+          if (!token) {
+            dealOutput.textContent = "Payment roll token is required for confirmation.";
+            return;
+          }
+          const confirmRes = await fetch(`/api/deals/${encodeURIComponent(dealId)}/confirm`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              paymentRole: confirmRole.value,
+              clientConfirmed: confirmRole.value === "client_approver",
+              releaseToken: token,
+              adminOverrideReason:
+                confirmRole.value === "platform_admin" ? "Manual override via secure admin review" : "",
+            }),
+          });
+          if (confirmRes.ok) {
+            current = await confirmRes.json();
+          } else {
+            const err = await confirmRes.json();
+            dealOutput.textContent = err.error || "Could not confirm deal.";
+            return;
+          }
+        }
+
+        renderDeal(current);
+      }
+
+      async function saveProfile() {
+        const maxDeals = Number(profileMaxDeals.value);
+        const activeDeals = Number(profileActiveDeals.value);
+        if (activeDeals > maxDeals) {
+          profileMeta.textContent = "Current active deals cannot exceed max concurrent deals.";
+          return;
+        }
+        const body = {
+          applicantId: profileApplicantId.value.trim(),
+          fullName: profileName.value.trim(),
+          headline: `${profileTier.value} business operator`,
+          city: "Global",
+          weeklyHours: Number(profileWeeklyCapacity.value),
+          maxConcurrentDeals: maxDeals,
+          currentActiveDeals: activeDeals,
+          skills: profileSkills.value
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean),
+          certifications: profileCertificates.value
+            .split("\n")
+            .map((value) => value.trim())
+            .filter(Boolean),
+        };
+        const response = await fetch("/api/applicants", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) {
+          const err = await response.json();
+          profileMeta.textContent = err.error || "Could not save profile.";
+          return;
+        }
+        const payload = await response.json();
+        renderProfile(payload);
+      }
+
+      async function runCompatibilityMatch() {
+        const applicantId = profileApplicantId.value.trim();
+        if (!applicantId) {
+          matchMeta.textContent = "Applicant ID is required for compatibility matching.";
+          return;
+        }
+        const params = new URLSearchParams({
+          applicantId,
+          city: searchCity.value.trim(),
+          query: searchQuery.value.trim(),
+        });
+        const response = await fetch(`/api/engine/match?${params.toString()}`);
+        if (!response.ok) {
+          const err = await response.json();
+          matchMeta.textContent = err.error || "Compatibility match failed.";
+          return;
+        }
+        const payload = await response.json();
+        renderMatch(payload);
+      }
+
+      async function loadProfile() {
+        const applicantId = profileApplicantId.value.trim();
+        if (!applicantId) {
+          profileMeta.textContent = "Applicant ID is required.";
+          return;
+        }
+        const response = await fetch(`/api/applicants/${encodeURIComponent(applicantId)}`);
+        if (!response.ok) {
+          const err = await response.json();
+          profileMeta.textContent = err.error || "Profile not found.";
+          return;
+        }
+        const payload = await response.json();
+        renderProfile(payload);
+      }
+
+      searchBtn.addEventListener("click", runSearch);
+      analyzeBtn.addEventListener("click", runAnalysis);
+      createDealBtn.addEventListener("click", createOrUpdateDeal);
+      saveProfileBtn.addEventListener("click", saveProfile);
+      loadProfileBtn.addEventListener("click", loadProfile);
+      runMatchBtn.addEventListener("click", runCompatibilityMatch);
+      businessSelect.addEventListener("change", () => {
+        state.selectedBusinessId = businessSelect.value;
+        if (businessSelect.value) dealBusinessId.value = businessSelect.value;
+      });
+
+      runSearch();
+      loadProfile();
+    </script>
+  </body>
+</html>

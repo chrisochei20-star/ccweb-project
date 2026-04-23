@@ -8,12 +8,14 @@ import {
   Routes,
   useParams,
 } from "react-router-dom";
+import { useEffect, useState } from "react";
 import "./styles.css";
 
 const navItems = [
   { label: "Home", to: "/" },
   { label: "Courses", to: "/courses" },
   { label: "AI Tutor", to: "/ai-tutor" },
+  { label: "AI Streaming", to: "/ai-streaming" },
   { label: "Pricing", to: "/pricing" },
   { label: "Tokens", to: "/tokens" },
   { label: "Affiliates", to: "/affiliates" },
@@ -71,6 +73,7 @@ function App() {
           <Route path="courses" element={<CoursesPage />} />
           <Route path="courses/:id" element={<CourseNotFoundPage />} />
           <Route path="ai-tutor" element={<AiTutorPage />} />
+          <Route path="ai-streaming" element={<AiStreamingPage />} />
           <Route path="pricing" element={<PricingPage />} />
           <Route path="tokens" element={<TokensPage />} />
           <Route path="affiliates" element={<AffiliatesPage />} />
@@ -271,6 +274,631 @@ function AiTutorPage() {
           <Link to="/login" className="btn btn-outline">
             Sign In
           </Link>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function AiStreamingPage() {
+  const [payload, setPayload] = useState({
+    roomTitle: "AI Web3 Fundamentals Live",
+    curriculum: "AI",
+    courseLoad: "standard",
+    sessionCapacity: 250,
+    hostModel: "Claude-CCWEB-Host",
+    hostLocale: "English",
+    expectedAudience: 1800,
+    expectedArppuUsd: 4.5,
+    platformSharePercent: 37,
+    expectedSessionMinutes: 120,
+    tutoringIntervalMinutes: 20,
+  });
+  const [rooms, setRooms] = useState([]);
+  const [selectedRoomId, setSelectedRoomId] = useState("");
+  const [response, setResponse] = useState(null);
+  const [joinPayload, setJoinPayload] = useState({
+    userId: "user-organic-001",
+    displayName: "Maya Organic Learner",
+    watchMinutes: 15,
+    isOrganic: true,
+  });
+  const [joinState, setJoinState] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [joinLoading, setJoinLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [joinError, setJoinError] = useState("");
+  const [activeSessionLock, setActiveSessionLock] = useState(null);
+
+  function updateField(field, value) {
+    setPayload((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function curriculumToTracks(curriculum) {
+    const normalized = curriculum.toLowerCase();
+    if (normalized === "ai") {
+      return ["AI Foundations", "Machine Learning", "Digital Business Systems"];
+    }
+    if (normalized === "blockchain") {
+      return ["Blockchain Fundamentals", "Smart Contracts", "Web3 Product Development"];
+    }
+    if (normalized === "web3") {
+      return ["Web3 Product Development", "Smart Contracts", "Digital Business Systems"];
+    }
+    if (normalized === "crypto") {
+      return ["Crypto Markets", "Blockchain Fundamentals", "Financial Literacy & Human Development"];
+    }
+    if (normalized === "business") {
+      return ["Digital Business Systems", "Financial Literacy & Human Development", "AI Foundations"];
+    }
+    return ["Financial Literacy & Human Development", "Digital Business Systems", "AI Foundations"];
+  }
+
+  function autoDurationForCourseLoad(load) {
+    if (load === "foundation") {
+      return 60;
+    }
+    if (load === "standard") {
+      return 90;
+    }
+    if (load === "advanced") {
+      return 120;
+    }
+    if (load === "intensive") {
+      return 150;
+    }
+    return 180;
+  }
+
+  function autoIntervalForCourseLoad(load) {
+    if (load === "foundation") {
+      return 12;
+    }
+    if (load === "standard") {
+      return 15;
+    }
+    if (load === "advanced") {
+      return 20;
+    }
+    if (load === "intensive") {
+      return 25;
+    }
+    return 30;
+  }
+
+  function autoAudienceByCapacity(capacity) {
+    const safeCapacity = Math.max(20, Number(capacity) || 20);
+    return Math.round(safeCapacity * 0.72);
+  }
+
+  function autoArppuByCurriculum(curriculum) {
+    const key = curriculum.toLowerCase();
+    if (key === "ai") {
+      return 5.2;
+    }
+    if (key === "blockchain") {
+      return 5.1;
+    }
+    if (key === "web3") {
+      return 4.9;
+    }
+    if (key === "crypto") {
+      return 5.4;
+    }
+    if (key === "business") {
+      return 4.6;
+    }
+    return 4.5;
+  }
+
+  async function loadRooms() {
+    try {
+      const res = await fetch("/api/streaming/rooms");
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Could not load rooms.");
+      }
+      setRooms(data.rooms || []);
+      if (!selectedRoomId && data.rooms?.length) {
+        setSelectedRoomId(data.rooms[0].id);
+      }
+    } catch (err) {
+      setJoinError(err.message);
+    }
+  }
+
+  useEffect(() => {
+    loadRooms();
+  }, []);
+
+  function getSelectedRoom() {
+    if (response?.room?.id && response.room.id === selectedRoomId) {
+      return response.room;
+    }
+    return rooms.find((room) => room.id === selectedRoomId) || response?.room || null;
+  }
+
+  async function createRoom() {
+    setLoading(true);
+    setError("");
+    try {
+      const expectedGross = Number(payload.expectedAudience) * Number(payload.expectedArppuUsd);
+      const res = await fetch("/api/streaming/rooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomName: payload.roomTitle,
+          topic: `${payload.curriculum} live masterclass`,
+          city: "Global",
+          region: payload.hostLocale,
+          createdBy: "ccweb-stream-studio",
+          aiHostName: payload.hostModel,
+          curriculumTracks: curriculumToTracks(payload.curriculum),
+          platformRevenueSharePercent: Number(payload.platformSharePercent),
+          courseLoad: payload.courseLoad,
+          sessionCapacity: Number(payload.sessionCapacity),
+          expectedSessionMinutes: Number(payload.expectedSessionMinutes),
+          tutoringIntervalMinutes: Number(payload.tutoringIntervalMinutes),
+          agenda: [
+            {
+              title: `${payload.curriculum} foundations`,
+              durationMinutes: Math.round(Number(payload.expectedSessionMinutes) * 0.45),
+            },
+            {
+              title: `${payload.curriculum} practical workshop`,
+              durationMinutes: Math.round(Number(payload.expectedSessionMinutes) * 0.35),
+            },
+            {
+              title: "Live Q&A and recap",
+              durationMinutes: Math.round(Number(payload.expectedSessionMinutes) * 0.2),
+            },
+          ],
+        }),
+      });
+
+      const roomData = await res.json();
+      if (!res.ok) {
+        throw new Error(roomData.error || "Could not create room.");
+      }
+
+      const payoutRes = await fetch("/api/streaming/payouts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomId: roomData.id,
+          periodLabel: "Projected first live cycle",
+          grossRevenueUsd: expectedGross,
+          platformRevenueSharePercent: Number(payload.platformSharePercent),
+        }),
+      });
+      const payoutData = await payoutRes.json();
+      if (!payoutRes.ok) {
+        throw new Error(payoutData.error || "Could not compute payout.");
+      }
+
+      setResponse({ room: roomData, payout: payoutData });
+      setSelectedRoomId(roomData.id);
+      await loadRooms();
+      setJoinState(null);
+      setActiveSessionLock(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function joinRoom() {
+    if (!selectedRoomId) {
+      setJoinError("Select a room before joining.");
+      return;
+    }
+    setJoinLoading(true);
+    setJoinError("");
+    try {
+      const res = await fetch(`/api/streaming/rooms/${selectedRoomId}/attendance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: joinPayload.userId,
+          displayName: joinPayload.displayName,
+          watchMinutes: Number(joinPayload.watchMinutes),
+          isOrganic: Boolean(joinPayload.isOrganic),
+          isActive: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.activeSession) {
+          setActiveSessionLock(data.activeSession);
+        }
+        throw new Error(data.error || "Could not join this stream.");
+      }
+      setJoinState(data);
+      setActiveSessionLock(null);
+      await loadRooms();
+    } catch (err) {
+      setJoinError(err.message);
+    } finally {
+      setJoinLoading(false);
+    }
+  }
+
+  async function leaveRoom() {
+    if (!selectedRoomId) {
+      setJoinError("Select a room before leaving.");
+      return;
+    }
+    setJoinLoading(true);
+    setJoinError("");
+    try {
+      const res = await fetch(`/api/streaming/rooms/${selectedRoomId}/attendance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: joinPayload.userId,
+          displayName: joinPayload.displayName,
+          watchMinutes: Number(joinPayload.watchMinutes),
+          isOrganic: Boolean(joinPayload.isOrganic),
+          isActive: false,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Could not leave this stream.");
+      }
+      setJoinState(data);
+      if (selectedRoomId && activeSessionLock?.roomId === selectedRoomId) {
+        setActiveSessionLock(null);
+      }
+      await loadRooms();
+    } catch (err) {
+      setJoinError(err.message);
+    } finally {
+      setJoinLoading(false);
+    }
+  }
+
+  async function finishRoom() {
+    if (!selectedRoomId) {
+      setJoinError("Select a room before finishing.");
+      return;
+    }
+    setJoinLoading(true);
+    setJoinError("");
+    try {
+      const res = await fetch(`/api/streaming/rooms/${selectedRoomId}/finish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          finishedBy: "ccweb-stream-studio",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Could not finish this stream.");
+      }
+      await loadRooms();
+      if (response?.room?.id === selectedRoomId) {
+        setResponse((prev) => (prev ? { ...prev, room: data.room } : prev));
+      }
+      setJoinState((prev) =>
+        prev ? { ...prev, metrics: data.room.metrics, roomId: data.room.id } : prev
+      );
+      if (activeSessionLock?.roomId === selectedRoomId) {
+        setActiveSessionLock(null);
+      }
+    } catch (err) {
+      setJoinError(err.message);
+    } finally {
+      setJoinLoading(false);
+    }
+  }
+
+  const selectedRoom = getSelectedRoom();
+
+  return (
+    <section>
+      <header className="page-header">
+        <h1 className="section-title">AI Web Streaming</h1>
+        <p className="muted">
+          LiveKit-powered rooms with AI hosts that can tutor across AI, Blockchain, Web3,
+          Crypto, Business, and Finance curricula.
+        </p>
+      </header>
+
+      <div className="card-grid">
+        <article className="panel">
+          <h3>Live room configuration</h3>
+          <div className="auth-row">
+            <label htmlFor="room-title">Room title</label>
+            <input
+              id="room-title"
+              value={payload.roomTitle}
+              onChange={(event) => updateField("roomTitle", event.target.value)}
+            />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="curriculum">Curriculum</label>
+            <select
+              id="curriculum"
+              value={payload.curriculum}
+              onChange={(event) => {
+                const value = event.target.value;
+                updateField("curriculum", value);
+                updateField("expectedArppuUsd", autoArppuByCurriculum(value));
+              }}
+            >
+              <option>AI</option>
+              <option>Blockchain</option>
+              <option>Web3</option>
+              <option>Crypto</option>
+              <option>Business</option>
+              <option>Finance</option>
+            </select>
+          </div>
+          <div className="auth-row">
+            <label htmlFor="course-load">Course load template</label>
+            <select
+              id="course-load"
+              value={payload.courseLoad}
+              onChange={(event) => {
+                const value = event.target.value;
+                updateField("courseLoad", value);
+                updateField("expectedSessionMinutes", autoDurationForCourseLoad(value));
+                updateField("tutoringIntervalMinutes", autoIntervalForCourseLoad(value));
+              }}
+            >
+              <option value="foundation">Foundation load</option>
+              <option value="standard">Standard load</option>
+              <option value="advanced">Advanced load</option>
+              <option value="intensive">Intensive load</option>
+              <option value="marathon">Marathon load</option>
+            </select>
+          </div>
+          <div className="auth-row">
+            <label htmlFor="session-capacity">Session capacity</label>
+            <input
+              id="session-capacity"
+              type="number"
+              min="20"
+              max="10000"
+              value={payload.sessionCapacity}
+              onChange={(event) => {
+                const nextCapacity = event.target.value;
+                updateField("sessionCapacity", nextCapacity);
+                updateField("expectedAudience", autoAudienceByCapacity(nextCapacity));
+              }}
+            />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="host-model">AI host model</label>
+            <input
+              id="host-model"
+              value={payload.hostModel}
+              onChange={(event) => updateField("hostModel", event.target.value)}
+            />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="host-locale">Host locale</label>
+            <input
+              id="host-locale"
+              value={payload.hostLocale}
+              onChange={(event) => updateField("hostLocale", event.target.value)}
+            />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="expected-audience">Expected audience</label>
+            <input
+              id="expected-audience"
+              type="number"
+              min="1"
+              value={payload.expectedAudience}
+              onChange={(event) => updateField("expectedAudience", event.target.value)}
+            />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="arppu">Expected ARPPU (USD)</label>
+            <input
+              id="arppu"
+              type="number"
+              min="0.1"
+              step="0.1"
+              value={payload.expectedArppuUsd}
+              onChange={(event) => updateField("expectedArppuUsd", event.target.value)}
+            />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="platform-share">CCWEB platform share % (35-40)</label>
+            <input
+              id="platform-share"
+              type="number"
+              min="35"
+              max="40"
+              value={payload.platformSharePercent}
+              onChange={(event) => updateField("platformSharePercent", event.target.value)}
+            />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="expected-session-minutes">Expected full session (minutes)</label>
+            <input
+              id="expected-session-minutes"
+              type="number"
+              min="15"
+              max="480"
+              value={payload.expectedSessionMinutes}
+              onChange={(event) => updateField("expectedSessionMinutes", event.target.value)}
+            />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="interval-minutes">Tutor round interval (minutes)</label>
+            <input
+              id="interval-minutes"
+              type="number"
+              min="5"
+              max="90"
+              value={payload.tutoringIntervalMinutes}
+              onChange={(event) => updateField("tutoringIntervalMinutes", event.target.value)}
+            />
+          </div>
+          <button type="button" className="btn btn-primary" onClick={createRoom} disabled={loading}>
+            {loading ? "Creating..." : "Create AI Live Room"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={loadRooms}
+            style={{ marginLeft: "0.5rem" }}
+          >
+            Refresh rooms
+          </button>
+          {error ? <p className="muted" style={{ color: "#ff8c8c" }}>{error}</p> : null}
+        </article>
+
+        <article className="panel">
+          <h3>Revenue and capability preview</h3>
+          {!response ? (
+            <p className="muted">
+              Create a room to preview LiveKit session details, curriculum coverage,
+              and organic revenue projections.
+            </p>
+          ) : (
+            <>
+              <div className="auth-row">
+                <label htmlFor="active-room">Select active room</label>
+                <select
+                  id="active-room"
+                  value={selectedRoomId}
+                  onChange={(event) => setSelectedRoomId(event.target.value)}
+                >
+                  {rooms.length ? null : (
+                    <option value={response.room.id}>{response.room.roomName}</option>
+                  )}
+                  {rooms.map((room) => (
+                    <option key={room.id} value={room.id}>
+                      {room.roomName} ({room.status})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p><strong>Room:</strong> {selectedRoom?.roomName || response.room.roomName}</p>
+              <p><strong>LiveKit SID hint:</strong> {selectedRoom?.livekit?.roomSidHint || response.room.livekit.roomSidHint}</p>
+              <p><strong>Status:</strong> {selectedRoom?.status || response.room.status}</p>
+              <p><strong>Topic:</strong> {selectedRoom?.topic || response.room.topic}</p>
+              <p><strong>AI Host:</strong> {selectedRoom?.aiHost?.displayName || response.room.aiHost.displayName}</p>
+              <p><strong>Course load:</strong> {selectedRoom?.configuration?.courseLoad || "standard"}</p>
+              <p><strong>Session capacity:</strong> {selectedRoom?.configuration?.sessionCapacity || payload.sessionCapacity}</p>
+              <p><strong>Starts at:</strong> {selectedRoom?.tutoringSchedule?.startedAt || "TBD"}</p>
+              <p><strong>Estimated end:</strong> {selectedRoom?.tutoringSchedule?.estimatedEndAt || "TBD"}</p>
+              <p>
+                <strong>Expected session:</strong> {selectedRoom?.tutoringSchedule?.expectedSessionMinutes || 0} minutes
+                {" · "}
+                <strong>Tutor interval:</strong> {selectedRoom?.tutoringSchedule?.tutoringIntervalMinutes || 0} minutes
+              </p>
+              <p>
+                <strong>Estimated teaching rounds:</strong>{" "}
+                {selectedRoom?.tutoringSchedule?.estimatedSegments || 0}
+              </p>
+              <p><strong>Platform share:</strong> {response.payout.platformRevenueSharePercent}%</p>
+              <p><strong>Estimated gross:</strong> ${response.payout.grossRevenueUsd}</p>
+              <p><strong>CCWEB revenue:</strong> ${response.payout.platformRevenueUsd}</p>
+              <p><strong>Creator pool:</strong> ${response.payout.creatorRevenueUsd}</p>
+              <p>
+                <strong>Auto capacity utilization:</strong>{" "}
+                {selectedRoom?.monetization?.autoCapacityUtilizationPercent ?? "n/a"}%
+              </p>
+              <p>
+                <strong>Participation weighting:</strong>{" "}
+                {selectedRoom?.monetization?.organicDistributionModel || "watch_minutes_weighted"}
+              </p>
+              <h4 style={{ marginBottom: "0.4rem", marginTop: "1rem" }}>Join/leave session</h4>
+              <div className="auth-row">
+                <label htmlFor="join-user-id">User ID</label>
+                <input
+                  id="join-user-id"
+                  value={joinPayload.userId}
+                  onChange={(event) =>
+                    setJoinPayload((prev) => ({ ...prev, userId: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="auth-row">
+                <label htmlFor="join-display-name">Display name</label>
+                <input
+                  id="join-display-name"
+                  value={joinPayload.displayName}
+                  onChange={(event) =>
+                    setJoinPayload((prev) => ({ ...prev, displayName: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="auth-row">
+                <label htmlFor="join-watch-minutes">Watch minutes</label>
+                <input
+                  id="join-watch-minutes"
+                  type="number"
+                  min="0"
+                  value={joinPayload.watchMinutes}
+                  onChange={(event) =>
+                    setJoinPayload((prev) => ({ ...prev, watchMinutes: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="auth-row">
+                <label htmlFor="join-is-organic">Organic user</label>
+                <select
+                  id="join-is-organic"
+                  value={joinPayload.isOrganic ? "true" : "false"}
+                  onChange={(event) =>
+                    setJoinPayload((prev) => ({
+                      ...prev,
+                      isOrganic: event.target.value === "true",
+                    }))
+                  }
+                >
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
+              <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+                <button type="button" className="btn btn-primary" onClick={joinRoom} disabled={joinLoading}>
+                  {joinLoading ? "Joining..." : "Join stream"}
+                </button>
+                <button type="button" className="btn btn-outline" onClick={leaveRoom} disabled={joinLoading}>
+                  Leave stream
+                </button>
+                <button type="button" className="btn btn-outline" onClick={finishRoom} disabled={joinLoading}>
+                  Finish selected room
+                </button>
+              </div>
+              {activeSessionLock ? (
+                <div className="stream-lock-box">
+                  <p><strong>Active session lock:</strong> {activeSessionLock.roomName}</p>
+                  <p>
+                    You must leave or finish that session before joining another one.
+                  </p>
+                  <p className="muted">
+                    Estimated end: {activeSessionLock.estimatedEndAt || "Not available"}
+                  </p>
+                </div>
+              ) : null}
+              {joinError ? <p className="muted" style={{ color: "#ff8c8c" }}>{joinError}</p> : null}
+              {joinState ? (
+                <div className="stream-session-box">
+                  <p><strong>Session room:</strong> {joinState.roomId}</p>
+                  <p><strong>User active:</strong> {joinState.attendance?.isActive ? "yes" : "no"}</p>
+                  <p><strong>Active attenders:</strong> {joinState.metrics?.activeAttenders ?? 0}</p>
+                  <p><strong>Active organic attenders:</strong> {joinState.metrics?.activeOrganicAttenders ?? 0}</p>
+                </div>
+              ) : null}
+              <h4 style={{ marginBottom: "0.4rem" }}>AI host curriculum coverage</h4>
+              <ul className="list">
+                {(selectedRoom?.aiHost?.curriculumCoverage || response.room.aiHost.curriculumCoverage).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </>
+          )}
         </article>
       </div>
     </section>

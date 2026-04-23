@@ -303,6 +303,113 @@ a {
   margin-top: 0.4rem;
 }
 
+.stream-hero {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.stream-kpis {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.stream-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.stream-form {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.stream-form input,
+.stream-form select,
+.stream-form textarea {
+  border-radius: 0.65rem;
+  border: 1px solid #244267;
+  background: #061226;
+  color: var(--text);
+  padding: 0.6rem 0.72rem;
+}
+
+.stream-form textarea {
+  min-height: 90px;
+}
+
+.room-list {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.8rem;
+}
+
+.room-item {
+  border: 1px solid var(--card-border);
+  border-radius: 0.85rem;
+  background: rgba(8, 19, 40, 0.8);
+  padding: 0.75rem;
+}
+
+.meta-line {
+  margin: 0.2rem 0;
+}
+
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+}
+
+.tiny-pill {
+  border-radius: 999px;
+  border: 1px solid rgba(106, 155, 222, 0.3);
+  background: rgba(60, 120, 210, 0.2);
+  color: #add0ff;
+  font-size: 0.75rem;
+  padding: 0.16rem 0.55rem;
+}
+
+.error-text {
+  color: #ff9ea8;
+}
+
+.stream-session-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.stream-session-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+}
+
+.stream-session-box {
+  margin-top: 0.6rem;
+  border: 1px solid rgba(106, 155, 222, 0.28);
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: rgba(8, 18, 38, 0.65);
+}
+
+.room-item.active-room {
+  border-color: rgba(48, 201, 130, 0.45);
+  box-shadow: 0 0 0 1px rgba(48, 201, 130, 0.25);
+}
+
+.stream-lock-box {
+  margin-top: 0.55rem;
+  border: 1px solid rgba(255, 164, 86, 0.35);
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: rgba(42, 24, 8, 0.38);
+}
+
 .footer {
   border-top: 1px solid rgba(117, 160, 214, 0.16);
   margin-top: 2rem;

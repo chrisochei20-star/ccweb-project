@@ -13,16 +13,15 @@ import "./styles.css";
 
 const navItems = [
   { label: "Home", to: "/" },
+  { label: "Dashboard", to: "/dashboard" },
   { label: "Courses", to: "/courses" },
   { label: "AI Tutor", to: "/ai-tutor" },
   { label: "AI Streaming", to: "/ai-streaming" },
-  { label: "Pricing", to: "/pricing" },
-  { label: "Tokens", to: "/tokens" },
+  { label: "Live Session", to: "/live-session" },
+  { label: "Revenue", to: "/revenue" },
+  { label: "Setup", to: "/session-setup" },
   { label: "Affiliates", to: "/affiliates" },
-  { label: "Community", to: "/community" },
-  { label: "Blog", to: "/blog" },
-  { label: "About", to: "/about" },
-  { label: "FAQ", to: "/faq" },
+  { label: "Profile", to: "/profile" },
 ];
 
 const courses = [
@@ -64,6 +63,100 @@ const courses = [
   },
 ];
 
+const courseLoads = {
+  foundation: {
+    label: "Foundation load",
+    minutes: 60,
+    interval: 12,
+    capacity: 180,
+    arppu: 3.8,
+    focus: "Light onboarding, glossary building, confidence checks",
+  },
+  standard: {
+    label: "Standard load",
+    minutes: 90,
+    interval: 15,
+    capacity: 250,
+    arppu: 4.5,
+    focus: "Concept walkthrough, guided demos, and learner prompts",
+  },
+  advanced: {
+    label: "Advanced load",
+    minutes: 120,
+    interval: 20,
+    capacity: 420,
+    arppu: 5.2,
+    focus: "Deeper labs, project critique, and monetization practice",
+  },
+  intensive: {
+    label: "Intensive load",
+    minutes: 150,
+    interval: 25,
+    capacity: 650,
+    arppu: 6.1,
+    focus: "Cohort sprint, high interaction, and revenue experiments",
+  },
+};
+
+const learnerProfile = {
+  name: "Maya Organic Learner",
+  role: "AI + Web3 Builder",
+  plan: "Creator Pro",
+  streak: 18,
+  wallet: "0x9F4...C21",
+  notificationEmail: "maya@ccweb.example",
+  weeklyGoal: "420 learning minutes",
+};
+
+const participationSignals = [
+  { label: "Duration of stay", value: 82, detail: "98 of 120 minutes" },
+  { label: "Polls and prompts", value: 74, detail: "14 interactions" },
+  { label: "Chat contribution", value: 66, detail: "8 helpful messages" },
+  { label: "Quiz accuracy", value: 91, detail: "10 of 11 correct" },
+];
+
+const activeSessions = [
+  {
+    id: "room-web3-248",
+    title: "AI Web3 Fundamentals Live",
+    course: "Blockchain Fundamentals",
+    status: "Live",
+    progress: 68,
+    viewers: 238,
+    capacity: 420,
+    minutes: 120,
+    arppu: 5.2,
+    participation: 78,
+  },
+  {
+    id: "room-ai-117",
+    title: "AI Automation Lab",
+    course: "AI & Machine Learning Basics",
+    status: "Starts in 26m",
+    progress: 12,
+    viewers: 96,
+    capacity: 250,
+    minutes: 90,
+    arppu: 4.8,
+    participation: 52,
+  },
+];
+
+function formatUsd(value) {
+  return `$${Number(value).toLocaleString(undefined, {
+    maximumFractionDigits: 0,
+  })}`;
+}
+
+function calculateEstimatedEarnings({ capacity, arppu, minutes, participation }) {
+  const expectedAudience = Math.round(Number(capacity) * 0.72);
+  const grossRevenue = expectedAudience * Number(arppu);
+  const creatorPool = grossRevenue * 0.63;
+  const stayWeight = Math.min(Number(minutes) / 120, 1);
+  const participationWeight = Number(participation) / 100;
+  return creatorPool * (0.55 * stayWeight + 0.45 * participationWeight);
+}
+
 function App() {
   return (
     <BrowserRouter>
@@ -85,7 +178,10 @@ function App() {
           <Route path="signup" element={<SignupPage />} />
           <Route path="contact" element={<ContactPage />} />
           <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="profile" element={<Navigate to="/login" replace />} />
+          <Route path="live-session" element={<LiveSessionPage />} />
+          <Route path="revenue" element={<RevenueDashboardPage />} />
+          <Route path="session-setup" element={<SessionSetupPage />} />
+          <Route path="profile" element={<ProfileSettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
@@ -598,17 +694,27 @@ function AiStreamingPage() {
   const selectedRoom = getSelectedRoom();
 
   return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">AI Web Streaming</h1>
-        <p className="muted">
-          LiveKit-powered rooms with AI hosts that can tutor across AI, Blockchain, Web3,
-          Crypto, Business, and Finance curricula.
-        </p>
+    <section className="product-page">
+      <header className="product-hero">
+        <div>
+          <span className="pill">AI streaming studio</span>
+          <h1 className="section-title">Launch revenue-aware live sessions</h1>
+          <p className="muted">
+            Configure AI-hosted rooms, auto-balance session load, and preview creator pool economics.
+          </p>
+        </div>
+        <div className="hero-actions compact-actions">
+          <Link to="/live-session" className="btn btn-outline">
+            Live view
+          </Link>
+          <Link to="/revenue" className="btn btn-primary">
+            Revenue dashboard
+          </Link>
+        </div>
       </header>
 
-      <div className="card-grid">
-        <article className="panel">
+      <div className="studio-layout">
+        <article className="panel setup-card">
           <h3>Live room configuration</h3>
           <div className="auth-row">
             <label htmlFor="room-title">Room title</label>
@@ -755,7 +861,7 @@ function AiStreamingPage() {
           {error ? <p className="muted" style={{ color: "#ff8c8c" }}>{error}</p> : null}
         </article>
 
-        <article className="panel">
+        <article className="panel session-preview-panel">
           <h3>Revenue and capability preview</h3>
           {!response ? (
             <p className="muted">
@@ -1230,45 +1336,308 @@ function ContactPage() {
   );
 }
 
-function DashboardPage() {
+function MetricCard({ label, value, detail }) {
   return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">Dashboard</h1>
-        <p className="muted">Welcome back! Here&apos;s your learning overview.</p>
+    <article className="metric-card">
+      <span className="eyebrow">{label}</span>
+      <strong>{value}</strong>
+      <p className="muted">{detail}</p>
+    </article>
+  );
+}
+
+function ProgressBar({ value }) {
+  return (
+    <div className="progress-track" aria-label={`${value}% complete`}>
+      <span style={{ width: `${value}%` }} />
+    </div>
+  );
+}
+
+function DashboardPage() {
+  const currentSession = activeSessions[0];
+  const estimatedEarnings = calculateEstimatedEarnings(currentSession);
+
+  return (
+    <section className="product-page">
+      <header className="product-hero">
+        <div>
+          <span className="pill">User overview</span>
+          <h1 className="section-title">Creator dashboard</h1>
+          <p className="muted">
+            Track learning momentum, live participation, and earnings from one command center.
+          </p>
+        </div>
+        <Link to="/live-session" className="btn btn-primary">
+          Join live session
+        </Link>
       </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>Plan</h3>
-          <p>Free Plan</p>
-          <p className="muted">Upgrade now</p>
+
+      <div className="metric-grid">
+        <MetricCard label="Estimated earnings" value={formatUsd(estimatedEarnings)} detail="Auto-calculated from capacity, stay time, and participation." />
+        <MetricCard label="Active sessions" value="2" detail="1 live now, 1 starts in 26 minutes." />
+        <MetricCard label="Participation score" value="78%" detail="Organic share boosted by prompts and watch time." />
+        <MetricCard label="Learning streak" value={`${learnerProfile.streak} days`} detail={learnerProfile.weeklyGoal} />
+      </div>
+
+      <div className="dashboard-layout">
+        <article className="panel spotlight-panel">
+          <span className="badge">{currentSession.status}</span>
+          <h3>{currentSession.title}</h3>
+          <p className="muted">{currentSession.course}</p>
+          <ProgressBar value={currentSession.progress} />
+          <div className="session-meta-grid">
+            <span>{currentSession.viewers} viewers</span>
+            <span>{currentSession.capacity} capacity</span>
+            <span>{currentSession.minutes} min</span>
+            <span>{currentSession.participation}% participation</span>
+          </div>
         </article>
+
         <article className="panel">
-          <h3>Courses Enrolled</h3>
-          <p>5</p>
-          <p className="muted">+1 this month</p>
+          <h3>Active sessions</h3>
+          <div className="stack-list">
+            {activeSessions.map((session) => (
+              <div className="stack-item" key={session.id}>
+                <div>
+                  <strong>{session.title}</strong>
+                  <p className="muted">{session.status} · {session.viewers}/{session.capacity} seats</p>
+                </div>
+                <ProgressBar value={session.progress} />
+              </div>
+            ))}
+          </div>
         </article>
+
         <article className="panel">
-          <h3>Tokens Earned</h3>
-          <p>1,250</p>
-          <p className="muted">+180 this week</p>
-        </article>
-        <article className="panel">
-          <h3>Referrals</h3>
-          <p>12</p>
-          <p className="muted">+3 this month</p>
-        </article>
-        <article className="panel">
-          <h3>Affiliate Revenue</h3>
-          <p>$340</p>
-          <p className="muted">+$85 this week</p>
+          <h3>Revenue signals</h3>
+          <div className="signal-list">
+            {participationSignals.map((signal) => (
+              <div key={signal.label}>
+                <div className="signal-heading">
+                  <span>{signal.label}</span>
+                  <strong>{signal.value}%</strong>
+                </div>
+                <ProgressBar value={signal.value} />
+                <p className="muted">{signal.detail}</p>
+              </div>
+            ))}
+          </div>
         </article>
       </div>
-      <section className="panel" style={{ marginTop: "1rem" }}>
-        <h3>Continue Learning</h3>
-        <p className="muted">Blockchain Fundamentals · 9/12 lessons · 75%</p>
-        <p className="muted">AI Basics · 4/10 lessons · 40%</p>
-      </section>
+    </section>
+  );
+}
+
+function LiveSessionPage() {
+  return (
+    <section className="product-page">
+      <header className="product-hero">
+        <div>
+          <span className="pill">Live session view</span>
+          <h1 className="section-title">AI Web3 Fundamentals Live</h1>
+          <p className="muted">
+            Watch the AI host, ask questions, and track your organic earning score in real time.
+          </p>
+        </div>
+        <span className="live-status">Live now</span>
+      </header>
+
+      <div className="live-layout">
+        <article className="video-stage">
+          <div className="stage-orb">AI</div>
+          <h3>Claude-CCWEB-Host is teaching smart contract launch patterns</h3>
+          <p className="muted">Segment 3 of 6 · next tutor round in 08:42</p>
+          <div className="stage-controls">
+            <button type="button" className="btn btn-primary">Ask AI host</button>
+            <button type="button" className="btn btn-outline">Raise hand</button>
+            <button type="button" className="btn btn-outline">Save clip</button>
+          </div>
+        </article>
+
+        <aside className="interaction-panel">
+          <h3>Chat + interaction</h3>
+          <div className="chat-feed">
+            <p><strong>Amina:</strong> Can you compare gas fees across chains?</p>
+            <p><strong>AI Host:</strong> Yes. Start with finality, congestion, and validator incentives.</p>
+            <p><strong>Maya:</strong> I pushed a checklist into my project notes.</p>
+          </div>
+          <div className="chat-composer">
+            <input aria-label="Message" placeholder="Ask a question or share progress" />
+            <button type="button" className="btn btn-primary">Send</button>
+          </div>
+        </aside>
+
+        <article className="panel participation-panel">
+          <h3>Participation tracking</h3>
+          {participationSignals.map((signal) => (
+            <div key={signal.label}>
+              <div className="signal-heading">
+                <span>{signal.label}</span>
+                <strong>{signal.value}%</strong>
+              </div>
+              <ProgressBar value={signal.value} />
+            </div>
+          ))}
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function RevenueDashboardPage() {
+  const capacity = 420;
+  const expectedAudience = Math.round(capacity * 0.72);
+  const grossRevenue = expectedAudience * 5.2;
+  const creatorPool = grossRevenue * 0.63;
+  const organicShare = creatorPool * 0.78;
+
+  return (
+    <section className="product-page">
+      <header className="product-hero">
+        <div>
+          <span className="pill">Revenue dashboard</span>
+          <h1 className="section-title">Organic revenue sharing</h1>
+          <p className="muted">
+            Earnings update from session capacity, expected ARPPU, duration of stay, and participation quality.
+          </p>
+        </div>
+        <Link to="/session-setup" className="btn btn-primary">Plan next session</Link>
+      </header>
+
+      <div className="metric-grid">
+        <MetricCard label="Expected audience" value={expectedAudience.toLocaleString()} detail={`${capacity} capacity at 72% utilization.`} />
+        <MetricCard label="Estimated gross" value={formatUsd(grossRevenue)} detail="$5.20 expected ARPPU." />
+        <MetricCard label="Creator pool" value={formatUsd(creatorPool)} detail="63% after CCWEB platform share." />
+        <MetricCard label="Your organic share" value={formatUsd(organicShare)} detail="Weighted by stay duration and participation." />
+      </div>
+
+      <div className="revenue-layout">
+        <article className="panel">
+          <h3>Organic share formula</h3>
+          <div className="formula-card">
+            <strong>Creator pool x (55% stay duration + 45% participation)</strong>
+            <p className="muted">
+              Duration rewards learners who stay through the lesson. Participation rewards useful chat, polls, prompts, and quiz accuracy.
+            </p>
+          </div>
+        </article>
+        <article className="panel">
+          <h3>Distribution factors</h3>
+          <div className="signal-list">
+            {participationSignals.map((signal) => (
+              <div key={signal.label}>
+                <div className="signal-heading">
+                  <span>{signal.label}</span>
+                  <strong>{signal.value}%</strong>
+                </div>
+                <ProgressBar value={signal.value} />
+                <p className="muted">{signal.detail}</p>
+              </div>
+            ))}
+          </div>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function SessionSetupPage() {
+  const [load, setLoad] = useState("standard");
+  const selectedLoad = courseLoads[load];
+  const expectedAudience = Math.round(selectedLoad.capacity * 0.72);
+  const estimatedGross = expectedAudience * selectedLoad.arppu;
+
+  return (
+    <section className="product-page">
+      <header className="product-hero">
+        <div>
+          <span className="pill">Course/session setup</span>
+          <h1 className="section-title">Build an AI streaming session</h1>
+          <p className="muted">
+            Select a course load and the system auto-adjusts duration, tutor cadence, capacity, and revenue estimates.
+          </p>
+        </div>
+        <Link to="/ai-streaming" className="btn btn-primary">Create via API flow</Link>
+      </header>
+
+      <div className="setup-layout">
+        <article className="panel">
+          <h3>Course load</h3>
+          <div className="auth-row">
+            <label htmlFor="setup-course">Course</label>
+            <select id="setup-course" defaultValue="Blockchain Fundamentals">
+              {courses.map((course) => (
+                <option key={course.id}>{course.title}</option>
+              ))}
+            </select>
+          </div>
+          <div className="auth-row">
+            <label htmlFor="setup-load">Course load</label>
+            <select id="setup-load" value={load} onChange={(event) => setLoad(event.target.value)}>
+              {Object.entries(courseLoads).map(([key, item]) => (
+                <option key={key} value={key}>{item.label}</option>
+              ))}
+            </select>
+          </div>
+          <p className="muted">{selectedLoad.focus}</p>
+        </article>
+
+        <article className="panel setup-preview">
+          <h3>Auto-adjusted session</h3>
+          <div className="metric-grid compact">
+            <MetricCard label="Duration" value={`${selectedLoad.minutes} min`} detail={`Tutor every ${selectedLoad.interval} min.`} />
+            <MetricCard label="Capacity" value={selectedLoad.capacity.toLocaleString()} detail={`${expectedAudience} expected audience.`} />
+            <MetricCard label="ARPPU" value={`$${selectedLoad.arppu.toFixed(2)}`} detail="Course-load estimate." />
+            <MetricCard label="Gross estimate" value={formatUsd(estimatedGross)} detail="Before revenue split." />
+          </div>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function ProfileSettingsPage() {
+  return (
+    <section className="product-page">
+      <header className="product-hero">
+        <div>
+          <span className="pill">Profile & settings</span>
+          <h1 className="section-title">{learnerProfile.name}</h1>
+          <p className="muted">{learnerProfile.role} · {learnerProfile.plan}</p>
+        </div>
+        <button type="button" className="btn btn-primary">Save settings</button>
+      </header>
+
+      <div className="profile-layout">
+        <article className="panel">
+          <h3>Account</h3>
+          <div className="auth-row">
+            <label htmlFor="profile-name">Display name</label>
+            <input id="profile-name" defaultValue={learnerProfile.name} />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="profile-email">Notification email</label>
+            <input id="profile-email" defaultValue={learnerProfile.notificationEmail} />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="profile-goal">Weekly goal</label>
+            <input id="profile-goal" defaultValue={learnerProfile.weeklyGoal} />
+          </div>
+        </article>
+
+        <article className="panel">
+          <h3>Revenue profile</h3>
+          <p><strong>Wallet:</strong> {learnerProfile.wallet}</p>
+          <p><strong>Default share model:</strong> Organic participation weighted</p>
+          <p><strong>Payout preference:</strong> Monthly stablecoin settlement</p>
+          <div className="pill-row">
+            <span className="tiny-pill">Duration tracking</span>
+            <span className="tiny-pill">Chat quality</span>
+            <span className="tiny-pill">Quiz scoring</span>
+          </div>
+        </article>
+      </div>
     </section>
   );
 }

@@ -21,7 +21,6 @@ const navItems = [
   { label: "Revenue", to: "/revenue" },
   { label: "Setup", to: "/session-setup" },
   { label: "Affiliates", to: "/affiliates" },
-  { label: "Profile", to: "/profile" },
 ];
 
 const courses = [
@@ -212,6 +211,9 @@ function Layout() {
             ))}
           </nav>
           <div className="nav-cta">
+            <NavLink to="/profile" className="nav-link">
+              Profile
+            </NavLink>
             <NavLink to="/login" className="nav-link">
               Login
             </NavLink>

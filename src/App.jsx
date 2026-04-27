@@ -1065,11 +1065,11 @@ function Field({ label, id, children }) {
 }
 
 function Input(props) {
-  return <input className="w-full rounded-2xl border border-slate-900/10 bg-white/80 px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-cyan-400 focus:ring-4 focus:ring-cyan-400/10 dark:border-white/10 dark:bg-white/5 dark:text-white" {...props} />;
+  return <input className="w-full rounded-2xl border border-slate-900/10 bg-white/90 px-4 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-cyan-400 focus:ring-4 focus:ring-cyan-400/10 dark:border-white/10 dark:bg-white/5 dark:text-white" {...props} />;
 }
 
 function Select(props) {
-  return <select className="w-full rounded-2xl border border-slate-900/10 bg-white/80 px-4 py-3 text-sm outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-400/10 dark:border-white/10 dark:bg-slate-950 dark:text-white" {...props} />;
+  return <select className="w-full rounded-2xl border border-slate-900/10 bg-white/90 px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-400/10 dark:border-white/10 dark:bg-slate-950 dark:text-white" {...props} />;
 }
 
 function StatusRow({ label, value }) {

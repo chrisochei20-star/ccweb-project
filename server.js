@@ -20,6 +20,11 @@ const communityPosts = new Map();
 const communityChats = new Map();
 const communityReactions = new Map();
 const aiBlogs = new Map();
+const dappDeployments = new Map();
+const dappPayments = new Map();
+const dappTransactions = new Map();
+const processedIdempotencyKeys = new Map();
+let nextDappTransactionId = 1;
 let nextDealId = 1;
 let nextStreamRoomId = 1;
 let nextStreamPayoutId = 1;
@@ -29,6 +34,8 @@ let nextCommunityPostId = 1;
 let nextCommunityChatId = 1;
 let nextCommunityReactionId = 1;
 let nextAiBlogId = 1;
+let nextDappDeploymentId = 1;
+let nextDappPaymentId = 1;
 
 const sampleBusinesses = [
   {
@@ -2289,6 +2296,378 @@ function seedUsers() {
 seedUsers();
 seedApplicants();
 
+const DAPP_TEMPLATES = [
+  {
+    id: "erc20",
+    name: "ERC-20 Token",
+    description: "Standard fungible token contract with mint, burn, and transfer capabilities.",
+    category: "Token",
+    networks: ["ethereum", "polygon", "bnb"],
+    baseFeeUsd: 25,
+    estimatedGas: "1,200,000",
+    features: ["Mintable", "Burnable", "Pausable", "Access Control"],
+  },
+  {
+    id: "erc721",
+    name: "NFT Collection (ERC-721)",
+    description: "Non-fungible token contract with metadata, royalties, and marketplace integration.",
+    category: "NFT",
+    networks: ["ethereum", "polygon", "bnb"],
+    baseFeeUsd: 35,
+    estimatedGas: "2,100,000",
+    features: ["Metadata URI", "Royalties (EIP-2981)", "Enumerable", "Batch Mint"],
+  },
+  {
+    id: "erc1155",
+    name: "Multi-Token (ERC-1155)",
+    description: "Semi-fungible token supporting both fungible and non-fungible assets in one contract.",
+    category: "NFT",
+    networks: ["ethereum", "polygon", "bnb"],
+    baseFeeUsd: 40,
+    estimatedGas: "2,500,000",
+    features: ["Batch Operations", "URI per Token", "Supply Tracking", "Royalties"],
+  },
+  {
+    id: "dao",
+    name: "DAO Governance",
+    description: "Decentralized governance contract with proposal creation, voting, and execution.",
+    category: "Governance",
+    networks: ["ethereum", "polygon"],
+    baseFeeUsd: 50,
+    estimatedGas: "3,400,000",
+    features: ["Proposal System", "Weighted Voting", "Timelock", "Quorum Rules"],
+  },
+  {
+    id: "staking",
+    name: "Staking Vault",
+    description: "Stake tokens and earn yield with configurable lock periods and reward distribution.",
+    category: "DeFi",
+    networks: ["ethereum", "polygon", "bnb"],
+    baseFeeUsd: 30,
+    estimatedGas: "1,800,000",
+    features: ["Flexible Lock Periods", "Auto-compound", "Emergency Withdraw", "Reward Distribution"],
+  },
+  {
+    id: "marketplace",
+    name: "NFT Marketplace",
+    description: "Decentralized marketplace for buying, selling, and auctioning NFTs with escrow.",
+    category: "Marketplace",
+    networks: ["ethereum", "polygon", "bnb"],
+    baseFeeUsd: 60,
+    estimatedGas: "4,200,000",
+    features: ["Fixed Price Listings", "English Auctions", "Escrow", "Platform Fees"],
+  },
+  {
+    id: "spl-token",
+    name: "SPL Token (Solana)",
+    description: "Solana Program Library token with mint authority and freeze capabilities.",
+    category: "Token",
+    networks: ["solana"],
+    baseFeeUsd: 15,
+    estimatedGas: "N/A (rent-exempt)",
+    features: ["Mint Authority", "Freeze Authority", "Decimals Config", "Metadata"],
+  },
+  {
+    id: "solana-nft",
+    name: "Solana NFT (Metaplex)",
+    description: "Solana NFT using Metaplex standard with candy machine deployment.",
+    category: "NFT",
+    networks: ["solana"],
+    baseFeeUsd: 20,
+    estimatedGas: "N/A (rent-exempt)",
+    features: ["Metaplex Standard", "Candy Machine", "Royalty Enforcement", "Collection Verification"],
+  },
+];
+
+const TOKEN_PRICES = {
+  ETH: { usd: 3245.67, symbol: "ETH", network: "ethereum", decimals: 18 },
+  MATIC: { usd: 0.72, symbol: "MATIC", network: "polygon", decimals: 18 },
+  USDC: { usd: 1.0, symbol: "USDC", network: "ethereum", decimals: 6 },
+  BNB: { usd: 612.34, symbol: "BNB", network: "bnb", decimals: 18 },
+  SOL: { usd: 178.92, symbol: "SOL", network: "solana", decimals: 9 },
+};
+
+const SUPPORTED_NETWORKS = [
+  { id: "ethereum", name: "Ethereum Mainnet", chainId: 1, explorer: "https://etherscan.io", wallet: "metamask" },
+  { id: "polygon", name: "Polygon", chainId: 137, explorer: "https://polygonscan.com", wallet: "metamask" },
+  { id: "bnb", name: "BNB Chain", chainId: 56, explorer: "https://bscscan.com", wallet: "metamask" },
+  { id: "solana", name: "Solana", chainId: null, explorer: "https://solscan.io", wallet: "phantom" },
+];
+
+function recordTransaction(type, data) {
+  const id = `tx-${String(nextDappTransactionId++).padStart(5, "0")}`;
+  const now = new Date().toISOString();
+  const tx = { id, type, ...data, createdAt: now };
+  dappTransactions.set(id, tx);
+  return tx;
+}
+
+function handleDappTemplates(res) {
+  sendJson(res, 200, { count: DAPP_TEMPLATES.length, templates: DAPP_TEMPLATES });
+}
+
+function handleDappNetworks(res) {
+  sendJson(res, 200, { networks: SUPPORTED_NETWORKS });
+}
+
+function handleDappPriceOracle(requestUrl, res) {
+  const token = (requestUrl.searchParams.get("token") || "").toUpperCase();
+  const amountUsd = safeNumber(requestUrl.searchParams.get("amountUsd"), 0);
+
+  if (token && TOKEN_PRICES[token]) {
+    const price = TOKEN_PRICES[token];
+    const tokenAmount = amountUsd > 0 ? formatMoney(amountUsd / price.usd) : null;
+    sendJson(res, 200, { token, priceUsd: price.usd, amountUsd, tokenAmount, network: price.network, decimals: price.decimals, updatedAt: new Date().toISOString() });
+    return;
+  }
+
+  const allPrices = {};
+  for (const [sym, info] of Object.entries(TOKEN_PRICES)) {
+    allPrices[sym] = { priceUsd: info.usd, network: info.network, tokenAmount: amountUsd > 0 ? formatMoney(amountUsd / info.usd) : null };
+  }
+  sendJson(res, 200, { prices: allPrices, amountUsd, updatedAt: new Date().toISOString() });
+}
+
+async function handleDappDeploy(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const { templateId, network, paymentToken, contractName, contractSymbol, walletAddress, parameters, idempotencyKey } = body;
+
+  if (idempotencyKey) {
+    const existing = processedIdempotencyKeys.get(idempotencyKey);
+    if (existing) {
+      sendJson(res, 200, { ...existing, _idempotent: true });
+      return;
+    }
+  }
+
+  if (!templateId) { sendJson(res, 400, { error: "templateId is required." }); return; }
+  if (!network) { sendJson(res, 400, { error: "network is required." }); return; }
+  if (!paymentToken) { sendJson(res, 400, { error: "paymentToken is required." }); return; }
+  if (!walletAddress) { sendJson(res, 400, { error: "walletAddress is required." }); return; }
+
+  const template = DAPP_TEMPLATES.find((t) => t.id === templateId);
+  if (!template) { sendJson(res, 404, { error: `Template '${templateId}' not found.` }); return; }
+  if (!template.networks.includes(network)) { sendJson(res, 400, { error: `Template '${templateId}' does not support network '${network}'.` }); return; }
+
+  const tokenUpper = paymentToken.toUpperCase();
+  if (!TOKEN_PRICES[tokenUpper]) { sendJson(res, 400, { error: `Unsupported payment token '${paymentToken}'.` }); return; }
+
+  const price = TOKEN_PRICES[tokenUpper];
+  const feeUsd = template.baseFeeUsd;
+  const feeInToken = formatMoney(feeUsd / price.usd);
+
+  const deploymentId = `deploy-${String(nextDappDeploymentId++).padStart(4, "0")}`;
+  const paymentId = `pay-${String(nextDappPaymentId++).padStart(4, "0")}`;
+  const txHash = `0x${crypto.randomBytes(32).toString("hex")}`;
+  const contractAddress = `0x${crypto.randomBytes(20).toString("hex")}`;
+  const now = new Date().toISOString();
+
+  const payment = {
+    id: paymentId,
+    deploymentId,
+    token: tokenUpper,
+    network: price.network,
+    amountToken: feeInToken,
+    amountUsd: feeUsd,
+    priceAtTime: price.usd,
+    walletAddress,
+    txHash,
+    status: "confirmed",
+    confirmedAt: now,
+  };
+  dappPayments.set(paymentId, payment);
+
+  const deployment = {
+    id: deploymentId,
+    templateId,
+    templateName: template.name,
+    category: template.category,
+    network,
+    contractName: contractName || template.name,
+    contractSymbol: contractSymbol || templateId.toUpperCase(),
+    contractAddress,
+    walletAddress,
+    parameters: parameters || {},
+    payment,
+    status: "deployed",
+    deployedAt: now,
+    explorerUrl: `${SUPPORTED_NETWORKS.find((n) => n.id === network)?.explorer || ""}/address/${contractAddress}`,
+    features: template.features,
+    estimatedGas: template.estimatedGas,
+  };
+  dappDeployments.set(deploymentId, deployment);
+
+  recordTransaction("payment", { deploymentId, paymentId, token: tokenUpper, amountToken: feeInToken, amountUsd: feeUsd, walletAddress, txHash, network, status: "confirmed", description: `Payment for ${template.name} deployment` });
+  recordTransaction("deployment", { deploymentId, templateId, templateName: template.name, contractAddress, network, walletAddress, status: "deployed", description: `Deployed ${contractName || template.name} to ${network}` });
+
+  if (idempotencyKey) {
+    processedIdempotencyKeys.set(idempotencyKey, deployment);
+  }
+
+  sendJson(res, 201, deployment);
+}
+
+function handleDappDeployments(requestUrl, res) {
+  const wallet = requestUrl.searchParams.get("wallet");
+  const status = requestUrl.searchParams.get("status");
+  const network = requestUrl.searchParams.get("network");
+  let results = [...dappDeployments.values()];
+  if (wallet) {
+    results = results.filter((d) => d.walletAddress.toLowerCase() === wallet.toLowerCase());
+  }
+  if (status) {
+    results = results.filter((d) => d.status === status);
+  }
+  if (network) {
+    results = results.filter((d) => d.network === network);
+  }
+  results.sort((a, b) => new Date(b.deployedAt) - new Date(a.deployedAt));
+  sendJson(res, 200, { count: results.length, deployments: results });
+}
+
+function handleDappDeploymentById(deploymentId, res) {
+  const deployment = dappDeployments.get(deploymentId);
+  if (!deployment) { sendJson(res, 404, { error: "Deployment not found." }); return; }
+  sendJson(res, 200, deployment);
+}
+
+function handleDappTransactions(requestUrl, res) {
+  const wallet = requestUrl.searchParams.get("wallet");
+  const type = requestUrl.searchParams.get("type");
+  const limit = Math.min(100, Math.max(1, safeNumber(requestUrl.searchParams.get("limit"), 50)));
+  const offset = Math.max(0, safeNumber(requestUrl.searchParams.get("offset"), 0));
+  let results = [...dappTransactions.values()];
+  if (wallet) {
+    results = results.filter((t) => t.walletAddress && t.walletAddress.toLowerCase() === wallet.toLowerCase());
+  }
+  if (type) {
+    results = results.filter((t) => t.type === type);
+  }
+  results.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const total = results.length;
+  results = results.slice(offset, offset + limit);
+  sendJson(res, 200, { total, count: results.length, offset, limit, transactions: results });
+}
+
+function handleDappDashboardStats(requestUrl, res) {
+  const wallet = requestUrl.searchParams.get("wallet");
+  let deployments = [...dappDeployments.values()];
+  let payments = [...dappPayments.values()];
+  let transactions = [...dappTransactions.values()];
+
+  if (wallet) {
+    deployments = deployments.filter((d) => d.walletAddress.toLowerCase() === wallet.toLowerCase());
+    payments = payments.filter((p) => p.walletAddress.toLowerCase() === wallet.toLowerCase());
+    transactions = transactions.filter((t) => t.walletAddress && t.walletAddress.toLowerCase() === wallet.toLowerCase());
+  }
+
+  const totalDeployments = deployments.length;
+  const activeDeployments = deployments.filter((d) => d.status === "deployed").length;
+  const failedDeployments = deployments.filter((d) => d.status === "failed").length;
+  const totalSpentUsd = formatMoney(payments.reduce((sum, p) => sum + safeNumber(p.amountUsd, 0), 0));
+
+  const networkBreakdown = {};
+  deployments.forEach((d) => {
+    networkBreakdown[d.network] = (networkBreakdown[d.network] || 0) + 1;
+  });
+
+  const templateBreakdown = {};
+  deployments.forEach((d) => {
+    templateBreakdown[d.templateName] = (templateBreakdown[d.templateName] || 0) + 1;
+  });
+
+  const tokenSpending = {};
+  payments.forEach((p) => {
+    if (!tokenSpending[p.token]) {
+      tokenSpending[p.token] = { totalAmount: 0, totalUsd: 0, count: 0 };
+    }
+    tokenSpending[p.token].totalAmount = formatMoney(tokenSpending[p.token].totalAmount + safeNumber(p.amountToken, 0));
+    tokenSpending[p.token].totalUsd = formatMoney(tokenSpending[p.token].totalUsd + safeNumber(p.amountUsd, 0));
+    tokenSpending[p.token].count += 1;
+  });
+
+  const recentDeployments = deployments.sort((a, b) => new Date(b.deployedAt) - new Date(a.deployedAt)).slice(0, 5).map((d) => ({
+    id: d.id, contractName: d.contractName, network: d.network, status: d.status,
+    contractAddress: d.contractAddress, templateName: d.templateName, deployedAt: d.deployedAt,
+    payment: { token: d.payment.token, amountToken: d.payment.amountToken, amountUsd: d.payment.amountUsd },
+  }));
+
+  sendJson(res, 200, {
+    overview: { totalDeployments, activeDeployments, failedDeployments, totalSpentUsd, totalTransactions: transactions.length },
+    networkBreakdown,
+    templateBreakdown,
+    tokenSpending,
+    recentDeployments,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+async function handleDappVerifyPayment(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const { txHash, deploymentId } = body;
+  if (!txHash && !deploymentId) { sendJson(res, 400, { error: "txHash or deploymentId is required." }); return; }
+
+  if (deploymentId) {
+    const deployment = dappDeployments.get(deploymentId);
+    if (!deployment) { sendJson(res, 404, { error: "Deployment not found." }); return; }
+    sendJson(res, 200, { verified: true, payment: deployment.payment, deployment: { id: deployment.id, status: deployment.status, contractAddress: deployment.contractAddress } });
+    return;
+  }
+
+  const payment = [...dappPayments.values()].find((p) => p.txHash === txHash);
+  if (!payment) { sendJson(res, 404, { error: "Payment not found for given txHash." }); return; }
+  sendJson(res, 200, { verified: true, payment });
+}
+
+async function handleDappRetryDeployment(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const { deploymentId } = body;
+  if (!deploymentId) { sendJson(res, 400, { error: "deploymentId is required." }); return; }
+
+  const deployment = dappDeployments.get(deploymentId);
+  if (!deployment) { sendJson(res, 404, { error: "Deployment not found." }); return; }
+  if (deployment.status === "deployed") { sendJson(res, 400, { error: "Deployment already succeeded. No retry needed." }); return; }
+
+  const now = new Date().toISOString();
+  const newContractAddress = `0x${crypto.randomBytes(20).toString("hex")}`;
+  const newTxHash = `0x${crypto.randomBytes(32).toString("hex")}`;
+
+  deployment.status = "deployed";
+  deployment.contractAddress = newContractAddress;
+  deployment.deployedAt = now;
+  deployment.explorerUrl = `${SUPPORTED_NETWORKS.find((n) => n.id === deployment.network)?.explorer || ""}/address/${newContractAddress}`;
+  deployment.payment.txHash = newTxHash;
+  deployment.payment.status = "confirmed";
+  deployment.payment.confirmedAt = now;
+  deployment.retriedAt = now;
+  dappDeployments.set(deploymentId, deployment);
+
+  recordTransaction("retry", { deploymentId, contractAddress: newContractAddress, network: deployment.network, walletAddress: deployment.walletAddress, txHash: newTxHash, status: "confirmed", description: `Retried deployment of ${deployment.contractName}` });
+
+  sendJson(res, 200, deployment);
+}
+
 const server = http.createServer(async (req, res) => {
   if (!req.url) {
     sendJson(res, 400, { error: "Invalid request URL." });
@@ -2495,6 +2874,57 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname.match(/^\/api\/deals\/[^/]+$/) && req.method === "GET") {
     handleGetDeal(pathname, res);
+    return;
+  }
+
+  if (pathname === "/api/dapp/templates" && req.method === "GET") {
+    handleDappTemplates(res);
+    return;
+  }
+
+  if (pathname === "/api/dapp/networks" && req.method === "GET") {
+    handleDappNetworks(res);
+    return;
+  }
+
+  if (pathname === "/api/dapp/prices" && req.method === "GET") {
+    handleDappPriceOracle(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/dapp/deploy" && req.method === "POST") {
+    await handleDappDeploy(req, res);
+    return;
+  }
+
+  if (pathname === "/api/dapp/deployments" && req.method === "GET") {
+    handleDappDeployments(requestUrl, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/dapp\/deployments\/[^/]+$/) && req.method === "GET") {
+    const deploymentId = pathname.split("/").pop();
+    handleDappDeploymentById(deploymentId, res);
+    return;
+  }
+
+  if (pathname === "/api/dapp/verify-payment" && req.method === "POST") {
+    await handleDappVerifyPayment(req, res);
+    return;
+  }
+
+  if (pathname === "/api/dapp/transactions" && req.method === "GET") {
+    handleDappTransactions(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/dapp/dashboard" && req.method === "GET") {
+    handleDappDashboardStats(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/dapp/retry" && req.method === "POST") {
+    await handleDappRetryDeployment(req, res);
     return;
   }
 

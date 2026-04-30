@@ -13,17 +13,14 @@ import "./styles.css";
 
 const navItems = [
   { label: "Home", to: "/" },
-  { label: "Courses", to: "/courses" },
-  { label: "AI Tutor", to: "/ai-tutor" },
+  { label: "Learn", to: "/courses" },
   { label: "AI Streaming", to: "/ai-streaming" },
-  { label: "DApp Builder", to: "/dapp-builder" },
-  { label: "Pricing", to: "/pricing" },
-  { label: "Tokens", to: "/tokens" },
-  { label: "Affiliates", to: "/affiliates" },
+  { label: "Find", to: "/find" },
+  { label: "Build", to: "/dapp-builder" },
+  { label: "AI Agents", to: "/ai-agents" },
+  { label: "Earn", to: "/earn" },
   { label: "Community", to: "/community" },
-  { label: "Blog", to: "/blog" },
   { label: "About", to: "/about" },
-  { label: "FAQ", to: "/faq" },
 ];
 
 const courses = [
@@ -75,11 +72,14 @@ function App() {
           <Route path="courses/:id" element={<CourseNotFoundPage />} />
           <Route path="ai-tutor" element={<AiTutorPage />} />
           <Route path="ai-streaming" element={<AiStreamingPage />} />
+          <Route path="find" element={<FindPage />} />
           <Route path="dapp-builder" element={<DappBuilderPage />} />
           <Route path="dapp-dashboard" element={<DappDashboardPage />} />
+          <Route path="ai-agents" element={<AiAgentsPage />} />
+          <Route path="earn" element={<EarnPage />} />
           <Route path="pricing" element={<PricingPage />} />
-          <Route path="tokens" element={<TokensPage />} />
-          <Route path="affiliates" element={<AffiliatesPage />} />
+          <Route path="tokens" element={<Navigate to="/earn" replace />} />
+          <Route path="affiliates" element={<Navigate to="/earn" replace />} />
           <Route path="community" element={<CommunityPage />} />
           <Route path="blog" element={<BlogPage />} />
           <Route path="about" element={<AboutPage />} />
@@ -148,40 +148,59 @@ function Layout() {
 function HomePage() {
   return (
     <section className="hero">
-      <span className="pill">The Future of Learning</span>
+      <span className="pill">AI-Powered Web3 Academy &amp; Business Engine</span>
       <h1 className="hero-title">
-        Learn Crypto &amp; AI.
+        <span className="accent-cyan">Learn.</span>{" "}
+        <span className="accent-violet">Find.</span>
         <br />
-        <span className="accent-cyan">Earn</span>{" "}
-        <span className="accent-violet">While You</span>
-        <br />
-        <span className="accent-green">Learn.</span>
+        <span className="accent-green">Build.</span>{" "}
+        <span className="accent-cyan">Earn.</span>
       </h1>
       <p className="hero-subtitle">
-        Master blockchain and artificial intelligence with AI-powered tutoring
-        and earn through subscriptions, tokens, and affiliates.
+        CCWEB combines AI-powered education, crypto intelligence, decentralized app
+        deployment, and real revenue streams — all in one platform.
       </p>
       <div className="hero-actions">
         <Link to="/signup" className="btn btn-primary">
-          Start Free
+          Get Started Free
         </Link>
-        <Link to="/courses" className="btn btn-outline">
-          Browse Courses
+        <Link to="/find" className="btn btn-outline">
+          Explore Intelligence
         </Link>
       </div>
       <div className="stats-grid">
-        <StatCard value="50K+" label="Students" />
-        <StatCard value="200+" label="Courses" />
-        <StatCard value="$2M+" label="Earned by Affiliates" />
+        <StatCard value="50K+" label="Learners" />
+        <StatCard value="200+" label="AI Courses" />
+        <StatCard value="8" label="DApp Templates" />
         <StatCard value="99.9%" label="Uptime" />
       </div>
-      <section className="panel" style={{ marginTop: "1rem" }}>
-        <h3>Why Chrisccwebfoundation?</h3>
-        <p className="muted">
-          Crypto and AI education in one platform, with AI tutoring, practical
-          learning tracks, and a built-in earn model.
-        </p>
-      </section>
+
+      <div className="pillars-grid">
+        <Link to="/courses" className="pillar-card pillar-learn">
+          <div className="pillar-icon">🧠</div>
+          <h3>LEARN</h3>
+          <p>AI-powered academy with live streaming sessions, adaptive tutoring, quizzes, and session memory.</p>
+          <span className="pillar-link">Explore Courses →</span>
+        </Link>
+        <Link to="/find" className="pillar-card pillar-find">
+          <div className="pillar-icon">🔍</div>
+          <h3>FIND</h3>
+          <p>Crypto Safety Scanner, Early Signals Dashboard, Smart Money Tracking, and narrative detection.</p>
+          <span className="pillar-link">View Intelligence →</span>
+        </Link>
+        <Link to="/dapp-builder" className="pillar-card pillar-build">
+          <div className="pillar-icon">🏗️</div>
+          <h3>BUILD</h3>
+          <p>DApp Builder, AI Agents, Business Automation Hub, and workflow operator system.</p>
+          <span className="pillar-link">Start Building →</span>
+        </Link>
+        <Link to="/earn" className="pillar-card pillar-earn">
+          <div className="pillar-icon">💰</div>
+          <h3>EARN</h3>
+          <p>Affiliate revenue, streaming income, referral commissions, and skill-based payouts.</p>
+          <span className="pillar-link">Start Earning →</span>
+        </Link>
+      </div>
     </section>
   );
 }
@@ -968,69 +987,11 @@ function PricingPage() {
 }
 
 function TokensPage() {
-  return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">CCWEB Token</h1>
-        <p className="muted">
-          The native utility token powering the Chrisccwebfoundation ecosystem.
-        </p>
-      </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>Token Gate</h3>
-          <p className="muted">Connect wallet or check manually.</p>
-          <button type="button" className="btn btn-primary">
-            Check
-          </button>
-        </article>
-        <article className="panel">
-          <h3>Learn &amp; Earn</h3>
-          <p className="muted">Complete courses and quizzes to earn CCWEB.</p>
-        </article>
-        <article className="panel">
-          <h3>Staking Rewards</h3>
-          <p className="muted">Stake tokens and earn passive income.</p>
-        </article>
-        <article className="panel">
-          <h3>Governance</h3>
-          <p className="muted">Vote on key platform decisions.</p>
-        </article>
-      </div>
-    </section>
-  );
+  return <Navigate to="/earn" replace />;
 }
 
 function AffiliatesPage() {
-  return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">Affiliate Program</h1>
-        <p className="muted">
-          Earn passive income by referring students. 30% recurring commissions.
-        </p>
-      </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>Sign Up</h3>
-          <p className="muted">Create a free affiliate account in seconds.</p>
-        </article>
-        <article className="panel">
-          <h3>Share Your Link</h3>
-          <p className="muted">Share your unique referral link with audience.</p>
-        </article>
-        <article className="panel">
-          <h3>Earn Commissions</h3>
-          <p className="muted">Get recurring commissions from every referral.</p>
-        </article>
-      </div>
-      <div style={{ marginTop: "1rem" }}>
-        <Link to="/signup" className="btn btn-primary">
-          Become an Affiliate
-        </Link>
-      </div>
-    </section>
-  );
+  return <Navigate to="/earn" replace />;
 }
 
 function CommunityPage() {
@@ -1271,6 +1232,290 @@ function DashboardPage() {
         <h3>Continue Learning</h3>
         <p className="muted">Blockchain Fundamentals · 9/12 lessons · 75%</p>
         <p className="muted">AI Basics · 4/10 lessons · 40%</p>
+      </section>
+    </section>
+  );
+}
+
+function FindPage() {
+  const [tab, setTab] = useState("scanner");
+  const [scanQuery, setScanQuery] = useState("");
+  const [scanResult, setScanResult] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const [signals, setSignals] = useState([]);
+  const [smartMoney, setSmartMoney] = useState(null);
+  const [loadingSignals, setLoadingSignals] = useState(false);
+  const [loadingSm, setLoadingSm] = useState(false);
+
+  async function doScan() {
+    if (!scanQuery.trim()) return;
+    setScanning(true);
+    setScanResult(null);
+    try {
+      const res = await fetch(`/api/find/scan?token=${encodeURIComponent(scanQuery.trim().toUpperCase())}`);
+      const data = await res.json();
+      setScanResult(data);
+    } catch { /* ignore */ }
+    setScanning(false);
+  }
+
+  async function loadSignals() {
+    setLoadingSignals(true);
+    try {
+      const res = await fetch("/api/find/signals");
+      const data = await res.json();
+      setSignals(data.signals || []);
+    } catch { /* ignore */ }
+    setLoadingSignals(false);
+  }
+
+  async function loadSmartMoney() {
+    setLoadingSm(true);
+    try {
+      const res = await fetch("/api/find/smart-money");
+      const data = await res.json();
+      setSmartMoney(data);
+    } catch { /* ignore */ }
+    setLoadingSm(false);
+  }
+
+  useEffect(() => {
+    if (tab === "signals" && !signals.length) loadSignals();
+    if (tab === "smart-money" && !smartMoney) loadSmartMoney();
+  }, [tab]);
+
+  const scoreColor = (score) => score >= 70 ? "find-score-safe" : score >= 40 ? "find-score-warn" : "find-score-danger";
+
+  return (
+    <section className="find-page">
+      <header className="page-header">
+        <span className="pill">FIND — Discovery &amp; Intelligence</span>
+        <h1 className="section-title">Crypto Intelligence Hub</h1>
+        <p className="muted">Discover opportunities, insights, and risks — before the crowd.</p>
+      </header>
+
+      <div className="dash-tabs">
+        {[["scanner", "Safety Scanner"], ["signals", "Early Signals"], ["smart-money", "Smart Money"]].map(([key, label]) => (
+          <button key={key} className={`dash-tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>{label}</button>
+        ))}
+      </div>
+
+      {tab === "scanner" && (
+        <div className="find-scanner">
+          <div className="panel" style={{ maxWidth: 600 }}>
+            <h3>Crypto Safety Scanner</h3>
+            <p className="muted">Analyze any token for honeypot risk, rug pull indicators, contract verification, and liquidity locks.</p>
+            <div className="find-scan-form">
+              <input type="text" value={scanQuery} onChange={(e) => setScanQuery(e.target.value)} placeholder="Enter token symbol (e.g. ETH, SHIB)" onKeyDown={(e) => e.key === "Enter" && doScan()} />
+              <button className="btn btn-primary" onClick={doScan} disabled={scanning}>{scanning ? "Scanning..." : "Scan Token"}</button>
+            </div>
+          </div>
+          {scanResult && (
+            <div className="find-scan-result panel">
+              <div className="find-scan-header">
+                <h3>{scanResult.name} ({scanResult.token})</h3>
+                <div className={`find-score-badge ${scoreColor(scanResult.score)}`}>{scanResult.score}/100</div>
+              </div>
+              <div className="find-scan-grid">
+                <div className="find-check-item"><span className={scanResult.contractVerified ? "check-pass" : "check-fail"}>{scanResult.contractVerified ? "✓" : "✗"}</span> Contract Verified</div>
+                <div className="find-check-item"><span className={scanResult.liquidityLocked ? "check-pass" : "check-fail"}>{scanResult.liquidityLocked ? "✓" : "✗"}</span> Liquidity Locked</div>
+                <div className="find-check-item"><span className={scanResult.ownershipRenounced ? "check-pass" : "check-fail"}>{scanResult.ownershipRenounced ? "✓" : "✗"}</span> Ownership Renounced</div>
+                <div className="find-check-item"><span>Honeypot Risk:</span> <strong className={scanResult.honeypotRisk === "none" || scanResult.honeypotRisk === "low" ? "check-pass" : "check-fail"}>{scanResult.honeypotRisk}</strong></div>
+                <div className="find-check-item"><span>Rug Pull Risk:</span> <strong className={scanResult.rugPullRisk === "very_low" || scanResult.rugPullRisk === "low" ? "check-pass" : "check-fail"}>{scanResult.rugPullRisk}</strong></div>
+                <div className="find-check-item"><span>Network:</span> <strong>{scanResult.network}</strong></div>
+              </div>
+              {scanResult.flags.length > 0 && (
+                <div className="find-flags"><strong>Flags:</strong> <div className="pill-row">{scanResult.flags.map((f) => (<span key={f} className="tiny-pill find-flag-pill">{f.replace(/_/g, " ")}</span>))}</div></div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "signals" && (
+        <div className="find-signals">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+            <h3 style={{ margin: 0 }}>Early Signals Dashboard</h3>
+            <button className="btn btn-outline btn-sm" onClick={loadSignals} disabled={loadingSignals}>Refresh</button>
+          </div>
+          {loadingSignals && <p className="muted">Loading signals...</p>}
+          <div className="find-signals-grid">
+            {signals.map((sig) => (
+              <article key={sig.id} className="find-signal-card panel">
+                <div className="find-signal-header">
+                  <span className="badge">{sig.type.replace(/_/g, " ")}</span>
+                  <span className="find-confidence">{sig.confidence}%</span>
+                </div>
+                <h4>{sig.title}</h4>
+                <p className="muted">{sig.description}</p>
+                <div className="pill-row">{sig.tokens.map((t) => (<span key={t} className="tiny-pill">{t}</span>))}</div>
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "smart-money" && (
+        <div className="find-smart-money">
+          {loadingSm && <p className="muted">Loading smart money data...</p>}
+          {smartMoney && (
+            <>
+              <h3>Whale Trends</h3>
+              <div className="find-trends-grid">
+                {smartMoney.trends.map((t) => (
+                  <div key={t.token} className="find-trend-card panel">
+                    <strong>{t.token}</strong>
+                    <div className={t.direction === "accumulation" ? "find-trend-up" : "find-trend-down"}>
+                      {t.direction === "accumulation" ? "↑" : "↓"} ${(t.netFlow / 1e6).toFixed(1)}M
+                    </div>
+                    <span className="muted">{t.whaleCount} whales · {t.direction}</span>
+                  </div>
+                ))}
+              </div>
+              <h3 style={{ marginTop: "1.5rem" }}>Smart Money Wallets</h3>
+              <div className="find-wallets-list">
+                {smartMoney.wallets.map((w) => (
+                  <div key={w.address} className="find-wallet-card panel">
+                    <div className="find-wallet-header">
+                      <strong>{w.label}</strong>
+                      <span className="muted">{w.address}</span>
+                    </div>
+                    <div className="find-wallet-stats">
+                      <span>Win: {w.winRate}%</span>
+                      <span>Avg Return: {w.avgReturn}%</span>
+                      <span>Portfolio: ${(w.totalValueUsd / 1e6).toFixed(0)}M</span>
+                    </div>
+                    <div className="find-wallet-moves">
+                      {w.recentMoves.map((m, i) => (
+                        <span key={i} className={`find-move ${m.action === "buy" ? "move-buy" : "move-sell"}`}>
+                          {m.action.toUpperCase()} {m.token} · ${(m.amountUsd / 1e6).toFixed(1)}M
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AiAgentsPage() {
+  const [agents, setAgents] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/build/agents").then((r) => r.json()).then((d) => { setAgents(d.agents || []); setLoading(false); });
+  }, []);
+
+  return (
+    <section>
+      <header className="page-header">
+        <span className="pill">BUILD — AI Agent Operator</span>
+        <h1 className="section-title">AI Agents</h1>
+        <p className="muted">
+          Autonomous agents that run research loops, execute workflows, automate operations, and replace fragmented SaaS tools.
+        </p>
+      </header>
+
+      {loading && <p className="muted">Loading agents...</p>}
+
+      <div className="agents-grid">
+        {agents.map((agent) => (
+          <article key={agent.id} className="agent-card panel">
+            <div className="agent-card-header">
+              <span className={`agent-status ${agent.status === "active" ? "status-active" : ""}`}>{agent.status}</span>
+              <span className="badge">{agent.category}</span>
+            </div>
+            <h3>{agent.name}</h3>
+            <p className="muted">{agent.description}</p>
+            <div className="agent-stats">
+              <span className="agent-stat">{agent.tasksCompleted.toLocaleString()} tasks completed</span>
+            </div>
+            <div className="pill-row">
+              {agent.capabilities.map((cap) => (<span key={cap} className="dapp-feature-tag">{cap}</span>))}
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <section className="panel" style={{ marginTop: "1.5rem" }}>
+        <h3>Workflow Operator System</h3>
+        <p className="muted">The Agent Operator designs workflows, connects tools and data, translates problems into execution, and monitors performance continuously.</p>
+        <div className="card-grid" style={{ marginTop: "0.8rem" }}>
+          <div className="panel"><h4>Design</h4><p className="muted">Visual workflow builder for complex multi-step automations.</p></div>
+          <div className="panel"><h4>Connect</h4><p className="muted">Integrates APIs, data sources, and external tools seamlessly.</p></div>
+          <div className="panel"><h4>Execute</h4><p className="muted">Runs workflows autonomously with error handling and retries.</p></div>
+          <div className="panel"><h4>Optimize</h4><p className="muted">Monitors performance metrics and improves over time.</p></div>
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function EarnPage() {
+  return (
+    <section>
+      <header className="page-header">
+        <span className="pill">EARN — Revenue Streams</span>
+        <h1 className="section-title">Earn With CCWEB</h1>
+        <p className="muted">
+          Multiple revenue streams powered by real utility — no platform token required.
+          Earn through skills, referrals, and participation.
+        </p>
+      </header>
+
+      <div className="card-grid">
+        <article className="panel">
+          <h3>🎓 Affiliate Program</h3>
+          <p className="muted">30% recurring commissions on all referred subscriptions. Share your unique link and earn passive income.</p>
+          <ul className="list">
+            <li>Recurring monthly commissions</li>
+            <li>Real-time tracking dashboard</li>
+            <li>Payout in USDC or fiat</li>
+          </ul>
+          <Link to="/signup" className="btn btn-primary" style={{ marginTop: "0.6rem" }}>Become an Affiliate</Link>
+        </article>
+        <article className="panel">
+          <h3>📡 Streaming Revenue</h3>
+          <p className="muted">Create AI-powered live learning sessions and earn organic revenue share based on attendance and engagement.</p>
+          <ul className="list">
+            <li>63% creator revenue share</li>
+            <li>Watch-time weighted distribution</li>
+            <li>Payout via USDC settlement</li>
+          </ul>
+          <Link to="/ai-streaming" className="btn btn-outline" style={{ marginTop: "0.6rem" }}>Start Streaming</Link>
+        </article>
+        <article className="panel">
+          <h3>🏗️ Skill-Based Income</h3>
+          <p className="muted">Use the Business Engine to match your skills with real client needs. Get paid for completed work through secure escrow.</p>
+          <ul className="list">
+            <li>AI-matched opportunities</li>
+            <li>Secure escrow payments</li>
+            <li>Performance-based bonuses</li>
+          </ul>
+        </article>
+        <article className="panel">
+          <h3>🤖 Agent Rewards</h3>
+          <p className="muted">Deploy AI agents that generate value, optimize workflows, and earn based on measurable outcomes.</p>
+          <ul className="list">
+            <li>Revenue from agent operations</li>
+            <li>Performance-linked payouts</li>
+            <li>Scalable passive income</li>
+          </ul>
+          <Link to="/ai-agents" className="btn btn-outline" style={{ marginTop: "0.6rem" }}>Deploy Agents</Link>
+        </article>
+      </div>
+
+      <section className="panel" style={{ marginTop: "1.5rem" }}>
+        <h3>No Platform Token Required</h3>
+        <p className="muted">
+          All earnings are paid in external tokens (USDC, ETH) or fiat. CCWEB focuses on real utility and
+          measurable value — not token speculation. You earn by contributing real skills, content, and referrals.
+        </p>
       </section>
     </section>
   );

@@ -743,6 +743,250 @@ a {
   flex-wrap: wrap;
 }
 
+/* ─── Pillars Grid (Home) ─── */
+.pillars-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin-top: 2.5rem;
+}
+
+.pillar-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border: 1px solid var(--card-border);
+  border-radius: 1rem;
+  padding: 1.3rem;
+  text-decoration: none;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  background: rgba(9, 19, 40, 0.83);
+}
+
+.pillar-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 24px rgba(17, 212, 255, 0.08);
+}
+
+.pillar-learn:hover { border-color: var(--brand-cyan); }
+.pillar-find:hover { border-color: var(--brand-violet); }
+.pillar-build:hover { border-color: var(--brand-green); }
+.pillar-earn:hover { border-color: #ffc107; }
+
+.pillar-icon {
+  font-size: 2rem;
+  margin-bottom: 0.3rem;
+}
+
+.pillar-card h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: 0.05em;
+}
+
+.pillar-card p {
+  color: var(--muted);
+  font-size: 0.88rem;
+  margin: 0;
+  flex: 1;
+}
+
+.pillar-link {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--brand-cyan);
+  margin-top: 0.5rem;
+}
+
+/* ─── FIND Page Styles ─── */
+.find-page { padding-bottom: 2rem; }
+
+.find-scan-form {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.find-scan-form input {
+  flex: 1;
+  min-width: 200px;
+  border-radius: 0.65rem;
+  border: 1px solid #244267;
+  background: #061226;
+  color: var(--text);
+  padding: 0.65rem 0.75rem;
+  font-size: 1rem;
+}
+
+.find-scan-result {
+  margin-top: 1rem;
+  max-width: 600px;
+}
+
+.find-scan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.8rem;
+}
+
+.find-score-badge {
+  font-size: 1.3rem;
+  font-weight: 700;
+  padding: 0.3rem 0.8rem;
+  border-radius: 0.6rem;
+}
+
+.find-score-safe { background: rgba(35, 216, 159, 0.15); color: var(--brand-green); }
+.find-score-warn { background: rgba(255, 199, 0, 0.15); color: #ffc700; }
+.find-score-danger { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
+
+.find-scan-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.find-check-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  padding: 0.4rem 0;
+}
+
+.check-pass { color: var(--brand-green); font-weight: 700; }
+.check-fail { color: #ff6b6b; font-weight: 700; }
+
+.find-flags {
+  margin-top: 0.8rem;
+  font-size: 0.88rem;
+}
+
+.find-flag-pill {
+  background: rgba(255, 107, 107, 0.12) !important;
+  border-color: rgba(255, 107, 107, 0.3) !important;
+  color: #ff9999 !important;
+}
+
+.find-signals-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.find-signal-card h4 {
+  margin: 0.4rem 0 0.2rem;
+}
+
+.find-signal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.find-confidence {
+  font-weight: 700;
+  color: var(--brand-cyan);
+}
+
+.find-trends-grid {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.find-trend-card {
+  text-align: center;
+}
+
+.find-trend-up { font-size: 1.3rem; font-weight: 700; color: var(--brand-green); }
+.find-trend-down { font-size: 1.3rem; font-weight: 700; color: #ff6b6b; }
+
+.find-wallets-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.find-wallet-card { }
+
+.find-wallet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.find-wallet-stats {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 0.4rem;
+}
+
+.find-wallet-moves {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.find-move {
+  font-size: 0.78rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.move-buy { background: rgba(35, 216, 159, 0.15); color: var(--brand-green); border: 1px solid rgba(35, 216, 159, 0.3); }
+.move-sell { background: rgba(255, 107, 107, 0.12); color: #ff6b6b; border: 1px solid rgba(255, 107, 107, 0.3); }
+
+/* ─── AI Agents Page ─── */
+.agents-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.agent-card { }
+
+.agent-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.agent-status {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  background: rgba(140, 163, 196, 0.15);
+  color: var(--muted);
+  border: 1px solid rgba(140, 163, 196, 0.3);
+}
+
+.agent-status.status-active {
+  background: rgba(35, 216, 159, 0.15);
+  color: var(--brand-green);
+  border-color: rgba(35, 216, 159, 0.3);
+}
+
+.agent-stats {
+  margin: 0.5rem 0;
+}
+
+.agent-stat {
+  font-size: 0.85rem;
+  color: var(--brand-cyan);
+  font-weight: 600;
+}
+
 /* DApp Filter Bar */
 .dapp-filter-bar {
   display: flex;

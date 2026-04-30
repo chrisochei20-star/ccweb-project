@@ -16,6 +16,7 @@ const navItems = [
   { label: "Courses", to: "/courses" },
   { label: "AI Tutor", to: "/ai-tutor" },
   { label: "AI Streaming", to: "/ai-streaming" },
+  { label: "DApp Builder", to: "/dapp-builder" },
   { label: "Pricing", to: "/pricing" },
   { label: "Tokens", to: "/tokens" },
   { label: "Affiliates", to: "/affiliates" },
@@ -74,6 +75,7 @@ function App() {
           <Route path="courses/:id" element={<CourseNotFoundPage />} />
           <Route path="ai-tutor" element={<AiTutorPage />} />
           <Route path="ai-streaming" element={<AiStreamingPage />} />
+          <Route path="dapp-builder" element={<DappBuilderPage />} />
           <Route path="pricing" element={<PricingPage />} />
           <Route path="tokens" element={<TokensPage />} />
           <Route path="affiliates" element={<AffiliatesPage />} />
@@ -1269,6 +1271,349 @@ function DashboardPage() {
         <p className="muted">Blockchain Fundamentals · 9/12 lessons · 75%</p>
         <p className="muted">AI Basics · 4/10 lessons · 40%</p>
       </section>
+    </section>
+  );
+}
+
+function DappBuilderPage() {
+  const [templates, setTemplates] = useState([]);
+  const [networks, setNetworks] = useState([]);
+  const [prices, setPrices] = useState({});
+  const [deployments, setDeployments] = useState([]);
+  const [step, setStep] = useState("select");
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [selectedNetwork, setSelectedNetwork] = useState("");
+  const [selectedToken, setSelectedToken] = useState("ETH");
+  const [walletAddress, setWalletAddress] = useState("");
+  const [walletConnected, setWalletConnected] = useState(false);
+  const [walletType, setWalletType] = useState("");
+  const [contractName, setContractName] = useState("");
+  const [contractSymbol, setContractSymbol] = useState("");
+  const [deploying, setDeploying] = useState(false);
+  const [deployResult, setDeployResult] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/dapp/templates").then((r) => r.json()).then((d) => setTemplates(d.templates || []));
+    fetch("/api/dapp/networks").then((r) => r.json()).then((d) => setNetworks(d.networks || []));
+    fetch("/api/dapp/prices").then((r) => r.json()).then((d) => setPrices(d.prices || {}));
+    fetch("/api/dapp/deployments").then((r) => r.json()).then((d) => setDeployments(d.deployments || []));
+  }, []);
+
+  const availableNetworks = selectedTemplate
+    ? networks.filter((n) => selectedTemplate.networks.includes(n.id))
+    : networks;
+
+  const currentNetworkInfo = networks.find((n) => n.id === selectedNetwork);
+  const feeUsd = selectedTemplate ? selectedTemplate.baseFeeUsd : 0;
+  const tokenPrice = prices[selectedToken];
+  const feeInToken = tokenPrice ? (feeUsd / tokenPrice.priceUsd).toFixed(6) : "—";
+
+  function connectWallet(type) {
+    const mockAddress = type === "phantom"
+      ? `${crypto.getRandomValues(new Uint8Array(4)).reduce((s, b) => s + b.toString(16).padStart(2, "0"), "")}...sol`
+      : `0x${crypto.getRandomValues(new Uint8Array(20)).reduce((s, b) => s + b.toString(16).padStart(2, "0"), "")}`;
+    setWalletAddress(mockAddress);
+    setWalletConnected(true);
+    setWalletType(type);
+  }
+
+  function disconnectWallet() {
+    setWalletAddress("");
+    setWalletConnected(false);
+    setWalletType("");
+  }
+
+  function selectTemplate(tmpl) {
+    setSelectedTemplate(tmpl);
+    setSelectedNetwork(tmpl.networks[0] || "");
+    setContractName(tmpl.name);
+    setContractSymbol(tmpl.id.toUpperCase().slice(0, 5));
+    setStep("configure");
+    setError("");
+
+    const net = networks.find((n) => n.id === tmpl.networks[0]);
+    if (net) {
+      if (net.wallet === "phantom") {
+        setSelectedToken("SOL");
+      } else {
+        setSelectedToken("ETH");
+      }
+    }
+  }
+
+  function handleNetworkChange(networkId) {
+    setSelectedNetwork(networkId);
+    const net = networks.find((n) => n.id === networkId);
+    if (net?.wallet === "phantom") {
+      setSelectedToken("SOL");
+    }
+  }
+
+  async function handleDeploy() {
+    if (!walletConnected) { setError("Please connect a wallet first."); return; }
+    if (!selectedNetwork) { setError("Please select a network."); return; }
+    if (!selectedToken) { setError("Please select a payment token."); return; }
+
+    setDeploying(true);
+    setError("");
+
+    try {
+      const resp = await fetch("/api/dapp/deploy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateId: selectedTemplate.id,
+          network: selectedNetwork,
+          paymentToken: selectedToken,
+          contractName,
+          contractSymbol,
+          walletAddress,
+          parameters: {},
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { setError(data.error || "Deployment failed."); setDeploying(false); return; }
+      setDeployResult(data);
+      setStep("success");
+      setDeployments((prev) => [data, ...prev]);
+    } catch (e) {
+      setError("Network error. Please try again.");
+    }
+    setDeploying(false);
+  }
+
+  function resetBuilder() {
+    setStep("select");
+    setSelectedTemplate(null);
+    setDeployResult(null);
+    setError("");
+    setContractName("");
+    setContractSymbol("");
+  }
+
+  const tokenOptions = currentNetworkInfo?.wallet === "phantom"
+    ? ["SOL"]
+    : ["ETH", "MATIC", "USDC", "BNB"];
+
+  return (
+    <section className="dapp-builder">
+      <header className="page-header">
+        <span className="pill">Native DApp Builder</span>
+        <h1 className="section-title">Deploy Decentralized Applications</h1>
+        <p className="muted">
+          Build and deploy smart contracts with multi-token payments. Supports Ethereum, Polygon, BNB Chain, and Solana.
+        </p>
+      </header>
+
+      <div className="dapp-wallet-bar">
+        {walletConnected ? (
+          <div className="dapp-wallet-connected">
+            <span className="dapp-wallet-indicator"></span>
+            <span className="dapp-wallet-label">
+              {walletType === "phantom" ? "Phantom" : "MetaMask"}: <code>{walletAddress.slice(0, 10)}...{walletAddress.slice(-6)}</code>
+            </span>
+            <button className="btn btn-outline btn-sm" onClick={disconnectWallet}>Disconnect</button>
+          </div>
+        ) : (
+          <div className="dapp-wallet-buttons">
+            <button className="btn btn-outline" onClick={() => connectWallet("metamask")}>
+              🦊 Connect MetaMask
+            </button>
+            <button className="btn btn-outline" onClick={() => connectWallet("phantom")}>
+              👻 Connect Phantom
+            </button>
+          </div>
+        )}
+      </div>
+
+      {step === "select" && (
+        <>
+          <h2 className="dapp-step-title">1. Choose a Template</h2>
+          <div className="dapp-template-grid">
+            {templates.map((tmpl) => (
+              <article key={tmpl.id} className="dapp-template-card" onClick={() => selectTemplate(tmpl)}>
+                <div className="dapp-template-header">
+                  <span className="badge">{tmpl.category}</span>
+                  <span className="dapp-fee">${tmpl.baseFeeUsd}</span>
+                </div>
+                <h3>{tmpl.name}</h3>
+                <p className="muted">{tmpl.description}</p>
+                <div className="dapp-template-networks">
+                  {tmpl.networks.map((n) => (
+                    <span key={n} className="tiny-pill">{n}</span>
+                  ))}
+                </div>
+                <div className="dapp-template-features">
+                  {tmpl.features.map((f) => (
+                    <span key={f} className="dapp-feature-tag">{f}</span>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+
+          {deployments.length > 0 && (
+            <div className="dapp-history">
+              <h2 className="dapp-step-title">Your Deployments</h2>
+              <div className="dapp-deploy-list">
+                {deployments.map((dep) => (
+                  <div key={dep.id} className="dapp-deploy-item">
+                    <div className="dapp-deploy-info">
+                      <strong>{dep.contractName}</strong>
+                      <span className="badge">{dep.network}</span>
+                      <span className="dapp-deploy-status">{dep.status}</span>
+                    </div>
+                    <div className="muted" style={{ fontSize: "0.85rem" }}>
+                      {dep.contractAddress.slice(0, 16)}... · Paid {dep.payment.amountToken} {dep.payment.token}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {step === "configure" && selectedTemplate && (
+        <>
+          <button className="btn btn-outline btn-sm" onClick={resetBuilder} style={{ marginBottom: "1rem" }}>
+            ← Back to Templates
+          </button>
+          <h2 className="dapp-step-title">2. Configure & Deploy: {selectedTemplate.name}</h2>
+
+          <div className="dapp-config-grid">
+            <div className="dapp-config-form panel">
+              <h3>Contract Configuration</h3>
+              <div className="dapp-form-row">
+                <label>Contract Name</label>
+                <input
+                  type="text"
+                  value={contractName}
+                  onChange={(e) => setContractName(e.target.value)}
+                  placeholder="My Token"
+                />
+              </div>
+              <div className="dapp-form-row">
+                <label>Symbol</label>
+                <input
+                  type="text"
+                  value={contractSymbol}
+                  onChange={(e) => setContractSymbol(e.target.value)}
+                  placeholder="TKN"
+                />
+              </div>
+              <div className="dapp-form-row">
+                <label>Network</label>
+                <select value={selectedNetwork} onChange={(e) => handleNetworkChange(e.target.value)}>
+                  {availableNetworks.map((n) => (
+                    <option key={n.id} value={n.id}>{n.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="dapp-form-row">
+                <label>Payment Token</label>
+                <select value={selectedToken} onChange={(e) => setSelectedToken(e.target.value)}>
+                  {tokenOptions.map((t) => (
+                    <option key={t} value={t}>{t} — ${prices[t]?.priceUsd || "..."}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="dapp-fee-summary">
+                <div className="dapp-fee-row">
+                  <span>Deployment Fee</span>
+                  <span>${feeUsd} USD</span>
+                </div>
+                <div className="dapp-fee-row">
+                  <span>Pay in {selectedToken}</span>
+                  <strong>{feeInToken} {selectedToken}</strong>
+                </div>
+                <div className="dapp-fee-row muted">
+                  <span>Estimated Gas</span>
+                  <span>{selectedTemplate.estimatedGas}</span>
+                </div>
+              </div>
+
+              {error && <p className="error-text">{error}</p>}
+
+              <button
+                className="btn btn-primary dapp-deploy-btn"
+                onClick={handleDeploy}
+                disabled={deploying || !walletConnected}
+              >
+                {deploying ? "Deploying..." : `Deploy & Pay ${feeInToken} ${selectedToken}`}
+              </button>
+            </div>
+
+            <div className="dapp-config-preview panel">
+              <h3>Template Details</h3>
+              <p className="muted">{selectedTemplate.description}</p>
+              <h4>Features</h4>
+              <ul className="list">
+                {selectedTemplate.features.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+              <h4>Supported Networks</h4>
+              <div className="pill-row">
+                {selectedTemplate.networks.map((n) => (
+                  <span key={n} className="tiny-pill">{n}</span>
+                ))}
+              </div>
+              <h4 style={{ marginTop: "1rem" }}>Payment Tokens</h4>
+              <div className="dapp-token-grid">
+                {Object.entries(prices).map(([sym, info]) => (
+                  <div key={sym} className={`dapp-token-card ${selectedToken === sym ? "active" : ""}`} onClick={() => tokenOptions.includes(sym) && setSelectedToken(sym)}>
+                    <strong>{sym}</strong>
+                    <span className="muted">${info.priceUsd}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {step === "success" && deployResult && (
+        <div className="dapp-success">
+          <div className="dapp-success-card panel">
+            <div className="dapp-success-icon">✓</div>
+            <h2>Deployment Successful!</h2>
+            <p className="muted">Your {deployResult.templateName} has been deployed to {deployResult.network}.</p>
+
+            <div className="dapp-success-details">
+              <div className="dapp-detail-row">
+                <span className="muted">Contract Address</span>
+                <code>{deployResult.contractAddress}</code>
+              </div>
+              <div className="dapp-detail-row">
+                <span className="muted">Network</span>
+                <span>{deployResult.network}</span>
+              </div>
+              <div className="dapp-detail-row">
+                <span className="muted">Payment</span>
+                <span>{deployResult.payment.amountToken} {deployResult.payment.token} (${deployResult.payment.amountUsd})</span>
+              </div>
+              <div className="dapp-detail-row">
+                <span className="muted">Transaction Hash</span>
+                <code style={{ fontSize: "0.75rem" }}>{deployResult.payment.txHash.slice(0, 22)}...</code>
+              </div>
+              <div className="dapp-detail-row">
+                <span className="muted">Status</span>
+                <span className="dapp-deploy-status">{deployResult.status}</span>
+              </div>
+            </div>
+
+            <div className="dapp-success-actions">
+              <a href={deployResult.explorerUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline">
+                View on Explorer
+              </a>
+              <button className="btn btn-primary" onClick={resetBuilder}>Deploy Another</button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

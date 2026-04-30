@@ -76,6 +76,7 @@ function App() {
           <Route path="ai-tutor" element={<AiTutorPage />} />
           <Route path="ai-streaming" element={<AiStreamingPage />} />
           <Route path="dapp-builder" element={<DappBuilderPage />} />
+          <Route path="dapp-dashboard" element={<DappDashboardPage />} />
           <Route path="pricing" element={<PricingPage />} />
           <Route path="tokens" element={<TokensPage />} />
           <Route path="affiliates" element={<AffiliatesPage />} />
@@ -1292,6 +1293,7 @@ function DappBuilderPage() {
   const [deploying, setDeploying] = useState(false);
   const [deployResult, setDeployResult] = useState(null);
   const [error, setError] = useState("");
+  const [filterCategory, setFilterCategory] = useState("All");
 
   useEffect(() => {
     fetch("/api/dapp/templates").then((r) => r.json()).then((d) => setTemplates(d.templates || []));
@@ -1299,6 +1301,9 @@ function DappBuilderPage() {
     fetch("/api/dapp/prices").then((r) => r.json()).then((d) => setPrices(d.prices || {}));
     fetch("/api/dapp/deployments").then((r) => r.json()).then((d) => setDeployments(d.deployments || []));
   }, []);
+
+  const categories = ["All", ...new Set(templates.map((t) => t.category))];
+  const filteredTemplates = filterCategory === "All" ? templates : templates.filter((t) => t.category === filterCategory);
 
   const availableNetworks = selectedTemplate
     ? networks.filter((n) => selectedTemplate.networks.includes(n.id))
@@ -1331,32 +1336,28 @@ function DappBuilderPage() {
     setContractSymbol(tmpl.id.toUpperCase().slice(0, 5));
     setStep("configure");
     setError("");
-
     const net = networks.find((n) => n.id === tmpl.networks[0]);
     if (net) {
-      if (net.wallet === "phantom") {
-        setSelectedToken("SOL");
-      } else {
-        setSelectedToken("ETH");
-      }
+      setSelectedToken(net.wallet === "phantom" ? "SOL" : "ETH");
     }
   }
 
   function handleNetworkChange(networkId) {
     setSelectedNetwork(networkId);
     const net = networks.find((n) => n.id === networkId);
-    if (net?.wallet === "phantom") {
-      setSelectedToken("SOL");
-    }
+    if (net?.wallet === "phantom") setSelectedToken("SOL");
   }
 
   async function handleDeploy() {
     if (!walletConnected) { setError("Please connect a wallet first."); return; }
     if (!selectedNetwork) { setError("Please select a network."); return; }
-    if (!selectedToken) { setError("Please select a payment token."); return; }
+    if (!contractName.trim()) { setError("Contract name is required."); return; }
+    if (!contractSymbol.trim()) { setError("Contract symbol is required."); return; }
 
     setDeploying(true);
     setError("");
+
+    const idempotencyKey = `${walletAddress}-${selectedTemplate.id}-${selectedNetwork}-${Date.now()}`;
 
     try {
       const resp = await fetch("/api/dapp/deploy", {
@@ -1366,10 +1367,11 @@ function DappBuilderPage() {
           templateId: selectedTemplate.id,
           network: selectedNetwork,
           paymentToken: selectedToken,
-          contractName,
-          contractSymbol,
+          contractName: contractName.trim(),
+          contractSymbol: contractSymbol.trim().toUpperCase(),
           walletAddress,
           parameters: {},
+          idempotencyKey,
         }),
       });
       const data = await resp.json();
@@ -1377,7 +1379,7 @@ function DappBuilderPage() {
       setDeployResult(data);
       setStep("success");
       setDeployments((prev) => [data, ...prev]);
-    } catch (e) {
+    } catch {
       setError("Network error. Please try again.");
     }
     setDeploying(false);
@@ -1392,9 +1394,7 @@ function DappBuilderPage() {
     setContractSymbol("");
   }
 
-  const tokenOptions = currentNetworkInfo?.wallet === "phantom"
-    ? ["SOL"]
-    : ["ETH", "MATIC", "USDC", "BNB"];
+  const tokenOptions = currentNetworkInfo?.wallet === "phantom" ? ["SOL"] : ["ETH", "MATIC", "USDC", "BNB"];
 
   return (
     <section className="dapp-builder">
@@ -1404,6 +1404,9 @@ function DappBuilderPage() {
         <p className="muted">
           Build and deploy smart contracts with multi-token payments. Supports Ethereum, Polygon, BNB Chain, and Solana.
         </p>
+        <div style={{ marginTop: "0.8rem" }}>
+          <Link to="/dapp-dashboard" className="btn btn-outline btn-sm">View Dashboard</Link>
+        </div>
       </header>
 
       <div className="dapp-wallet-bar">
@@ -1417,11 +1420,12 @@ function DappBuilderPage() {
           </div>
         ) : (
           <div className="dapp-wallet-buttons">
+            <span className="muted" style={{ alignSelf: "center", fontSize: "0.85rem" }}>Connect your wallet to begin:</span>
             <button className="btn btn-outline" onClick={() => connectWallet("metamask")}>
-              🦊 Connect MetaMask
+              🦊 MetaMask
             </button>
             <button className="btn btn-outline" onClick={() => connectWallet("phantom")}>
-              👻 Connect Phantom
+              👻 Phantom
             </button>
           </div>
         )}
@@ -1429,9 +1433,16 @@ function DappBuilderPage() {
 
       {step === "select" && (
         <>
-          <h2 className="dapp-step-title">1. Choose a Template</h2>
+          <div className="dapp-filter-bar">
+            <h2 className="dapp-step-title" style={{ margin: 0 }}>Choose a Template</h2>
+            <div className="dapp-filter-pills">
+              {categories.map((cat) => (
+                <button key={cat} className={`dapp-filter-pill ${filterCategory === cat ? "active" : ""}`} onClick={() => setFilterCategory(cat)}>{cat}</button>
+              ))}
+            </div>
+          </div>
           <div className="dapp-template-grid">
-            {templates.map((tmpl) => (
+            {filteredTemplates.map((tmpl) => (
               <article key={tmpl.id} className="dapp-template-card" onClick={() => selectTemplate(tmpl)}>
                 <div className="dapp-template-header">
                   <span className="badge">{tmpl.category}</span>
@@ -1452,115 +1463,54 @@ function DappBuilderPage() {
               </article>
             ))}
           </div>
-
-          {deployments.length > 0 && (
-            <div className="dapp-history">
-              <h2 className="dapp-step-title">Your Deployments</h2>
-              <div className="dapp-deploy-list">
-                {deployments.map((dep) => (
-                  <div key={dep.id} className="dapp-deploy-item">
-                    <div className="dapp-deploy-info">
-                      <strong>{dep.contractName}</strong>
-                      <span className="badge">{dep.network}</span>
-                      <span className="dapp-deploy-status">{dep.status}</span>
-                    </div>
-                    <div className="muted" style={{ fontSize: "0.85rem" }}>
-                      {dep.contractAddress.slice(0, 16)}... · Paid {dep.payment.amountToken} {dep.payment.token}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </>
       )}
 
       {step === "configure" && selectedTemplate && (
         <>
-          <button className="btn btn-outline btn-sm" onClick={resetBuilder} style={{ marginBottom: "1rem" }}>
-            ← Back to Templates
-          </button>
-          <h2 className="dapp-step-title">2. Configure & Deploy: {selectedTemplate.name}</h2>
-
+          <button className="btn btn-outline btn-sm" onClick={resetBuilder} style={{ marginBottom: "1rem" }}>← Back to Templates</button>
+          <h2 className="dapp-step-title">Configure & Deploy: {selectedTemplate.name}</h2>
           <div className="dapp-config-grid">
             <div className="dapp-config-form panel">
               <h3>Contract Configuration</h3>
               <div className="dapp-form-row">
                 <label>Contract Name</label>
-                <input
-                  type="text"
-                  value={contractName}
-                  onChange={(e) => setContractName(e.target.value)}
-                  placeholder="My Token"
-                />
+                <input type="text" value={contractName} onChange={(e) => setContractName(e.target.value)} placeholder="My Token" />
               </div>
               <div className="dapp-form-row">
                 <label>Symbol</label>
-                <input
-                  type="text"
-                  value={contractSymbol}
-                  onChange={(e) => setContractSymbol(e.target.value)}
-                  placeholder="TKN"
-                />
+                <input type="text" value={contractSymbol} onChange={(e) => setContractSymbol(e.target.value.toUpperCase())} placeholder="TKN" maxLength={10} />
               </div>
               <div className="dapp-form-row">
                 <label>Network</label>
                 <select value={selectedNetwork} onChange={(e) => handleNetworkChange(e.target.value)}>
-                  {availableNetworks.map((n) => (
-                    <option key={n.id} value={n.id}>{n.name}</option>
-                  ))}
+                  {availableNetworks.map((n) => (<option key={n.id} value={n.id}>{n.name}</option>))}
                 </select>
               </div>
               <div className="dapp-form-row">
                 <label>Payment Token</label>
                 <select value={selectedToken} onChange={(e) => setSelectedToken(e.target.value)}>
-                  {tokenOptions.map((t) => (
-                    <option key={t} value={t}>{t} — ${prices[t]?.priceUsd || "..."}</option>
-                  ))}
+                  {tokenOptions.map((t) => (<option key={t} value={t}>{t} — ${prices[t]?.priceUsd || "..."}</option>))}
                 </select>
               </div>
-
               <div className="dapp-fee-summary">
-                <div className="dapp-fee-row">
-                  <span>Deployment Fee</span>
-                  <span>${feeUsd} USD</span>
-                </div>
-                <div className="dapp-fee-row">
-                  <span>Pay in {selectedToken}</span>
-                  <strong>{feeInToken} {selectedToken}</strong>
-                </div>
-                <div className="dapp-fee-row muted">
-                  <span>Estimated Gas</span>
-                  <span>{selectedTemplate.estimatedGas}</span>
-                </div>
+                <div className="dapp-fee-row"><span>Deployment Fee</span><span>${feeUsd} USD</span></div>
+                <div className="dapp-fee-row"><span>Pay in {selectedToken}</span><strong>{feeInToken} {selectedToken}</strong></div>
+                <div className="dapp-fee-row muted"><span>Estimated Gas</span><span>{selectedTemplate.estimatedGas}</span></div>
               </div>
-
               {error && <p className="error-text">{error}</p>}
-
-              <button
-                className="btn btn-primary dapp-deploy-btn"
-                onClick={handleDeploy}
-                disabled={deploying || !walletConnected}
-              >
-                {deploying ? "Deploying..." : `Deploy & Pay ${feeInToken} ${selectedToken}`}
+              <button className="btn btn-primary dapp-deploy-btn" onClick={handleDeploy} disabled={deploying || !walletConnected}>
+                {deploying ? "Processing Payment..." : !walletConnected ? "Connect Wallet First" : `Deploy & Pay ${feeInToken} ${selectedToken}`}
               </button>
+              {!walletConnected && <p className="muted" style={{ textAlign: "center", fontSize: "0.82rem", marginTop: "0.4rem" }}>Wallet connection required before deployment</p>}
             </div>
-
             <div className="dapp-config-preview panel">
               <h3>Template Details</h3>
               <p className="muted">{selectedTemplate.description}</p>
               <h4>Features</h4>
-              <ul className="list">
-                {selectedTemplate.features.map((f) => (
-                  <li key={f}>{f}</li>
-                ))}
-              </ul>
+              <ul className="list">{selectedTemplate.features.map((f) => (<li key={f}>{f}</li>))}</ul>
               <h4>Supported Networks</h4>
-              <div className="pill-row">
-                {selectedTemplate.networks.map((n) => (
-                  <span key={n} className="tiny-pill">{n}</span>
-                ))}
-              </div>
+              <div className="pill-row">{selectedTemplate.networks.map((n) => (<span key={n} className="tiny-pill">{n}</span>))}</div>
               <h4 style={{ marginTop: "1rem" }}>Payment Tokens</h4>
               <div className="dapp-token-grid">
                 {Object.entries(prices).map(([sym, info]) => (
@@ -1581,37 +1531,225 @@ function DappBuilderPage() {
             <div className="dapp-success-icon">✓</div>
             <h2>Deployment Successful!</h2>
             <p className="muted">Your {deployResult.templateName} has been deployed to {deployResult.network}.</p>
-
             <div className="dapp-success-details">
-              <div className="dapp-detail-row">
-                <span className="muted">Contract Address</span>
-                <code>{deployResult.contractAddress}</code>
-              </div>
-              <div className="dapp-detail-row">
-                <span className="muted">Network</span>
-                <span>{deployResult.network}</span>
-              </div>
-              <div className="dapp-detail-row">
-                <span className="muted">Payment</span>
-                <span>{deployResult.payment.amountToken} {deployResult.payment.token} (${deployResult.payment.amountUsd})</span>
-              </div>
-              <div className="dapp-detail-row">
-                <span className="muted">Transaction Hash</span>
-                <code style={{ fontSize: "0.75rem" }}>{deployResult.payment.txHash.slice(0, 22)}...</code>
-              </div>
-              <div className="dapp-detail-row">
-                <span className="muted">Status</span>
-                <span className="dapp-deploy-status">{deployResult.status}</span>
-              </div>
+              <div className="dapp-detail-row"><span className="muted">Contract Address</span><code>{deployResult.contractAddress}</code></div>
+              <div className="dapp-detail-row"><span className="muted">Network</span><span>{deployResult.network}</span></div>
+              <div className="dapp-detail-row"><span className="muted">Payment</span><span>{deployResult.payment.amountToken} {deployResult.payment.token} (${deployResult.payment.amountUsd})</span></div>
+              <div className="dapp-detail-row"><span className="muted">Tx Hash</span><code style={{ fontSize: "0.75rem" }}>{deployResult.payment.txHash.slice(0, 22)}...</code></div>
+              <div className="dapp-detail-row"><span className="muted">Status</span><span className="dapp-deploy-status">{deployResult.status}</span></div>
             </div>
-
             <div className="dapp-success-actions">
-              <a href={deployResult.explorerUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline">
-                View on Explorer
-              </a>
+              <a href={deployResult.explorerUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline">View on Explorer</a>
+              <Link to="/dapp-dashboard" className="btn btn-outline">Go to Dashboard</Link>
               <button className="btn btn-primary" onClick={resetBuilder}>Deploy Another</button>
             </div>
           </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DappDashboardPage() {
+  const [stats, setStats] = useState(null);
+  const [deployments, setDeployments] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [tab, setTab] = useState("overview");
+  const [loading, setLoading] = useState(true);
+  const [expandedDeploy, setExpandedDeploy] = useState(null);
+
+  async function loadAll() {
+    setLoading(true);
+    try {
+      const [statsRes, deploymentsRes, txRes] = await Promise.all([
+        fetch("/api/dapp/dashboard").then((r) => r.json()),
+        fetch("/api/dapp/deployments").then((r) => r.json()),
+        fetch("/api/dapp/transactions").then((r) => r.json()),
+      ]);
+      setStats(statsRes);
+      setDeployments(deploymentsRes.deployments || []);
+      setTransactions(txRes.transactions || []);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }
+
+  useEffect(() => { loadAll(); }, []);
+
+  const statusColor = (status) => {
+    if (status === "deployed" || status === "confirmed") return "dapp-status-green";
+    if (status === "failed") return "dapp-status-red";
+    return "dapp-status-yellow";
+  };
+
+  return (
+    <section className="dapp-dashboard">
+      <header className="page-header">
+        <span className="pill">DApp Dashboard</span>
+        <h1 className="section-title">Deployment Dashboard</h1>
+        <p className="muted">View deployed DApps, transaction history, and track deployment status.</p>
+        <div style={{ marginTop: "0.8rem", display: "flex", gap: "0.6rem" }}>
+          <Link to="/dapp-builder" className="btn btn-primary btn-sm">Deploy New DApp</Link>
+          <button className="btn btn-outline btn-sm" onClick={loadAll}>Refresh</button>
+        </div>
+      </header>
+
+      <div className="dash-tabs">
+        {["overview", "deployments", "transactions"].map((t) => (
+          <button key={t} className={`dash-tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
+            {t === "overview" ? "Overview" : t === "deployments" ? "Deployed DApps" : "Transactions"}
+          </button>
+        ))}
+      </div>
+
+      {loading && <p className="muted" style={{ textAlign: "center", padding: "2rem" }}>Loading dashboard...</p>}
+
+      {!loading && tab === "overview" && stats && (
+        <>
+          <div className="dash-kpi-grid">
+            <div className="dash-kpi-card">
+              <div className="dash-kpi-value">{stats.overview.totalDeployments}</div>
+              <div className="muted">Total Deployments</div>
+            </div>
+            <div className="dash-kpi-card">
+              <div className="dash-kpi-value dash-kpi-green">{stats.overview.activeDeployments}</div>
+              <div className="muted">Active / Deployed</div>
+            </div>
+            <div className="dash-kpi-card">
+              <div className="dash-kpi-value dash-kpi-red">{stats.overview.failedDeployments}</div>
+              <div className="muted">Failed</div>
+            </div>
+            <div className="dash-kpi-card">
+              <div className="dash-kpi-value">${stats.overview.totalSpentUsd}</div>
+              <div className="muted">Total Spent</div>
+            </div>
+            <div className="dash-kpi-card">
+              <div className="dash-kpi-value">{stats.overview.totalTransactions}</div>
+              <div className="muted">Total Transactions</div>
+            </div>
+          </div>
+
+          {Object.keys(stats.networkBreakdown).length > 0 && (
+            <div className="dash-section">
+              <h3>Network Distribution</h3>
+              <div className="dash-bar-grid">
+                {Object.entries(stats.networkBreakdown).map(([net, count]) => (
+                  <div key={net} className="dash-bar-item">
+                    <div className="dash-bar-label"><span className="tiny-pill">{net}</span><span>{count} deployment{count !== 1 ? "s" : ""}</span></div>
+                    <div className="dash-bar-track"><div className="dash-bar-fill" style={{ width: `${Math.min(100, (count / Math.max(1, stats.overview.totalDeployments)) * 100)}%` }} /></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {Object.keys(stats.tokenSpending).length > 0 && (
+            <div className="dash-section">
+              <h3>Token Spending</h3>
+              <div className="dash-token-spend-grid">
+                {Object.entries(stats.tokenSpending).map(([token, info]) => (
+                  <div key={token} className="dash-token-spend-card panel">
+                    <strong>{token}</strong>
+                    <div style={{ fontSize: "1.2rem", fontWeight: 700, margin: "0.3rem 0" }}>{info.totalAmount} {token}</div>
+                    <div className="muted">${info.totalUsd} USD · {info.count} tx{info.count !== 1 ? "s" : ""}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {stats.recentDeployments.length > 0 && (
+            <div className="dash-section">
+              <h3>Recent Deployments</h3>
+              <div className="dapp-deploy-list">
+                {stats.recentDeployments.map((dep) => (
+                  <div key={dep.id} className="dapp-deploy-item">
+                    <div className="dapp-deploy-info">
+                      <strong>{dep.contractName}</strong>
+                      <span className="tiny-pill">{dep.network}</span>
+                      <span className={`dapp-deploy-status ${statusColor(dep.status)}`}>{dep.status}</span>
+                    </div>
+                    <div className="muted" style={{ fontSize: "0.83rem" }}>
+                      {dep.contractAddress.slice(0, 20)}... · {dep.payment.amountToken} {dep.payment.token} · {dep.templateName}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {!loading && tab === "deployments" && (
+        <div className="dash-section">
+          <h3>All Deployed DApps ({deployments.length})</h3>
+          {deployments.length === 0 ? (
+            <div className="panel" style={{ textAlign: "center", padding: "2rem" }}>
+              <p className="muted">No deployments yet.</p>
+              <Link to="/dapp-builder" className="btn btn-primary">Deploy Your First DApp</Link>
+            </div>
+          ) : (
+            <div className="dash-deploy-table">
+              {deployments.map((dep) => (
+                <div key={dep.id} className={`dash-deploy-row ${expandedDeploy === dep.id ? "expanded" : ""}`}>
+                  <div className="dash-deploy-row-main" onClick={() => setExpandedDeploy(expandedDeploy === dep.id ? null : dep.id)}>
+                    <div className="dash-deploy-row-left">
+                      <strong>{dep.contractName}</strong>
+                      <span className="badge">{dep.category}</span>
+                      <span className="tiny-pill">{dep.network}</span>
+                      <span className={`dapp-deploy-status ${statusColor(dep.status)}`}>{dep.status}</span>
+                    </div>
+                    <div className="dash-deploy-row-right muted">
+                      {dep.payment.amountToken} {dep.payment.token} · {new Date(dep.deployedAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                  {expandedDeploy === dep.id && (
+                    <div className="dash-deploy-expanded">
+                      <div className="dapp-detail-row"><span className="muted">Deployment ID</span><code>{dep.id}</code></div>
+                      <div className="dapp-detail-row"><span className="muted">Contract</span><code>{dep.contractAddress}</code></div>
+                      <div className="dapp-detail-row"><span className="muted">Symbol</span><span>{dep.contractSymbol}</span></div>
+                      <div className="dapp-detail-row"><span className="muted">Template</span><span>{dep.templateName}</span></div>
+                      <div className="dapp-detail-row"><span className="muted">Payment</span><span>{dep.payment.amountToken} {dep.payment.token} (${dep.payment.amountUsd})</span></div>
+                      <div className="dapp-detail-row"><span className="muted">Tx Hash</span><code style={{ fontSize: "0.73rem" }}>{dep.payment.txHash.slice(0, 30)}...</code></div>
+                      <div className="dapp-detail-row"><span className="muted">Deployed</span><span>{new Date(dep.deployedAt).toLocaleString()}</span></div>
+                      <div className="dapp-detail-row"><span className="muted">Features</span><div className="pill-row">{dep.features.map((f) => (<span key={f} className="dapp-feature-tag">{f}</span>))}</div></div>
+                      <div style={{ marginTop: "0.6rem" }}>
+                        <a href={dep.explorerUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">View on Explorer</a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!loading && tab === "transactions" && (
+        <div className="dash-section">
+          <h3>Transaction History ({transactions.length})</h3>
+          {transactions.length === 0 ? (
+            <div className="panel" style={{ textAlign: "center", padding: "2rem" }}>
+              <p className="muted">No transactions recorded yet.</p>
+            </div>
+          ) : (
+            <div className="dash-tx-list">
+              {transactions.map((tx) => (
+                <div key={tx.id} className="dash-tx-item">
+                  <div className="dash-tx-header">
+                    <span className={`dash-tx-type ${tx.type === "payment" ? "type-payment" : tx.type === "deployment" ? "type-deploy" : "type-retry"}`}>{tx.type}</span>
+                    <span className={`dapp-deploy-status ${statusColor(tx.status)}`}>{tx.status}</span>
+                    <span className="muted" style={{ fontSize: "0.8rem", marginLeft: "auto" }}>{new Date(tx.createdAt).toLocaleString()}</span>
+                  </div>
+                  <p style={{ margin: "0.3rem 0 0", fontSize: "0.88rem" }}>{tx.description}</p>
+                  <div className="muted" style={{ fontSize: "0.8rem", marginTop: "0.2rem" }}>
+                    {tx.txHash && <span>Tx: {tx.txHash.slice(0, 18)}... · </span>}
+                    {tx.amountToken && <span>{tx.amountToken} {tx.token} · </span>}
+                    {tx.network && <span>{tx.network}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </section>

@@ -17,6 +17,14 @@ const {
   handleAutomationSolve,
   handleAutomationMonitoring,
 } = require("./lib/automation/httpHandlers");
+const {
+  handleBillingPricing,
+  handleTrackUsage,
+  handleCalculateCost,
+  handleBillingSummary,
+  handleSetPlan,
+  handleAttributedRevenue,
+} = require("./lib/automation/billingHandlers");
 
 const PORT = Number(process.env.PORT || 3000);
 const PLATFORM_FEE_RATE = 0.08;
@@ -2366,6 +2374,36 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === "/api/automation/monitoring/snapshot" && req.method === "GET") {
     handleAutomationMonitoring(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/automation/billing/pricing" && req.method === "GET") {
+    handleBillingPricing(res);
+    return;
+  }
+
+  if (pathname === "/api/automation/track-usage" && req.method === "POST") {
+    await handleTrackUsage(req, res);
+    return;
+  }
+
+  if (pathname === "/api/automation/calculate-cost" && req.method === "GET") {
+    handleCalculateCost(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/automation/billing-summary" && req.method === "GET") {
+    handleBillingSummary(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/automation/billing/set-plan" && req.method === "POST") {
+    await handleSetPlan(req, res);
+    return;
+  }
+
+  if (pathname === "/api/automation/billing/attribute-revenue" && req.method === "POST") {
+    await handleAttributedRevenue(req, res);
     return;
   }
 

@@ -3,14 +3,17 @@ import {
   ArrowRight,
   Bot,
   Boxes,
+  CircleDollarSign,
   Gauge,
   GitBranch,
   Layers,
   LineChart,
+  Link as LinkIcon,
   Sparkles,
   Target,
   Zap,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
 
@@ -27,6 +30,7 @@ export function AutomationHubPage() {
     "We manually copy booking requests from email into a spreadsheet, then call customers back within 48 hours.",
   );
   const [compatReport, setCompatReport] = useState(null);
+  const [billing, setBilling] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -34,24 +38,28 @@ export function AutomationHubPage() {
   const loadAll = useCallback(async () => {
     setError("");
     try {
-      const [monRes, agRes, pipeRes, tplRes] = await Promise.all([
+      const [monRes, agRes, pipeRes, tplRes, billRes] = await Promise.all([
         fetch(`/api/automation/monitoring/snapshot?tenantId=${encodeURIComponent(TENANT_ID)}`),
         fetch("/api/automation/agents"),
         fetch(`/api/automation/pipelines?tenantId=${encodeURIComponent(TENANT_ID)}`),
         fetch("/api/automation/templates"),
+        fetch(`/api/automation/billing-summary?tenantId=${encodeURIComponent(TENANT_ID)}`),
       ]);
       const mon = await monRes.json();
       const ag = await agRes.json();
       const pipes = await pipeRes.json();
       const tpl = await tplRes.json();
+      const bill = await billRes.json();
       if (!monRes.ok) throw new Error(mon.error || "Monitoring failed");
       if (!agRes.ok) throw new Error(ag.error || "Agents failed");
       if (!pipeRes.ok) throw new Error(pipes.error || "Pipelines failed");
       if (!tplRes.ok) throw new Error(tpl.error || "Templates failed");
+      if (!billRes.ok) throw new Error(bill.error || "Billing failed");
       setSnapshot(mon);
       setAgents(ag.agents || []);
       setPipelines(pipes.pipelines || []);
       setTemplates(tpl.templates || []);
+      setBilling(bill);
     } catch (e) {
       setError(e.message || "Could not load automation hub.");
     } finally {
@@ -90,7 +98,7 @@ export function AutomationHubPage() {
       const res = await fetch("/api/automation/compatibility/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workflowDescription: compatText, businessFunction: "operations" }),
+        body: JSON.stringify({ workflowDescription: compatText, businessFunction: "operations", tenantId: TENANT_ID }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Analyze failed");
@@ -179,6 +187,59 @@ export function AutomationHubPage() {
         />
       </section>
 
+      {billing ? (
+        <section className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+          <GlassCard className="p-6 sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Pill icon={CircleDollarSign}>Financial transparency</Pill>
+                <h2 className="mt-3 text-2xl font-black">Usage & spend</h2>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                  Pay for what you run: subscription includes quotas; overages use published meter rates. Performance fees apply only to growth you attribute.
+                </p>
+              </div>
+              <Link
+                to="/billing"
+                className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-900/10 bg-white/70 px-4 py-2 text-sm font-bold text-cyan-600 dark:border-white/10 dark:bg-white/5 dark:text-cyan-300"
+              >
+                Full billing <LinkIcon className="h-4 w-4" />
+              </Link>
+            </div>
+            <div className="mt-6 grid gap-4 sm:grid-cols-3">
+              <MiniStat label="Plan" value={billing.cost?.planName || "—"} />
+              <MiniStat label="Est. period total" value={money(billing.cost?.estimatedTotalUsd)} />
+              <MiniStat label="Usage overage" value={money(billing.cost?.usageBreakdown?.usageChargesUsd)} />
+            </div>
+            <div className="mt-6 space-y-4">
+              <UsageBar label="Workflow runs" used={billing.usageMeter?.workflowRuns?.used} pct={billing.usageMeter?.workflowRuns?.percent} />
+              <UsageBar label="Agent actions" used={billing.usageMeter?.agentActions?.used} pct={billing.usageMeter?.agentActions?.percent} />
+              <UsageBar label="API / AI units" used={billing.usageMeter?.apiUnits?.used} pct={billing.usageMeter?.apiUnits?.percent} />
+            </div>
+            <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">{billing.valueStory?.headline}</p>
+          </GlassCard>
+          <GlassCard className="p-6 sm:p-8">
+            <h3 className="text-xl font-black">Value vs cost</h3>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+              {billing.transparency?.noHiddenFees}
+            </p>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 dark:bg-emerald-500/10">
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Attributed / modeled value</p>
+                <p className="mt-2 text-2xl font-black text-emerald-700 dark:text-emerald-300">{money(billing.valueStory?.attributedValueUsd)}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-900/10 bg-slate-100/70 p-4 dark:border-white/10 dark:bg-white/5">
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Est. spend (period)</p>
+                <p className="mt-2 text-2xl font-black">{money(billing.valueStory?.estimatedSpendUsd)}</p>
+              </div>
+            </div>
+            <p className="mt-4 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              ROI multiple: {billing.valueStory?.roiMultiple != null ? `${billing.valueStory.roiMultiple}×` : "—"}
+            </p>
+            <p className="mt-2 text-xs text-slate-500">{billing.transparency?.marketplaceNote}</p>
+          </GlassCard>
+        </section>
+      ) : null}
+
       <section className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
         <GlassCard className="p-6 sm:p-8">
           <div className="flex items-start justify-between gap-4">
@@ -230,6 +291,21 @@ export function AutomationHubPage() {
                   ))}
                 </ul>
               </div>
+              {solveResult.run?.revenueAndCost ? (
+                <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 dark:bg-cyan-500/10">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-800 dark:text-cyan-200">Operator cost snapshot</p>
+                  <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">
+                    Est. rolling bill after this run: <span className="font-black">{money(solveResult.run.revenueAndCost.periodCostEstimateUsd)}</span>
+                    {" · "}
+                    Modeled uplift this cycle: <span className="font-black">{money(solveResult.run.revenueAndCost.estimatedAttributedUpliftUsd)}</span>
+                  </p>
+                  <ul className="mt-3 space-y-2 text-xs text-slate-600 dark:text-slate-300">
+                    {(solveResult.run.revenueAndCost.billingHints || []).slice(0, 3).map((h) => (
+                      <li key={h.code}>• {h.title}: {h.detail}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </GlassCard>
@@ -399,13 +475,29 @@ export function AutomationHubPage() {
           <Gauge className="h-8 w-8 text-cyan-500" />
         </div>
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <MiniStat label="Est. period bill" value={money(snapshot?.billingPreview?.estimatedPeriodCostUsd)} />
+          <MiniStat label="Usage charges (overage)" value={money(snapshot?.billingPreview?.usageChargesUsd)} />
+          <MiniStat label="Performance fee (attrib.)" value={money(snapshot?.billingPreview?.performanceFeeUsd)} />
+        </div>
+        <div className="mt-4 grid gap-4 lg:grid-cols-3">
           <MiniStat label="Response rate" value={`${metrics?.responseRatePercent?.toFixed?.(1) ?? "—"}%`} />
           <MiniStat label="Cost / outcome" value={money(metrics?.costPerOutcomeUsd)} />
           <MiniStat label="Error rate" value={`${metrics?.errorRatePercent?.toFixed?.(2) ?? "—"}%`} />
         </div>
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <div className="mt-6 grid gap-4 xl:grid-cols-3">
           <div>
-            <p className="text-sm font-black">Recent insights</p>
+            <p className="text-sm font-black">Cost & revenue optimization</p>
+            <ul className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
+              {(snapshot?.revenueOptimization || []).map((item, idx) => (
+                <li key={`${item.title}-${idx}`} className="rounded-2xl border border-slate-900/10 bg-amber-500/5 px-4 py-3 dark:border-white/10">
+                  <span className="font-bold">{item.title}</span> — {item.detail}
+                </li>
+              ))}
+              {!snapshot?.revenueOptimization?.length ? <li className="text-slate-500">Run workflows to see billing-aware hints.</li> : null}
+            </ul>
+          </div>
+          <div>
+            <p className="text-sm font-black">Operational insights</p>
             <ul className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
               {(snapshot?.recentInsights || []).map((i) => (
                 <li key={i.id} className="rounded-2xl border border-slate-900/10 bg-slate-100/60 px-4 py-3 dark:border-white/10 dark:bg-white/5">
@@ -475,6 +567,24 @@ function MiniStat({ label, value }) {
     <div className="rounded-2xl border border-slate-900/10 bg-slate-100/70 p-4 dark:border-white/10 dark:bg-white/5">
       <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</p>
       <p className="mt-2 text-xl font-black">{value}</p>
+    </div>
+  );
+}
+
+function UsageBar({ label, used, pct }) {
+  const safePct = Math.min(100, Math.max(0, Number(pct) || 0));
+  return (
+    <div>
+      <div className="flex justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+        <span>{label}</span>
+        <span>{used?.toLocaleString?.() ?? used}{pct != null ? ` · ${safePct}% of included` : ""}</span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200/80 dark:bg-white/10">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-violet-500 transition-all"
+          style={{ width: `${safePct}%` }}
+        />
+      </div>
     </div>
   );
 }

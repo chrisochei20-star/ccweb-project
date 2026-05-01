@@ -45,10 +45,12 @@ import {
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { AutomationHubPage } from "./pages/AutomationHubPage.jsx";
+import { BillingDashboardPage } from "./pages/BillingDashboardPage.jsx";
 
 const navItems = [
   { label: "Home", to: "/" },
   { label: "Automation", to: "/automation" },
+  { label: "Billing", to: "/billing" },
   { label: "Courses", to: "/courses" },
   { label: "AI Tutor", to: "/ai-tutor" },
   { label: "Streaming", to: "/ai-streaming" },
@@ -137,6 +139,7 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
           <Route path="automation" element={<AutomationHubPage />} />
+          <Route path="billing" element={<BillingDashboardPage />} />
           <Route path="courses" element={<CoursesPage />} />
           <Route path="courses/:id" element={<CourseNotFoundPage />} />
           <Route path="ai-tutor" element={<AiTutorPage />} />
@@ -869,8 +872,87 @@ function AiStreamingPage() {
 }
 
 function PricingPage() {
+  const [bizPricing, setBizPricing] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/automation/billing/pricing")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) setBizPricing(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const meterRates = bizPricing?.meterRates;
+
   return (
-    <PageShell eyebrow="Pricing" title="Simple plans for learners, creators, and teams." description="Start free, then unlock unlimited tutoring, live rooms, and token rewards.">
+    <PageShell
+      eyebrow="Pricing"
+      title="CCWEB: learn, stream, and automate with clear economics."
+      description="Academy plans stay approachable. Business Automation adds transparent usage-based billing — start free, scale with metered agents and workflows, and optional fees only on growth you attribute."
+    >
+      <section className="mb-12 rounded-[2rem] border border-cyan-500/20 bg-cyan-500/5 p-6 dark:bg-cyan-500/10">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <span className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-white dark:bg-white dark:text-slate-950">
+              Business Automation Hub
+            </span>
+            <h2 className="mt-4 text-2xl font-black">Automation & agents — usage you can see</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+              Pay-as-you-go beyond included quotas: workflow runs, agent actions, API/AI units, and data processing. Pro adds analytics and a{" "}
+              {bizPricing?.plans?.find((p) => p.id === "pro")?.performanceFeePercent ?? 5}% performance fee only on revenue you attribute to automation.
+              Enterprise lowers fees and adds dedicated integrations — priced with sales.
+            </p>
+          </div>
+          <Link
+            to="/billing"
+            className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-5 py-2.5 text-sm font-black text-white dark:bg-white dark:text-slate-950"
+          >
+            Open billing dashboard <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          {(bizPricing?.plans || []).map((plan) => (
+            <GlassCard key={plan.id} className={`p-5 ${plan.id === "pro" ? "ring-2 ring-cyan-400/60" : ""}`}>
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">{plan.name}</p>
+              <p className="mt-3 text-3xl font-black">
+                {plan.contactSales ? "Custom" : plan.monthlyPriceUsd === 0 ? "$0" : `$${plan.monthlyPriceUsd}`}
+                {!plan.contactSales && plan.monthlyPriceUsd > 0 ? <span className="text-base font-semibold text-slate-500">/mo</span> : null}
+              </p>
+              <ul className="mt-4 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                <li>Agents (active): up to {plan.limits?.maxActiveAgents}</li>
+                <li>Workflows: up to {plan.limits?.maxActiveWorkflows}</li>
+                <li>
+                  Included runs / mo: {plan.limits?.includedWorkflowRunsPerMonth?.toLocaleString?.() ?? plan.limits?.includedWorkflowRunsPerMonth}
+                </li>
+                <li>Performance fee: {plan.performanceFeePercent}% (on attributed growth)</li>
+              </ul>
+            </GlassCard>
+          ))}
+        </div>
+        {meterRates ? (
+          <div className="mt-6 rounded-2xl border border-slate-900/10 bg-white/60 p-4 dark:border-white/10 dark:bg-white/5">
+            <p className="text-sm font-black">Meter rates (overage)</p>
+            <ul className="mt-3 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+              <li>Per 1k agent actions: ${meterRates.agentActionsPer1k}</li>
+              <li>Per workflow run: ${meterRates.workflowRun}</li>
+              <li>Per API / AI unit: ${meterRates.apiUnit}</li>
+              <li>Per GB processed: ${meterRates.dataProcessingPerGb}</li>
+            </ul>
+            <p className="mt-3 text-xs text-slate-500">
+              {bizPricing?.performanceFeeNote} Marketplace commission on shared templates: {bizPricing?.marketplace?.ccwebCommissionPercent}%.
+            </p>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-slate-500">Start the API server to load live automation pricing.</p>
+        )}
+      </section>
+
+      <h2 className="mb-6 text-2xl font-black">Academy & streaming</h2>
       <div className="grid gap-4 lg:grid-cols-3">
         {pricingPlans.map((plan) => (
           <GlassCard key={plan.name} className={`p-6 ${plan.featured ? "ring-2 ring-cyan-400" : ""}`}>

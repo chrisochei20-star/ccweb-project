@@ -40,7 +40,7 @@ export function PlatformHubPage() {
     streaming: "/live",
     "teaching-brain": "/live",
     engagement: "/live",
-    "crypto-intelligence": "/platform#crypto",
+    "crypto-intelligence": "/crypto-intel",
     automation: "/automation",
     community: "/community",
   };
@@ -104,15 +104,19 @@ export function PlatformHubPage() {
             <Shield className="h-6 w-6 text-violet-500" /> Crypto intelligence (MVP)
           </h3>
           <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
-            Token safety scan and signals dashboard — wire on-chain indexers in production.
+            Safety scanner, wallet risk, alpha discovery, and alerts — synthetic MVP data until indexers are wired.
           </p>
           <ul className="mt-4 space-y-2 text-sm font-mono text-slate-600 dark:text-slate-400">
-            <li>POST /api/v1/crypto/scan</li>
-            <li>GET /api/v1/crypto/signals</li>
-            <li>GET /api/v1/crypto/scans</li>
+            <li>POST /api/v1/crypto/scan-token</li>
+            <li>POST /api/v1/crypto/scan-wallet</li>
+            <li>GET /api/v1/crypto/discover-tokens</li>
+            <li>POST /api/v1/crypto/track-wallet</li>
+            <li>POST /api/v1/crypto/untrack-wallet</li>
+            <li>GET /api/v1/crypto/alerts</li>
+            <li>GET /api/v1/crypto/examples</li>
           </ul>
-          <Link to="/pricing" className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-cyan-600 dark:text-cyan-300">
-            Plans & usage <ArrowRight className="h-4 w-4" />
+          <Link to="/crypto-intel" className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-cyan-600 dark:text-cyan-300">
+            Open crypto dashboard <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       </section>

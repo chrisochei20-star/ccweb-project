@@ -49,6 +49,7 @@ import { BillingDashboardPage } from "./pages/BillingDashboardPage.jsx";
 import { LeadGenPage } from "./pages/LeadGenPage.jsx";
 import { PlatformHubPage } from "./pages/PlatformHubPage.jsx";
 import { LiveSessionPage } from "./pages/LiveSessionPage.jsx";
+import { CryptoIntelPage } from "./pages/CryptoIntelPage.jsx";
 
 const navItems = [
   { label: "Platform", to: "/platform" },
@@ -61,6 +62,7 @@ const navItems = [
   { label: "AI Tutor", to: "/ai-tutor" },
   { label: "Streaming", to: "/ai-streaming" },
   { label: "Pricing", to: "/pricing" },
+  { label: "Crypto Intel", to: "/crypto-intel" },
   { label: "Tokens", to: "/tokens" },
   { label: "Community", to: "/community" },
   { label: "Blog", to: "/blog" },
@@ -154,6 +156,7 @@ function App() {
           <Route path="ai-tutor" element={<AiTutorPage />} />
           <Route path="ai-streaming" element={<AiStreamingPage />} />
           <Route path="pricing" element={<PricingPage />} />
+          <Route path="crypto-intel" element={<CryptoIntelPage />} />
           <Route path="tokens" element={<TokensPage />} />
           <Route path="affiliates" element={<AffiliatesPage />} />
           <Route path="community" element={<CommunityPage />} />

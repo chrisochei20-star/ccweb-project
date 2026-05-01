@@ -50,6 +50,13 @@ const {
   handleCryptoScanGet,
   handleCryptoSignals,
   handleCryptoScansList,
+  handleScanWallet,
+  handleDiscoverTokens,
+  handleTrackWallet,
+  handleUntrackWallet,
+  handleListTracked,
+  handleAlerts,
+  handleExamples,
 } = require("./lib/cryptoIntelligence/httpHandlers");
 const { attachWebSocketHub } = require("./lib/realtime/hub");
 const { attachLiveSession } = require("./lib/liveSession/socket");
@@ -2399,8 +2406,48 @@ const httpServer = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname === "/api/v1/crypto/scan-token" && req.method === "POST") {
+    await handleCryptoScan(req, res);
+    return;
+  }
+
+  if (pathname === "/api/v1/crypto/scan-wallet" && req.method === "POST") {
+    await handleScanWallet(req, res);
+    return;
+  }
+
+  if (pathname === "/api/v1/crypto/discover-tokens" && req.method === "GET") {
+    handleDiscoverTokens(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/v1/crypto/track-wallet" && req.method === "POST") {
+    await handleTrackWallet(req, res);
+    return;
+  }
+
+  if (pathname === "/api/v1/crypto/untrack-wallet" && (req.method === "DELETE" || req.method === "POST")) {
+    await handleUntrackWallet(req, res, requestUrl);
+    return;
+  }
+
+  if (pathname === "/api/v1/crypto/tracked-wallets" && req.method === "GET") {
+    handleListTracked(res);
+    return;
+  }
+
+  if (pathname === "/api/v1/crypto/alerts" && req.method === "GET") {
+    handleAlerts(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/v1/crypto/examples" && req.method === "GET") {
+    handleExamples(res);
+    return;
+  }
+
   if (pathname === "/api/v1/crypto/signals" && req.method === "GET") {
-    handleCryptoSignals(res);
+    handleCryptoSignals(requestUrl, res);
     return;
   }
 

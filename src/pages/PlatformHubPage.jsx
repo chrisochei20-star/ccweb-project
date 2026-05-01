@@ -37,9 +37,9 @@ export function PlatformHubPage() {
     community: Users,
   };
   const links = {
-    streaming: "/ai-streaming",
-    "teaching-brain": "/ai-tutor",
-    engagement: "/ai-streaming",
+    streaming: "/live",
+    "teaching-brain": "/live",
+    engagement: "/live",
     "crypto-intelligence": "/platform#crypto",
     automation: "/automation",
     community: "/community",
@@ -92,11 +92,11 @@ export function PlatformHubPage() {
             <Clapperboard className="h-6 w-6 text-cyan-500" /> Example: session lifecycle
           </h3>
           <ol className="mt-4 list-decimal space-y-3 pl-5 text-sm leading-7 text-slate-600 dark:text-slate-300">
-            <li>User joins stream → <code className="rounded bg-slate-100 px-1 dark:bg-white/10">POST /api/streaming/rooms/…/attendance</code></li>
-            <li>Realtime channel → <code className="rounded bg-slate-100 px-1 dark:bg-white/10">WebSocket /ws?roomId=&amp;userId=</code></li>
-            <li>Teaching Brain answers → <code className="rounded bg-slate-100 px-1 dark:bg-white/10">POST /api/v1/teaching-brain/answer</code></li>
-            <li>Engagement scored → <code className="rounded bg-slate-100 px-1 dark:bg-white/10">POST /api/v1/engagement/score</code></li>
-            <li>Payout pool → existing streaming payout + distribution endpoints</li>
+            <li>User joins live UI → <Link to="/live" className="font-bold text-cyan-600 dark:text-cyan-300">/live</Link> (Socket.io session:join)</li>
+            <li>Chat + AI Teaching Brain → same room; use <code className="rounded bg-slate-100 px-1 dark:bg-white/10">/ai</code> in chat or REST <code className="rounded bg-slate-100 px-1 dark:bg-white/10">POST /api/v1/teaching-brain/answer</code></li>
+            <li>Engagement + earnings → server pushes <code className="rounded bg-slate-100 px-1 dark:bg-white/10">engagement:update</code> and <code className="rounded bg-slate-100 px-1 dark:bg-white/10">earnings:update</code></li>
+            <li>Optional WebSocket → <code className="rounded bg-slate-100 px-1 dark:bg-white/10">/ws?roomId=&amp;userId=</code> (install <code className="rounded bg-slate-100 px-1 dark:bg-white/10">ws</code>)</li>
+            <li>Studio + payout math → <code className="rounded bg-slate-100 px-1 dark:bg-white/10">/api/streaming/*</code> (create room, attendance, payouts)</li>
           </ol>
         </div>
         <div id="crypto" className="rounded-[2rem] border border-slate-900/10 bg-white/70 p-6 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.05]">

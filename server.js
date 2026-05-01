@@ -46,6 +46,7 @@ const {
   handleCryptoScansList,
 } = require("./lib/cryptoIntelligence/httpHandlers");
 const { attachWebSocketHub } = require("./lib/realtime/hub");
+const { attachLiveSession } = require("./lib/liveSession/socket");
 
 const PORT = Number(process.env.PORT || 3000);
 const PLATFORM_FEE_RATE = 0.08;
@@ -2711,6 +2712,7 @@ const httpServer = http.createServer(async (req, res) => {
 });
 
 attachWebSocketHub(httpServer);
+attachLiveSession(httpServer);
 
 httpServer.listen(PORT, () => {
   console.log(`CCWEB platform API: http://localhost:${PORT}`);
@@ -2719,5 +2721,11 @@ httpServer.listen(PORT, () => {
     console.log(`CCWEB WebSocket: ws://localhost:${PORT}/ws`);
   } catch {
     console.log("Install optional dependency `ws` to enable WebSocket at /ws");
+  }
+  try {
+    require.resolve("socket.io");
+    console.log("CCWEB Live Session (Socket.io): socket.io path /socket.io/");
+  } catch {
+    console.log("Install socket.io for live AI streaming chat (npm install socket.io)");
   }
 });

@@ -48,10 +48,12 @@ import { AutomationHubPage } from "./pages/AutomationHubPage.jsx";
 import { BillingDashboardPage } from "./pages/BillingDashboardPage.jsx";
 import { LeadGenPage } from "./pages/LeadGenPage.jsx";
 import { PlatformHubPage } from "./pages/PlatformHubPage.jsx";
+import { LiveSessionPage } from "./pages/LiveSessionPage.jsx";
 
 const navItems = [
   { label: "Platform", to: "/platform" },
   { label: "Home", to: "/" },
+  { label: "Live", to: "/live" },
   { label: "Automation", to: "/automation" },
   { label: "Lead Gen", to: "/lead-gen" },
   { label: "Billing", to: "/billing" },
@@ -143,6 +145,7 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
           <Route path="platform" element={<PlatformHubPage />} />
+          <Route path="live" element={<LiveSessionPage />} />
           <Route path="automation" element={<AutomationHubPage />} />
           <Route path="lead-gen" element={<LeadGenPage />} />
           <Route path="billing" element={<BillingDashboardPage />} />
@@ -299,11 +302,14 @@ function HomePage() {
             CCWEB combines adaptive crypto and AI courses, live AI hosts, revenue sharing, and learner communities in one modern operating system.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <ButtonLink to="/platform" variant="primary">
-              Explore the platform <ArrowRight className="h-4 w-4" />
+            <ButtonLink to="/live" variant="primary">
+              Join live AI session <ArrowRight className="h-4 w-4" />
+            </ButtonLink>
+            <ButtonLink to="/platform" variant="secondary">
+              Explore the platform
             </ButtonLink>
             <ButtonLink to="/ai-streaming" variant="secondary">
-              Launch stream studio
+              Stream studio
             </ButtonLink>
             <ButtonLink to="/courses" variant="secondary">
               Browse learning paths

@@ -25,6 +25,14 @@ const {
   handleSetPlan,
   handleAttributedRevenue,
 } = require("./lib/automation/billingHandlers");
+const {
+  handleLeadGenCampaignsCreate,
+  handleLeadGenCampaignsList,
+  handleLeadGenCampaignGet,
+  handleLeadGenCampaignRun,
+  handleLeadGenDashboard,
+  handleLeadGenEvents,
+} = require("./lib/automation/leadGenHandlers");
 
 const PORT = Number(process.env.PORT || 3000);
 const PLATFORM_FEE_RATE = 0.08;
@@ -2404,6 +2412,36 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === "/api/automation/billing/attribute-revenue" && req.method === "POST") {
     await handleAttributedRevenue(req, res);
+    return;
+  }
+
+  if (pathname === "/api/automation/lead-gen/campaigns" && req.method === "POST") {
+    await handleLeadGenCampaignsCreate(req, res);
+    return;
+  }
+
+  if (pathname === "/api/automation/lead-gen/campaigns" && req.method === "GET") {
+    handleLeadGenCampaignsList(requestUrl, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/automation\/lead-gen\/campaigns\/[^/]+$/) && req.method === "GET") {
+    handleLeadGenCampaignGet(pathname, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/automation\/lead-gen\/campaigns\/[^/]+\/run$/) && req.method === "POST") {
+    await handleLeadGenCampaignRun(pathname, req, res);
+    return;
+  }
+
+  if (pathname === "/api/automation/lead-gen/dashboard" && req.method === "GET") {
+    handleLeadGenDashboard(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/automation/lead-gen/events" && req.method === "GET") {
+    handleLeadGenEvents(requestUrl, res);
     return;
   }
 

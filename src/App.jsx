@@ -46,10 +46,12 @@ import { motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { AutomationHubPage } from "./pages/AutomationHubPage.jsx";
 import { BillingDashboardPage } from "./pages/BillingDashboardPage.jsx";
+import { LeadGenPage } from "./pages/LeadGenPage.jsx";
 
 const navItems = [
   { label: "Home", to: "/" },
   { label: "Automation", to: "/automation" },
+  { label: "Lead Gen", to: "/lead-gen" },
   { label: "Billing", to: "/billing" },
   { label: "Courses", to: "/courses" },
   { label: "AI Tutor", to: "/ai-tutor" },
@@ -139,6 +141,7 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
           <Route path="automation" element={<AutomationHubPage />} />
+          <Route path="lead-gen" element={<LeadGenPage />} />
           <Route path="billing" element={<BillingDashboardPage />} />
           <Route path="courses" element={<CoursesPage />} />
           <Route path="courses/:id" element={<CourseNotFoundPage />} />

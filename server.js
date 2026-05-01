@@ -4,6 +4,20 @@ const fs = require("fs/promises");
 const path = require("path");
 const { URL } = require("url");
 
+const { seedAutomationHub } = require("./lib/automation/seed");
+const {
+  handleAutomationAgentsCatalog,
+  handleAutomationAgentsList,
+  handleAutomationAgentsUpsert,
+  handleAutomationTemplates,
+  handleAutomationPipelines,
+  handleAutomationPipelineCreate,
+  handleAutomationPipelineRun,
+  handleAutomationCompatibility,
+  handleAutomationSolve,
+  handleAutomationMonitoring,
+} = require("./lib/automation/httpHandlers");
+
 const PORT = Number(process.env.PORT || 3000);
 const PLATFORM_FEE_RATE = 0.08;
 
@@ -2288,6 +2302,7 @@ function seedUsers() {
 
 seedUsers();
 seedApplicants();
+seedAutomationHub();
 
 const server = http.createServer(async (req, res) => {
   if (!req.url) {
@@ -2301,6 +2316,56 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/health") {
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
     res.end(JSON.stringify({ status: "ok" }));
+    return;
+  }
+
+  if (pathname === "/api/automation/agents/catalog" && req.method === "GET") {
+    handleAutomationAgentsCatalog(res);
+    return;
+  }
+
+  if (pathname === "/api/automation/agents" && req.method === "GET") {
+    handleAutomationAgentsList(res);
+    return;
+  }
+
+  if (pathname === "/api/automation/agents" && req.method === "POST") {
+    await handleAutomationAgentsUpsert(req, res);
+    return;
+  }
+
+  if (pathname === "/api/automation/templates" && req.method === "GET") {
+    handleAutomationTemplates(res);
+    return;
+  }
+
+  if (pathname === "/api/automation/pipelines" && req.method === "GET") {
+    handleAutomationPipelines(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/automation/pipelines" && req.method === "POST") {
+    await handleAutomationPipelineCreate(req, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/automation\/pipelines\/[^/]+\/run$/) && req.method === "POST") {
+    await handleAutomationPipelineRun(pathname, req, res);
+    return;
+  }
+
+  if (pathname === "/api/automation/compatibility/analyze" && req.method === "POST") {
+    await handleAutomationCompatibility(req, res);
+    return;
+  }
+
+  if (pathname === "/api/automation/problems/solve" && req.method === "POST") {
+    await handleAutomationSolve(req, res);
+    return;
+  }
+
+  if (pathname === "/api/automation/monitoring/snapshot" && req.method === "GET") {
+    handleAutomationMonitoring(requestUrl, res);
     return;
   }
 

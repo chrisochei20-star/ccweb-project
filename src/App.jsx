@@ -44,9 +44,11 @@ import {
 } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
+import { AutomationHubPage } from "./pages/AutomationHubPage.jsx";
 
 const navItems = [
   { label: "Home", to: "/" },
+  { label: "Automation", to: "/automation" },
   { label: "Courses", to: "/courses" },
   { label: "AI Tutor", to: "/ai-tutor" },
   { label: "Streaming", to: "/ai-streaming" },
@@ -134,6 +136,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
+          <Route path="automation" element={<AutomationHubPage />} />
           <Route path="courses" element={<CoursesPage />} />
           <Route path="courses/:id" element={<CourseNotFoundPage />} />
           <Route path="ai-tutor" element={<AiTutorPage />} />

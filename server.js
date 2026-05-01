@@ -40,6 +40,12 @@ const {
 } = require("./lib/teachingBrain/httpHandlers");
 const { handleEngagementScore, handleEngagementPayoutPreview } = require("./lib/engagement/httpHandlers");
 const {
+  handleEngagementSessionGet,
+  handleEngagementSessionsList,
+  handleEngagementExamples,
+  handleEngagementSessionSeed,
+} = require("./lib/engagement/roomHandlers");
+const {
   handleCryptoScan,
   handleCryptoScanGet,
   handleCryptoSignals,
@@ -2365,6 +2371,26 @@ const httpServer = http.createServer(async (req, res) => {
 
   if (pathname === "/api/v1/engagement/payout-preview" && req.method === "POST") {
     await handleEngagementPayoutPreview(req, res);
+    return;
+  }
+
+  if (pathname === "/api/v1/engagement/examples" && req.method === "GET") {
+    handleEngagementExamples(res);
+    return;
+  }
+
+  if (pathname === "/api/v1/engagement/sessions" && req.method === "GET") {
+    handleEngagementSessionsList(res);
+    return;
+  }
+
+  if (pathname === "/api/v1/engagement/sessions" && req.method === "POST") {
+    await handleEngagementSessionSeed(req, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/v1\/engagement\/sessions\/[^/]+$/) && req.method === "GET") {
+    handleEngagementSessionGet(pathname, res);
     return;
   }
 

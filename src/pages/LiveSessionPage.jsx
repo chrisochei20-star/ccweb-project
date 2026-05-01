@@ -10,12 +10,23 @@ import {
   Send,
   Sparkles,
   Users,
+  Trophy,
   Zap,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const DEFAULT_ROOM = "live-demo";
+const ROOM_KEY = "ccweb-live-room";
 const USER_KEY = "ccweb-live-user";
+
+function loadRoomId() {
+  try {
+    const r = localStorage.getItem(ROOM_KEY);
+    return r && r.trim() ? r.trim() : DEFAULT_ROOM;
+  } catch {
+    return DEFAULT_ROOM;
+  }
+}
 
 function loadUserId() {
   try {
@@ -33,7 +44,7 @@ function loadUserId() {
 export function LiveSessionPage() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState("");
-  const [roomId] = useState(DEFAULT_ROOM);
+  const [roomId, setRoomId] = useState(() => loadRoomId());
   const [displayName, setDisplayName] = useState("You");
   const [userLevel, setUserLevel] = useState("intermediate");
   const [topic] = useState("Token economics and sustainable creator revenue");
@@ -43,7 +54,9 @@ export function LiveSessionPage() {
   const [summary, setSummary] = useState({ bullets: [], topics: [], proficiency: "" });
   const [engagement, setEngagement] = useState(null);
   const [earnings, setEarnings] = useState(null);
+  const [leaderboard, setLeaderboard] = useState([]);
   const [sessionInfo, setSessionInfo] = useState(null);
+  const [roomInput, setRoomInput] = useState(() => loadRoomId());
   const watchRef = useRef(0);
   const socketRef = useRef(null);
   const listRef = useRef(null);
@@ -63,6 +76,11 @@ export function LiveSessionPage() {
 
   useEffect(() => {
     setError("");
+    setMessages([]);
+    setEarnings(null);
+    setLeaderboard([]);
+    setEngagement(null);
+    watchRef.current = 0;
     const url = typeof window !== "undefined" ? window.location.origin : "";
     const s = io(url, {
       path: "/socket.io/",
@@ -88,6 +106,13 @@ export function LiveSessionPage() {
     s.on("session:joined", (payload) => {
       setSessionInfo(payload);
       if (Array.isArray(payload.messages)) setMessages(payload.messages);
+      const snap = payload.engagementSnapshot;
+      if (snap?.leaderboard?.length) {
+        setEarnings(snap);
+        setLeaderboard(snap.leaderboard);
+        const mine = snap.leaderboard.find((row) => row.userId === userId);
+        if (mine) setEngagement({ score: mine.rawScore, tier: mine.tier, penalties: mine.penalties, contribution: mine.contribution });
+      }
     });
 
     s.on("chat:message", (msg) => {
@@ -100,7 +125,14 @@ export function LiveSessionPage() {
       if (e?.userId === userId) setEngagement(e.snapshot);
     });
 
-    s.on("earnings:update", setEarnings);
+    s.on("earnings:update", (snap) => {
+      setEarnings(snap);
+      if (Array.isArray(snap?.leaderboard)) setLeaderboard(snap.leaderboard);
+    });
+
+    s.on("leaderboard:update", (payload) => {
+      if (Array.isArray(payload?.leaderboard)) setLeaderboard(payload.leaderboard);
+    });
 
     s.on("ai:nudge", (nudge) => {
       setMessages((prev) => [
@@ -119,7 +151,7 @@ export function LiveSessionPage() {
       s.disconnect();
       socketRef.current = null;
     };
-  }, [userId]);
+  }, [userId, roomId]);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
@@ -134,7 +166,11 @@ export function LiveSessionPage() {
     setInput("");
   }
 
-  const myEarnings = earnings?.participants?.find((p) => p.userId === userId)?.estimatedEarningsUsd;
+  const myRow =
+    earnings?.leaderboard?.find((p) => p.userId === userId) ||
+    earnings?.participants?.find((p) => p.userId === userId);
+  const myEarnings = myRow?.estimatedEarningsUsd;
+  const abuseFlags = engagement?.penalties?.flags ?? [];
 
   return (
     <div className="space-y-6 pb-24 lg:pb-8">
@@ -166,6 +202,36 @@ export function LiveSessionPage() {
         <span className="rounded-full bg-white/10 px-3 py-1 dark:bg-white/5">Room {sessionInfo?.roomId || roomId}</span>
       </div>
 
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const id = (roomInput || DEFAULT_ROOM).trim() || DEFAULT_ROOM;
+          try {
+            localStorage.setItem(ROOM_KEY, id);
+          } catch {
+            /* ignore */
+          }
+          setRoomId(id);
+        }}
+        className="flex max-w-2xl flex-col gap-2 sm:flex-row sm:items-end"
+      >
+        <label className="block flex-1 text-xs font-bold text-slate-500">
+          Session room ID
+          <input
+            className="mt-1 w-full rounded-2xl border border-slate-900/10 bg-white/90 px-4 py-2.5 text-sm font-semibold outline-none focus:border-cyan-400 dark:border-white/10 dark:bg-white/5 dark:text-white"
+            value={roomInput}
+            onChange={(e) => setRoomInput(e.target.value)}
+            placeholder="e.g. live-demo or creator-101"
+          />
+        </label>
+        <button
+          type="submit"
+          className="rounded-2xl bg-slate-950 px-5 py-2.5 text-sm font-black text-white dark:bg-white dark:text-slate-950"
+        >
+          Join / switch
+        </button>
+      </form>
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
         <section className="flex flex-col gap-4">
           <GlassPanel className="relative overflow-hidden">
@@ -186,7 +252,10 @@ export function LiveSessionPage() {
                     AI Teaching Brain co-hosts this session — use /ai for instant explanations. Idle learners receive gentle prompts.
                   </p>
                   <div className="mt-6 flex flex-wrap gap-2">
-                    <MiniBadge icon={Users} label={`${earnings?.participants?.length ?? 1} in pool`} />
+                    <MiniBadge
+                      icon={Users}
+                      label={`${earnings?.participantCount ?? Math.max(leaderboard.length, 1)} in room`}
+                    />
                     <MiniBadge icon={Zap} label={`Tier: ${engagement?.tier || "—"}`} />
                   </div>
                 </div>
@@ -272,13 +341,27 @@ export function LiveSessionPage() {
             <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
               <Activity className="h-4 w-4 text-emerald-500" /> Engagement
             </h3>
-            <div className="mt-4 grid grid-cols-2 gap-3 text-center">
+            <div className="mt-3 grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
               <Stat label="Score" value={engagement?.score ?? "—"} />
               <Stat label="Tier" value={engagement?.tier ?? "—"} />
+              <Stat label="Rank" value={myRow?.rank ?? "—"} />
+              <Stat label="Pool share" value={myRow?.shareOfPool != null ? `${(myRow.shareOfPool * 100).toFixed(1)}%` : "—"} />
             </div>
+            {abuseFlags.length ? (
+              <p className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
+                Anti-abuse: {abuseFlags.map((f) => f.code).join(", ")}
+              </p>
+            ) : null}
             <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-              Watch time syncs every 15s. Chat spam reduces weight.
+              Watch time syncs every 15s. Spam density and burst messaging reduce weight.
             </p>
+            <button
+              type="button"
+              className="mt-3 w-full rounded-xl border border-cyan-500/30 bg-cyan-500/10 py-2 text-xs font-bold text-cyan-800 dark:text-cyan-100"
+              onClick={() => socketRef.current?.emit("quiz:participation", { correct: true })}
+            >
+              Simulate quiz participation (+engagement)
+            </button>
           </GlassPanel>
 
           <GlassPanel>
@@ -289,8 +372,39 @@ export function LiveSessionPage() {
               {myEarnings != null ? `$${myEarnings.toFixed(2)}` : "—"}
             </p>
             <p className="mt-2 text-xs text-slate-500">
-              Share of ${earnings?.poolUsd ?? poolUsd} pool from engagement score (demo).
+              Share of ${earnings?.poolUsd ?? poolUsd} pool — normalized across viewers (demo).
             </p>
+          </GlassPanel>
+
+          <GlassPanel>
+            <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+              <Trophy className="h-4 w-4 text-amber-500" /> Live leaderboard
+            </h3>
+            <ol className="mt-4 max-h-52 space-y-2 overflow-y-auto text-sm">
+              {leaderboard.length ? (
+                leaderboard.map((row) => (
+                  <li
+                    key={row.userId}
+                    className={`flex items-center justify-between rounded-xl border px-3 py-2 ${
+                      row.userId === userId
+                        ? "border-cyan-500/40 bg-cyan-500/10"
+                        : "border-slate-900/10 bg-white/60 dark:border-white/10 dark:bg-white/5"
+                    }`}
+                  >
+                    <span className="font-bold text-slate-700 dark:text-slate-200">
+                      #{row.rank} {row.displayName}
+                      {row.userId === userId ? " (you)" : ""}
+                    </span>
+                    <span className="text-right text-xs">
+                      <span className="font-black text-slate-800 dark:text-white">{Math.round(row.rawScore)}</span>
+                      <span className="block text-slate-500">${row.estimatedEarningsUsd?.toFixed(2) ?? "—"}</span>
+                    </span>
+                  </li>
+                ))
+              ) : (
+                <li className="text-xs text-slate-500">Chat or react to appear on the board.</li>
+              )}
+            </ol>
           </GlassPanel>
 
           <GlassPanel className="text-sm">

@@ -33,6 +33,19 @@ const {
   handleLeadGenDashboard,
   handleLeadGenEvents,
 } = require("./lib/automation/leadGenHandlers");
+const { handlePlatformManifest } = require("./lib/platform/httpHandlers");
+const {
+  handleTeachingBrainAnswer,
+  handleTeachingBrainSummary,
+} = require("./lib/teachingBrain/httpHandlers");
+const { handleEngagementScore, handleEngagementPayoutPreview } = require("./lib/engagement/httpHandlers");
+const {
+  handleCryptoScan,
+  handleCryptoScanGet,
+  handleCryptoSignals,
+  handleCryptoScansList,
+} = require("./lib/cryptoIntelligence/httpHandlers");
+const { attachWebSocketHub } = require("./lib/realtime/hub");
 
 const PORT = Number(process.env.PORT || 3000);
 const PLATFORM_FEE_RATE = 0.08;
@@ -2320,7 +2333,7 @@ seedUsers();
 seedApplicants();
 seedAutomationHub();
 
-const server = http.createServer(async (req, res) => {
+const httpServer = http.createServer(async (req, res) => {
   if (!req.url) {
     sendJson(res, 400, { error: "Invalid request URL." });
     return;
@@ -2329,9 +2342,54 @@ const server = http.createServer(async (req, res) => {
   const requestUrl = new URL(req.url, `http://localhost:${PORT}`);
   const { pathname } = requestUrl;
 
+  if (pathname === "/api/v1/platform/manifest" && req.method === "GET") {
+    handlePlatformManifest(res);
+    return;
+  }
+
+  if (pathname === "/api/v1/teaching-brain/answer" && req.method === "POST") {
+    await handleTeachingBrainAnswer(req, res);
+    return;
+  }
+
+  if (pathname === "/api/v1/teaching-brain/session-summary" && req.method === "POST") {
+    await handleTeachingBrainSummary(req, res);
+    return;
+  }
+
+  if (pathname === "/api/v1/engagement/score" && req.method === "POST") {
+    await handleEngagementScore(req, res);
+    return;
+  }
+
+  if (pathname === "/api/v1/engagement/payout-preview" && req.method === "POST") {
+    await handleEngagementPayoutPreview(req, res);
+    return;
+  }
+
+  if (pathname === "/api/v1/crypto/scan" && req.method === "POST") {
+    await handleCryptoScan(req, res);
+    return;
+  }
+
+  if (pathname === "/api/v1/crypto/signals" && req.method === "GET") {
+    handleCryptoSignals(res);
+    return;
+  }
+
+  if (pathname === "/api/v1/crypto/scans" && req.method === "GET") {
+    handleCryptoScansList(requestUrl, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/v1\/crypto\/scans\/[^/]+$/) && req.method === "GET") {
+    handleCryptoScanGet(pathname, res);
+    return;
+  }
+
   if (pathname === "/health") {
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ status: "ok" }));
+    res.end(JSON.stringify({ status: "ok", platform: "CCWEB" }));
     return;
   }
 
@@ -2652,6 +2710,14 @@ const server = http.createServer(async (req, res) => {
   await serveFile(filePath, res);
 });
 
-server.listen(PORT, () => {
-  console.log(`ccweb-project app running on http://localhost:${PORT}`);
+attachWebSocketHub(httpServer);
+
+httpServer.listen(PORT, () => {
+  console.log(`CCWEB platform API: http://localhost:${PORT}`);
+  try {
+    require.resolve("ws");
+    console.log(`CCWEB WebSocket: ws://localhost:${PORT}/ws`);
+  } catch {
+    console.log("Install optional dependency `ws` to enable WebSocket at /ws");
+  }
 });

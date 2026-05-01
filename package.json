@@ -2,7 +2,7 @@
   "name": "ccweb-project",
   "version": "1.0.0",
   "private": true,
-  "description": "The world's first AI-powered Web3 Academy and Business Engine",
+  "description": "CCWEB — unified AI platform: streaming, teaching brain, engagement revenue, crypto intelligence, business automation.",
   "main": "server.js",
   "scripts": {
     "serve": "node server.js",

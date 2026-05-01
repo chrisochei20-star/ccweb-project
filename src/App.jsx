@@ -47,8 +47,10 @@ import { useEffect, useMemo, useState } from "react";
 import { AutomationHubPage } from "./pages/AutomationHubPage.jsx";
 import { BillingDashboardPage } from "./pages/BillingDashboardPage.jsx";
 import { LeadGenPage } from "./pages/LeadGenPage.jsx";
+import { PlatformHubPage } from "./pages/PlatformHubPage.jsx";
 
 const navItems = [
+  { label: "Platform", to: "/platform" },
   { label: "Home", to: "/" },
   { label: "Automation", to: "/automation" },
   { label: "Lead Gen", to: "/lead-gen" },
@@ -140,6 +142,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
+          <Route path="platform" element={<PlatformHubPage />} />
           <Route path="automation" element={<AutomationHubPage />} />
           <Route path="lead-gen" element={<LeadGenPage />} />
           <Route path="billing" element={<BillingDashboardPage />} />
@@ -176,11 +179,11 @@ function Layout() {
   }, [theme]);
 
   return (
-    <div className="min-h-screen overflow-hidden bg-slate-50 text-slate-950 transition-colors duration-500 dark:bg-[#030711] dark:text-white">
+    <div className="min-h-screen overflow-hidden bg-slate-50 text-slate-950 transition-colors duration-500 dark:bg-gradient-to-b dark:from-[#020617] dark:via-[#0a1628] dark:to-[#030712] dark:text-white">
       <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute left-1/2 top-0 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-cyan-400/20 blur-3xl dark:bg-cyan-400/10" />
-        <div className="absolute right-[-8rem] top-32 h-[28rem] w-[28rem] rounded-full bg-violet-500/20 blur-3xl dark:bg-violet-500/10" />
-        <div className="absolute bottom-[-12rem] left-[-8rem] h-[28rem] w-[28rem] rounded-full bg-emerald-400/20 blur-3xl dark:bg-emerald-400/10" />
+        <div className="absolute left-1/2 top-0 h-[36rem] w-[36rem] -translate-x-1/2 rounded-full bg-gradient-to-br from-cyan-500/25 via-blue-600/15 to-transparent blur-3xl dark:from-blue-500/20 dark:via-cyan-400/10" />
+        <div className="absolute right-[-10rem] top-24 h-[30rem] w-[30rem] rounded-full bg-gradient-to-bl from-indigo-600/25 to-transparent blur-3xl dark:from-indigo-500/15" />
+        <div className="absolute bottom-[-14rem] left-[-10rem] h-[32rem] w-[32rem] rounded-full bg-gradient-to-tr from-sky-500/20 to-transparent blur-3xl dark:from-blue-900/30" />
         <div className="absolute inset-0 bg-[linear-gradient(rgba(15,23,42,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,.08)_1px,transparent_1px)] bg-[size:72px_72px] opacity-40 dark:bg-[linear-gradient(rgba(148,163,184,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.08)_1px,transparent_1px)]" />
       </div>
 
@@ -192,7 +195,7 @@ function Layout() {
             </span>
             <span>
               <span className="block text-sm font-black tracking-[0.24em]">CCWEB</span>
-              <span className="block text-xs text-slate-500 dark:text-slate-400">AI streaming OS</span>
+              <span className="block text-xs text-slate-500 dark:text-slate-400">Unified AI platform</span>
             </span>
           </Link>
 
@@ -272,7 +275,7 @@ function Layout() {
 
       <footer className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-4 rounded-[2rem] border border-slate-900/10 bg-white/60 p-5 text-sm text-slate-500 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400 sm:flex-row sm:items-center sm:justify-between">
-          <span>© {new Date().getFullYear()} Chrisccwebfoundation. Built for live AI learning.</span>
+          <span>© {new Date().getFullYear()} CCWEB — learn, stream, automate, analyze.</span>
           <div className="flex gap-4">
             <Link to="/contact" className="hover:text-slate-950 dark:hover:text-white">Contact</Link>
             <Link to="/dashboard" className="hover:text-slate-950 dark:hover:text-white">Dashboard</Link>
@@ -296,8 +299,11 @@ function HomePage() {
             CCWEB combines adaptive crypto and AI courses, live AI hosts, revenue sharing, and learner communities in one modern operating system.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <ButtonLink to="/ai-streaming" variant="primary">
-              Launch stream studio <ArrowRight className="h-4 w-4" />
+            <ButtonLink to="/platform" variant="primary">
+              Explore the platform <ArrowRight className="h-4 w-4" />
+            </ButtonLink>
+            <ButtonLink to="/ai-streaming" variant="secondary">
+              Launch stream studio
             </ButtonLink>
             <ButtonLink to="/courses" variant="secondary">
               Browse learning paths

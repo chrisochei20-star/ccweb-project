@@ -1,4 +1,38 @@
 import {
+  Activity,
+  ArrowRight,
+  BarChart3,
+  BookOpen,
+  Bot,
+  Boxes,
+  BrainCircuit,
+  Check,
+  ChevronRight,
+  CircleDollarSign,
+  Clapperboard,
+  Coins,
+  Command,
+  Flame,
+  Globe2,
+  GraduationCap,
+  LayoutDashboard,
+  Lock,
+  Menu,
+  Moon,
+  Play,
+  Radio,
+  Rocket,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  Sun,
+  Users,
+  Wallet,
+  X,
+  Zap,
+} from "lucide-react";
+import {
   BrowserRouter,
   Link,
   NavLink,
@@ -8,19 +42,22 @@ import {
   Routes,
   useParams,
 } from "react-router-dom";
-import { useEffect, useState } from "react";
-import "./styles.css";
+import { motion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
+import { AutomationHubPage } from "./pages/AutomationHubPage.jsx";
 
 const navItems = [
   { label: "Home", to: "/" },
+  { label: "Automation", to: "/automation" },
   { label: "Learn", to: "/courses" },
-  { label: "AI Streaming", to: "/ai-streaming" },
+  { label: "AI Tutor", to: "/ai-tutor" },
+  { label: "Streaming", to: "/ai-streaming" },
   { label: "Find", to: "/find" },
   { label: "Build", to: "/dapp-builder" },
   { label: "AI Agents", to: "/ai-agents" },
   { label: "Earn", to: "/earn" },
   { label: "Community", to: "/community" },
-  { label: "About", to: "/about" },
+  { label: "Blog", to: "/blog" },
 ];
 
 const courses = [
@@ -30,35 +67,68 @@ const courses = [
     title: "Blockchain Fundamentals",
     level: "Beginner",
     duration: "6h",
-    students: "12,400",
+    students: "12.4K",
     rating: "4.9",
+    gradient: "from-cyan-400 to-blue-500",
   },
   {
     id: 2,
-    category: "Crypto",
+    category: "Web3",
     title: "Smart Contract Development",
     level: "Intermediate",
     duration: "10h",
-    students: "8,200",
+    students: "8.2K",
     rating: "4.8",
+    gradient: "from-violet-400 to-fuchsia-500",
   },
   {
     id: 3,
-    category: "Crypto",
+    category: "DeFi",
     title: "DeFi Masterclass",
     level: "Advanced",
     duration: "12h",
-    students: "5,100",
+    students: "5.1K",
     rating: "4.9",
+    gradient: "from-emerald-400 to-cyan-500",
   },
   {
     id: 4,
     category: "AI",
-    title: "AI & Machine Learning Basics",
+    title: "AI and Machine Learning Basics",
     level: "Beginner",
     duration: "8h",
-    students: "15,600",
+    students: "15.6K",
     rating: "4.7",
+    gradient: "from-amber-300 to-orange-500",
+  },
+];
+
+const streamBlueprints = [
+  "Adaptive curriculum planning",
+  "Live AI host with room context",
+  "Organic attendance weighting",
+  "Creator payout forecasting",
+];
+
+const pricingPlans = [
+  {
+    name: "Starter",
+    price: "$0",
+    description: "Explore the academy and join community streams.",
+    features: ["3 courses", "Community access", "Basic AI tutor"],
+  },
+  {
+    name: "Pro",
+    price: "$10",
+    description: "Full CCWEB learning, streaming, and token rewards.",
+    featured: true,
+    features: ["All courses", "Unlimited AI tutor", "Earn tokens", "Certificates"],
+  },
+  {
+    name: "Studio",
+    price: "$35",
+    description: "Launch team cohorts and AI-hosted workshops.",
+    features: ["Team rooms", "Revenue analytics", "API access"],
   },
 ];
 
@@ -68,6 +138,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
+          <Route path="automation" element={<AutomationHubPage />} />
           <Route path="courses" element={<CoursesPage />} />
           <Route path="courses/:id" element={<CourseNotFoundPage />} />
           <Route path="ai-tutor" element={<AiTutorPage />} />
@@ -78,8 +149,8 @@ function App() {
           <Route path="ai-agents" element={<AiAgentsPage />} />
           <Route path="earn" element={<EarnPage />} />
           <Route path="pricing" element={<PricingPage />} />
-          <Route path="tokens" element={<Navigate to="/earn" replace />} />
-          <Route path="affiliates" element={<Navigate to="/earn" replace />} />
+          <Route path="tokens" element={<TokensPage />} />
+          <Route path="affiliates" element={<AffiliatesPage />} />
           <Route path="community" element={<CommunityPage />} />
           <Route path="blog" element={<BlogPage />} />
           <Route path="about" element={<AboutPage />} />
@@ -97,48 +168,116 @@ function App() {
 }
 
 function Layout() {
+  const [theme, setTheme] = useState("dark");
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    document.documentElement.style.colorScheme = theme;
+  }, [theme]);
+
   return (
-    <div className="site-shell">
-      <header className="navbar">
-        <div className="container navbar-content">
-          <Link to="/" className="brand">
-            <span className="brand-bolt">⚡</span>
-            CHRISCCWEB
+    <div className="min-h-screen overflow-hidden bg-slate-50 text-slate-950 transition-colors duration-500 dark:bg-[#030711] dark:text-white">
+      <div className="pointer-events-none fixed inset-0 -z-10">
+        <div className="absolute left-1/2 top-0 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-cyan-400/20 blur-3xl dark:bg-cyan-400/10" />
+        <div className="absolute right-[-8rem] top-32 h-[28rem] w-[28rem] rounded-full bg-violet-500/20 blur-3xl dark:bg-violet-500/10" />
+        <div className="absolute bottom-[-12rem] left-[-8rem] h-[28rem] w-[28rem] rounded-full bg-emerald-400/20 blur-3xl dark:bg-emerald-400/10" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(15,23,42,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,.08)_1px,transparent_1px)] bg-[size:72px_72px] opacity-40 dark:bg-[linear-gradient(rgba(148,163,184,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.08)_1px,transparent_1px)]" />
+      </div>
+
+      <header className="sticky top-0 z-50 border-b border-slate-900/10 bg-white/75 backdrop-blur-2xl dark:border-white/10 dark:bg-[#030711]/75">
+        <div className="mx-auto flex min-h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link to="/" className="group flex items-center gap-3" onClick={() => setMenuOpen(false)}>
+            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-slate-950 text-cyan-300 shadow-lg shadow-cyan-500/20 transition-transform group-hover:scale-105 dark:bg-white dark:text-slate-950">
+              <Command className="h-5 w-5" />
+            </span>
+            <span>
+              <span className="block text-sm font-black tracking-[0.24em]">CCWEB</span>
+              <span className="block text-xs text-slate-500 dark:text-slate-400">AI streaming OS</span>
+            </span>
           </Link>
-          <nav className="nav-links">
+
+          <nav className="hidden items-center rounded-full border border-slate-900/10 bg-white/70 p-1 shadow-sm dark:border-white/10 dark:bg-white/5 lg:flex">
             {navItems.map((item) => (
               <NavLink
                 key={item.label}
                 to={item.to}
                 className={({ isActive }) =>
-                  `nav-link${isActive ? " active" : ""}`
+                  `rounded-full px-3 py-2 text-sm font-medium transition ${
+                    isActive
+                      ? "bg-slate-950 text-white shadow-lg shadow-slate-950/10 dark:bg-white dark:text-slate-950"
+                      : "text-slate-600 hover:bg-slate-900/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+                  }`
                 }
               >
                 {item.label}
               </NavLink>
             ))}
           </nav>
-          <div className="nav-cta">
-            <NavLink to="/login" className="nav-link">
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="grid h-10 w-10 place-items-center rounded-full border border-slate-900/10 bg-white/70 text-slate-700 transition hover:scale-105 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+              onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+              aria-label="Toggle color mode"
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+            <Link to="/login" className="hidden rounded-full px-4 py-2 text-sm font-semibold text-slate-600 transition hover:text-slate-950 dark:text-slate-300 dark:hover:text-white sm:inline-flex">
               Login
-            </NavLink>
-            <Link to="/signup" className="btn btn-primary">
-              Get Started
             </Link>
+            <Link to="/signup" className="hidden rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white shadow-xl shadow-slate-950/15 transition hover:-translate-y-0.5 hover:shadow-cyan-500/20 dark:bg-white dark:text-slate-950 sm:inline-flex">
+              Get started
+            </Link>
+            <button
+              type="button"
+              className="grid h-10 w-10 place-items-center rounded-full border border-slate-900/10 bg-white/70 dark:border-white/10 dark:bg-white/5 lg:hidden"
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-label="Open navigation"
+            >
+              {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
           </div>
         </div>
+
+        {menuOpen ? (
+          <motion.nav
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mx-4 mb-4 grid gap-2 rounded-3xl border border-slate-900/10 bg-white/95 p-3 shadow-2xl dark:border-white/10 dark:bg-slate-950/95 lg:hidden"
+          >
+            {navItems.map((item) => (
+              <NavLink
+                key={item.label}
+                to={item.to}
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) =>
+                  `rounded-2xl px-4 py-3 text-sm font-semibold ${
+                    isActive
+                      ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950"
+                      : "text-slate-600 dark:text-slate-300"
+                  }`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </motion.nav>
+        ) : null}
       </header>
 
-      <main className="main-content">
-        <div className="container">
-          <Outlet />
-        </div>
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+        <Outlet />
       </main>
 
-      <footer className="footer">
-        <div className="container">
-          © {new Date().getFullYear()} Chrisccwebfoundation ·{" "}
-          <Link to="/contact">Contact</Link> · <Link to="/dashboard">Dashboard</Link>
+      <footer className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-4 rounded-[2rem] border border-slate-900/10 bg-white/60 p-5 text-sm text-slate-500 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+          <span>© {new Date().getFullYear()} Chrisccwebfoundation. Built for live AI learning.</span>
+          <div className="flex gap-4">
+            <Link to="/contact" className="hover:text-slate-950 dark:hover:text-white">Contact</Link>
+            <Link to="/dashboard" className="hover:text-slate-950 dark:hover:text-white">Dashboard</Link>
+          </div>
         </div>
       </footer>
     </div>
@@ -147,158 +286,166 @@ function Layout() {
 
 function HomePage() {
   return (
-    <section className="hero">
-      <span className="pill">AI-Powered Web3 Academy &amp; Business Engine</span>
-      <h1 className="hero-title">
-        <span className="accent-cyan">Learn.</span>{" "}
-        <span className="accent-violet">Find.</span>
-        <br />
-        <span className="accent-green">Build.</span>{" "}
-        <span className="accent-cyan">Earn.</span>
-      </h1>
-      <p className="hero-subtitle">
-        CCWEB combines AI-powered education, crypto intelligence, decentralized app
-        deployment, and real revenue streams — all in one platform.
-      </p>
-      <div className="hero-actions">
-        <Link to="/signup" className="btn btn-primary">
-          Get Started Free
-        </Link>
-        <Link to="/find" className="btn btn-outline">
-          Explore Intelligence
-        </Link>
-      </div>
-      <div className="stats-grid">
-        <StatCard value="50K+" label="Learners" />
-        <StatCard value="200+" label="AI Courses" />
-        <StatCard value="8" label="DApp Templates" />
-        <StatCard value="99.9%" label="Uptime" />
-      </div>
+    <div className="space-y-10">
+      <section className="grid items-center gap-8 pt-6 lg:grid-cols-[1.05fr_.95fr] lg:pt-10">
+        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+          <Pill icon={Sparkles}>AI native academy and streaming platform</Pill>
+          <h1 className="mt-6 max-w-4xl text-5xl font-black tracking-tight text-slate-950 dark:text-white sm:text-6xl lg:text-7xl">
+            Learn, stream, and earn with an AI-powered Web3 campus.
+          </h1>
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">
+            CCWEB combines adaptive crypto and AI courses, live AI hosts, revenue sharing, and learner communities in one modern operating system.
+          </p>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <ButtonLink to="/ai-streaming" variant="primary">
+              Launch stream studio <ArrowRight className="h-4 w-4" />
+            </ButtonLink>
+            <ButtonLink to="/courses" variant="secondary">
+              Browse learning paths
+            </ButtonLink>
+          </div>
+        </motion.div>
 
-      <div className="pillars-grid">
-        <Link to="/courses" className="pillar-card pillar-learn">
-          <div className="pillar-icon">🧠</div>
-          <h3>LEARN</h3>
-          <p>AI-powered academy with live streaming sessions, adaptive tutoring, quizzes, and session memory.</p>
-          <span className="pillar-link">Explore Courses →</span>
-        </Link>
-        <Link to="/find" className="pillar-card pillar-find">
-          <div className="pillar-icon">🔍</div>
-          <h3>FIND</h3>
-          <p>Crypto Safety Scanner, Early Signals Dashboard, Smart Money Tracking, and narrative detection.</p>
-          <span className="pillar-link">View Intelligence →</span>
-        </Link>
-        <Link to="/dapp-builder" className="pillar-card pillar-build">
-          <div className="pillar-icon">🏗️</div>
-          <h3>BUILD</h3>
-          <p>DApp Builder, AI Agents, Business Automation Hub, and workflow operator system.</p>
-          <span className="pillar-link">Start Building →</span>
-        </Link>
-        <Link to="/earn" className="pillar-card pillar-earn">
-          <div className="pillar-icon">💰</div>
-          <h3>EARN</h3>
-          <p>Affiliate revenue, streaming income, referral commissions, and skill-based payouts.</p>
-          <span className="pillar-link">Start Earning →</span>
-        </Link>
-      </div>
-    </section>
-  );
-}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.7, delay: 0.1 }}
+          className="relative"
+        >
+          <div className="absolute inset-4 rounded-[2.5rem] bg-gradient-to-tr from-cyan-400/30 via-violet-500/30 to-emerald-400/30 blur-3xl" />
+          <GlassCard className="relative overflow-hidden p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Live cohort</p>
+                <h2 className="mt-2 text-2xl font-black">AI Web3 Fundamentals</h2>
+              </div>
+              <span className="flex items-center gap-2 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-500">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" /> Live
+              </span>
+            </div>
+            <div className="mt-6 aspect-video rounded-[2rem] border border-white/20 bg-slate-950 p-4 shadow-2xl dark:bg-black">
+              <div className="flex h-full flex-col justify-between rounded-[1.4rem] bg-[radial-gradient(circle_at_35%_20%,rgba(34,211,238,.35),transparent_30%),radial-gradient(circle_at_80%_30%,rgba(168,85,247,.3),transparent_30%),linear-gradient(135deg,#07111f,#111827)] p-5 text-white">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs backdrop-blur">
+                    <Radio className="h-3.5 w-3.5 text-cyan-300" /> 1,824 watching
+                  </div>
+                  <Bot className="h-6 w-6 text-cyan-200" />
+                </div>
+                <div>
+                  <p className="text-sm text-cyan-100">Claude-CCWEB-Host</p>
+                  <h3 className="mt-2 text-3xl font-black">Token economics, explained live.</h3>
+                </div>
+              </div>
+            </div>
+            <div className="mt-5 grid grid-cols-3 gap-3">
+              <MiniMetric label="Gross" value="$9.3K" />
+              <MiniMetric label="Creator pool" value="$5.9K" />
+              <MiniMetric label="Completion" value="92%" />
+            </div>
+          </GlassCard>
+        </motion.div>
+      </section>
 
-function StatCard({ value, label }) {
-  return (
-    <article className="stat-card">
-      <div className="stat-value">{value}</div>
-      <div className="muted">{label}</div>
-    </article>
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard icon={Users} label="Students" value="50K+" />
+        <MetricCard icon={BookOpen} label="Course modules" value="200+" />
+        <MetricCard icon={CircleDollarSign} label="Creator earnings" value="$2M+" />
+        <MetricCard icon={Activity} label="Platform uptime" value="99.9%" />
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        {[
+          ["Live AI classrooms", "Spin up AI-hosted rooms with curriculum memory, agenda timing, and attendance logic.", Radio],
+          ["Web3 revenue engine", "Forecast platform share, creator pools, and organic participation rewards before launch.", Coins],
+          ["Learner command center", "Unify courses, tutoring, live streams, token rewards, and community into one experience.", LayoutDashboard],
+        ].map(([title, body, Icon]) => (
+          <GlassCard key={title} className="group p-6 transition duration-300 hover:-translate-y-1">
+            <Icon className="h-7 w-7 text-cyan-500" />
+            <h3 className="mt-5 text-xl font-black">{title}</h3>
+            <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{body}</p>
+          </GlassCard>
+        ))}
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          ["Learn", "Adaptive courses, AI tutoring, quizzes, and live session memory.", "/courses", BrainCircuit],
+          ["Find", "Safety scanning, early signals, smart money, and narrative detection.", "/find", Search],
+          ["Build", "DApp templates, AI agents, and workflow automation tools.", "/dapp-builder", Boxes],
+          ["Earn", "Affiliate income, streaming revenue, skill payouts, and agent rewards.", "/earn", CircleDollarSign],
+        ].map(([title, body, to, Icon]) => (
+          <Link key={title} to={to} className="group rounded-[2rem] border border-slate-900/10 bg-white/70 p-6 shadow-xl shadow-slate-950/[0.04] transition duration-300 hover:-translate-y-1 hover:border-cyan-400/50 dark:border-white/10 dark:bg-white/[0.05]">
+            <Icon className="h-7 w-7 text-cyan-500" />
+            <h3 className="mt-5 text-xl font-black">{title}</h3>
+            <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{body}</p>
+            <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-cyan-500">Open {title} <ChevronRight className="h-4 w-4 transition group-hover:translate-x-1" /></span>
+          </Link>
+        ))}
+      </section>
+    </div>
   );
 }
 
 function CoursesPage() {
   return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">Course Library</h1>
-        <p className="muted">Master crypto and AI at your own pace.</p>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          {["All", "Crypto", "AI", "Trading", "Web3"].map((tag) => (
-            <span key={tag} className="badge">
-              {tag}
-            </span>
-          ))}
-        </div>
-      </header>
-      <div className="course-grid">
-        {courses.map((course) => (
-          <article key={course.id} className="course-card">
-            <span className="badge">{course.category}</span>
-            <h3>{course.title}</h3>
-            <p className="muted">
-              {course.level} · {course.duration}
-            </p>
-            <p className="muted">
-              {course.students} students · {course.rating} rating
-            </p>
-            <Link to={`/courses/${course.id}`} className="btn btn-outline">
-              View Course
-            </Link>
-          </article>
+    <PageShell eyebrow="Course library" title="Structured learning paths for AI, crypto, and Web3." description="Clean tracks, measurable milestones, and cohort-ready lessons built for the streaming studio.">
+      <div className="mb-6 flex flex-wrap gap-2">
+        {["All", "Crypto", "AI", "Trading", "Web3"].map((tag) => (
+          <span key={tag} className="rounded-full border border-slate-900/10 bg-white/60 px-4 py-2 text-sm font-semibold text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+            {tag}
+          </span>
         ))}
       </div>
-      <p className="muted" style={{ marginTop: "1rem" }}>
-        No courses in this category yet.
-      </p>
-    </section>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {courses.map((course) => (
+          <GlassCard key={course.id} className="group overflow-hidden p-5">
+            <div className={`h-2 rounded-full bg-gradient-to-r ${course.gradient}`} />
+            <div className="mt-5 flex items-center justify-between">
+              <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-bold text-white dark:bg-white dark:text-slate-950">{course.category}</span>
+              <span className="flex items-center gap-1 text-sm text-amber-500"><Star className="h-4 w-4 fill-current" /> {course.rating}</span>
+            </div>
+            <h3 className="mt-5 text-xl font-black">{course.title}</h3>
+            <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">{course.level} · {course.duration} · {course.students} learners</p>
+            <Link to={`/courses/${course.id}`} className="mt-6 inline-flex items-center gap-2 text-sm font-bold text-cyan-500">
+              View syllabus <ChevronRight className="h-4 w-4 transition group-hover:translate-x-1" />
+            </Link>
+          </GlassCard>
+        ))}
+      </div>
+    </PageShell>
   );
 }
 
 function CourseNotFoundPage() {
   const { id } = useParams();
   return (
-    <section className="panel">
-      <h1 className="section-title">Course Not Found</h1>
-      <p className="muted">
-        Course {id ? `#${id}` : ""} doesn&apos;t exist or has been removed.
-      </p>
-      <Link to="/courses" className="btn btn-primary">
-        Browse Courses
-      </Link>
-    </section>
+    <PageShell eyebrow="Course details" title="This syllabus is still being prepared." description={`Course ${id ? `#${id}` : ""} is not available yet.`}>
+      <ButtonLink to="/courses" variant="primary">Back to courses</ButtonLink>
+    </PageShell>
   );
 }
 
 function AiTutorPage() {
   return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">AI Tutor</h1>
-        <p className="muted">Powered by AI · 24/7 learning assistant</p>
-      </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>Ask me anything!</h3>
-          <p className="muted">
-            Crypto, blockchain, DeFi, AI — I&apos;m here to help you learn.
-          </p>
-          <ul className="list">
-            <li>Explain blockchain in simple terms</li>
-            <li>What is DeFi and how does it work?</li>
-            <li>How do smart contracts work?</li>
-            <li>Explain proof of stake vs proof of work</li>
-          </ul>
-        </article>
-        <article className="panel">
-          <h3>Modes</h3>
-          <p className="muted">Chat · Quiz Generator</p>
-          <p className="muted">
-            Sign in to save your chat history and learning progress.
-          </p>
-          <Link to="/login" className="btn btn-outline">
-            Sign In
-          </Link>
-        </article>
+    <PageShell eyebrow="AI Tutor" title="A personal learning copilot for every student." description="Use guided prompts, quizzes, and contextual explainers across AI, crypto, blockchain, and business systems.">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <GlassCard className="p-6">
+          <BrainCircuit className="h-8 w-8 text-violet-500" />
+          <h3 className="mt-5 text-xl font-black">Prompt console</h3>
+          <div className="mt-5 space-y-3">
+            {["Explain proof of stake in simple terms", "Generate a smart contract quiz", "Compare DeFi lending risks"].map((prompt) => (
+              <div key={prompt} className="rounded-2xl border border-slate-900/10 bg-slate-100/70 p-4 text-sm dark:border-white/10 dark:bg-white/5">{prompt}</div>
+            ))}
+          </div>
+        </GlassCard>
+        <GlassCard className="p-6">
+          <Sparkles className="h-8 w-8 text-cyan-500" />
+          <h3 className="mt-5 text-xl font-black">Tutor modes</h3>
+          <p className="mt-3 text-slate-600 dark:text-slate-300">Switch between chat, quiz generation, curriculum review, and live stream support.</p>
+          <ButtonLink to="/login" variant="secondary" className="mt-6">Sign in to save history</ButtonLink>
+        </GlassCard>
       </div>
-    </section>
+    </PageShell>
   );
 }
 
@@ -332,60 +479,36 @@ function AiStreamingPage() {
   const [joinError, setJoinError] = useState("");
   const [activeSessionLock, setActiveSessionLock] = useState(null);
 
+  const projectedGross = useMemo(
+    () => Number(payload.expectedAudience || 0) * Number(payload.expectedArppuUsd || 0),
+    [payload.expectedAudience, payload.expectedArppuUsd],
+  );
+  const platformRevenue = useMemo(
+    () => projectedGross * (Number(payload.platformSharePercent || 0) / 100),
+    [payload.platformSharePercent, projectedGross],
+  );
+  const selectedRoom = getSelectedRoom();
+
   function updateField(field, value) {
     setPayload((prev) => ({ ...prev, [field]: value }));
   }
 
   function curriculumToTracks(curriculum) {
     const normalized = curriculum.toLowerCase();
-    if (normalized === "ai") {
-      return ["AI Foundations", "Machine Learning", "Digital Business Systems"];
-    }
-    if (normalized === "blockchain") {
-      return ["Blockchain Fundamentals", "Smart Contracts", "Web3 Product Development"];
-    }
-    if (normalized === "web3") {
-      return ["Web3 Product Development", "Smart Contracts", "Digital Business Systems"];
-    }
-    if (normalized === "crypto") {
-      return ["Crypto Markets", "Blockchain Fundamentals", "Financial Literacy & Human Development"];
-    }
-    if (normalized === "business") {
-      return ["Digital Business Systems", "Financial Literacy & Human Development", "AI Foundations"];
-    }
+    if (normalized === "ai") return ["AI Foundations", "Machine Learning", "Digital Business Systems"];
+    if (normalized === "blockchain") return ["Blockchain Fundamentals", "Smart Contracts", "Web3 Product Development"];
+    if (normalized === "web3") return ["Web3 Product Development", "Smart Contracts", "Digital Business Systems"];
+    if (normalized === "crypto") return ["Crypto Markets", "Blockchain Fundamentals", "Financial Literacy & Human Development"];
+    if (normalized === "business") return ["Digital Business Systems", "Financial Literacy & Human Development", "AI Foundations"];
     return ["Financial Literacy & Human Development", "Digital Business Systems", "AI Foundations"];
   }
 
   function autoDurationForCourseLoad(load) {
-    if (load === "foundation") {
-      return 60;
-    }
-    if (load === "standard") {
-      return 90;
-    }
-    if (load === "advanced") {
-      return 120;
-    }
-    if (load === "intensive") {
-      return 150;
-    }
-    return 180;
+    return { foundation: 60, standard: 90, advanced: 120, intensive: 150 }[load] || 180;
   }
 
   function autoIntervalForCourseLoad(load) {
-    if (load === "foundation") {
-      return 12;
-    }
-    if (load === "standard") {
-      return 15;
-    }
-    if (load === "advanced") {
-      return 20;
-    }
-    if (load === "intensive") {
-      return 25;
-    }
-    return 30;
+    return { foundation: 12, standard: 15, advanced: 20, intensive: 25 }[load] || 30;
   }
 
   function autoAudienceByCapacity(capacity) {
@@ -394,36 +517,16 @@ function AiStreamingPage() {
   }
 
   function autoArppuByCurriculum(curriculum) {
-    const key = curriculum.toLowerCase();
-    if (key === "ai") {
-      return 5.2;
-    }
-    if (key === "blockchain") {
-      return 5.1;
-    }
-    if (key === "web3") {
-      return 4.9;
-    }
-    if (key === "crypto") {
-      return 5.4;
-    }
-    if (key === "business") {
-      return 4.6;
-    }
-    return 4.5;
+    return { ai: 5.2, blockchain: 5.1, web3: 4.9, crypto: 5.4, business: 4.6 }[curriculum.toLowerCase()] || 4.5;
   }
 
   async function loadRooms() {
     try {
       const res = await fetch("/api/streaming/rooms");
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Could not load rooms.");
-      }
+      if (!res.ok) throw new Error(data.error || "Could not load rooms.");
       setRooms(data.rooms || []);
-      if (!selectedRoomId && data.rooms?.length) {
-        setSelectedRoomId(data.rooms[0].id);
-      }
+      if (!selectedRoomId && data.rooms?.length) setSelectedRoomId(data.rooms[0].id);
     } catch (err) {
       setJoinError(err.message);
     }
@@ -434,9 +537,7 @@ function AiStreamingPage() {
   }, []);
 
   function getSelectedRoom() {
-    if (response?.room?.id && response.room.id === selectedRoomId) {
-      return response.room;
-    }
+    if (response?.room?.id && response.room.id === selectedRoomId) return response.room;
     return rooms.find((room) => room.id === selectedRoomId) || response?.room || null;
   }
 
@@ -444,7 +545,6 @@ function AiStreamingPage() {
     setLoading(true);
     setError("");
     try {
-      const expectedGross = Number(payload.expectedAudience) * Number(payload.expectedArppuUsd);
       const res = await fetch("/api/streaming/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -462,26 +562,14 @@ function AiStreamingPage() {
           expectedSessionMinutes: Number(payload.expectedSessionMinutes),
           tutoringIntervalMinutes: Number(payload.tutoringIntervalMinutes),
           agenda: [
-            {
-              title: `${payload.curriculum} foundations`,
-              durationMinutes: Math.round(Number(payload.expectedSessionMinutes) * 0.45),
-            },
-            {
-              title: `${payload.curriculum} practical workshop`,
-              durationMinutes: Math.round(Number(payload.expectedSessionMinutes) * 0.35),
-            },
-            {
-              title: "Live Q&A and recap",
-              durationMinutes: Math.round(Number(payload.expectedSessionMinutes) * 0.2),
-            },
+            { title: `${payload.curriculum} foundations`, durationMinutes: Math.round(Number(payload.expectedSessionMinutes) * 0.45) },
+            { title: `${payload.curriculum} practical workshop`, durationMinutes: Math.round(Number(payload.expectedSessionMinutes) * 0.35) },
+            { title: "Live Q&A and recap", durationMinutes: Math.round(Number(payload.expectedSessionMinutes) * 0.2) },
           ],
         }),
       });
-
       const roomData = await res.json();
-      if (!res.ok) {
-        throw new Error(roomData.error || "Could not create room.");
-      }
+      if (!res.ok) throw new Error(roomData.error || "Could not create room.");
 
       const payoutRes = await fetch("/api/streaming/payouts", {
         method: "POST",
@@ -489,14 +577,12 @@ function AiStreamingPage() {
         body: JSON.stringify({
           roomId: roomData.id,
           periodLabel: "Projected first live cycle",
-          grossRevenueUsd: expectedGross,
+          grossRevenueUsd: projectedGross,
           platformRevenueSharePercent: Number(payload.platformSharePercent),
         }),
       });
       const payoutData = await payoutRes.json();
-      if (!payoutRes.ok) {
-        throw new Error(payoutData.error || "Could not compute payout.");
-      }
+      if (!payoutRes.ok) throw new Error(payoutData.error || "Could not compute payout.");
 
       setResponse({ room: roomData, payout: payoutData });
       setSelectedRoomId(roomData.id);
@@ -531,9 +617,7 @@ function AiStreamingPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        if (data.activeSession) {
-          setActiveSessionLock(data.activeSession);
-        }
+        if (data.activeSession) setActiveSessionLock(data.activeSession);
         throw new Error(data.error || "Could not join this stream.");
       }
       setJoinState(data);
@@ -566,13 +650,9 @@ function AiStreamingPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Could not leave this stream.");
-      }
+      if (!res.ok) throw new Error(data.error || "Could not leave this stream.");
       setJoinState(data);
-      if (selectedRoomId && activeSessionLock?.roomId === selectedRoomId) {
-        setActiveSessionLock(null);
-      }
+      if (selectedRoomId && activeSessionLock?.roomId === selectedRoomId) setActiveSessionLock(null);
       await loadRooms();
     } catch (err) {
       setJoinError(err.message);
@@ -592,24 +672,14 @@ function AiStreamingPage() {
       const res = await fetch(`/api/streaming/rooms/${selectedRoomId}/finish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          finishedBy: "ccweb-stream-studio",
-        }),
+        body: JSON.stringify({ finishedBy: "ccweb-stream-studio" }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Could not finish this stream.");
-      }
+      if (!res.ok) throw new Error(data.error || "Could not finish this stream.");
       await loadRooms();
-      if (response?.room?.id === selectedRoomId) {
-        setResponse((prev) => (prev ? { ...prev, room: data.room } : prev));
-      }
-      setJoinState((prev) =>
-        prev ? { ...prev, metrics: data.room.metrics, roomId: data.room.id } : prev
-      );
-      if (activeSessionLock?.roomId === selectedRoomId) {
-        setActiveSessionLock(null);
-      }
+      if (response?.room?.id === selectedRoomId) setResponse((prev) => (prev ? { ...prev, room: data.room } : prev));
+      setJoinState((prev) => (prev ? { ...prev, metrics: data.room.metrics, roomId: data.room.id } : prev));
+      if (activeSessionLock?.roomId === selectedRoomId) setActiveSessionLock(null);
     } catch (err) {
       setJoinError(err.message);
     } finally {
@@ -617,372 +687,227 @@ function AiStreamingPage() {
     }
   }
 
-  const selectedRoom = getSelectedRoom();
-
   return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">AI Web Streaming</h1>
-        <p className="muted">
-          LiveKit-powered rooms with AI hosts that can tutor across AI, Blockchain, Web3,
-          Crypto, Business, and Finance curricula.
-        </p>
-      </header>
-
-      <div className="card-grid">
-        <article className="panel">
-          <h3>Live room configuration</h3>
-          <div className="auth-row">
-            <label htmlFor="room-title">Room title</label>
-            <input
-              id="room-title"
-              value={payload.roomTitle}
-              onChange={(event) => updateField("roomTitle", event.target.value)}
-            />
-          </div>
-          <div className="auth-row">
-            <label htmlFor="curriculum">Curriculum</label>
-            <select
-              id="curriculum"
-              value={payload.curriculum}
-              onChange={(event) => {
-                const value = event.target.value;
-                updateField("curriculum", value);
-                updateField("expectedArppuUsd", autoArppuByCurriculum(value));
-              }}
-            >
-              <option>AI</option>
-              <option>Blockchain</option>
-              <option>Web3</option>
-              <option>Crypto</option>
-              <option>Business</option>
-              <option>Finance</option>
-            </select>
-          </div>
-          <div className="auth-row">
-            <label htmlFor="course-load">Course load template</label>
-            <select
-              id="course-load"
-              value={payload.courseLoad}
-              onChange={(event) => {
-                const value = event.target.value;
-                updateField("courseLoad", value);
-                updateField("expectedSessionMinutes", autoDurationForCourseLoad(value));
-                updateField("tutoringIntervalMinutes", autoIntervalForCourseLoad(value));
-              }}
-            >
-              <option value="foundation">Foundation load</option>
-              <option value="standard">Standard load</option>
-              <option value="advanced">Advanced load</option>
-              <option value="intensive">Intensive load</option>
-              <option value="marathon">Marathon load</option>
-            </select>
-          </div>
-          <div className="auth-row">
-            <label htmlFor="session-capacity">Session capacity</label>
-            <input
-              id="session-capacity"
-              type="number"
-              min="20"
-              max="10000"
-              value={payload.sessionCapacity}
-              onChange={(event) => {
-                const nextCapacity = event.target.value;
-                updateField("sessionCapacity", nextCapacity);
-                updateField("expectedAudience", autoAudienceByCapacity(nextCapacity));
-              }}
-            />
-          </div>
-          <div className="auth-row">
-            <label htmlFor="host-model">AI host model</label>
-            <input
-              id="host-model"
-              value={payload.hostModel}
-              onChange={(event) => updateField("hostModel", event.target.value)}
-            />
-          </div>
-          <div className="auth-row">
-            <label htmlFor="host-locale">Host locale</label>
-            <input
-              id="host-locale"
-              value={payload.hostLocale}
-              onChange={(event) => updateField("hostLocale", event.target.value)}
-            />
-          </div>
-          <div className="auth-row">
-            <label htmlFor="expected-audience">Expected audience</label>
-            <input
-              id="expected-audience"
-              type="number"
-              min="1"
-              value={payload.expectedAudience}
-              onChange={(event) => updateField("expectedAudience", event.target.value)}
-            />
-          </div>
-          <div className="auth-row">
-            <label htmlFor="arppu">Expected ARPPU (USD)</label>
-            <input
-              id="arppu"
-              type="number"
-              min="0.1"
-              step="0.1"
-              value={payload.expectedArppuUsd}
-              onChange={(event) => updateField("expectedArppuUsd", event.target.value)}
-            />
-          </div>
-          <div className="auth-row">
-            <label htmlFor="platform-share">CCWEB platform share % (35-40)</label>
-            <input
-              id="platform-share"
-              type="number"
-              min="35"
-              max="40"
-              value={payload.platformSharePercent}
-              onChange={(event) => updateField("platformSharePercent", event.target.value)}
-            />
-          </div>
-          <div className="auth-row">
-            <label htmlFor="expected-session-minutes">Expected full session (minutes)</label>
-            <input
-              id="expected-session-minutes"
-              type="number"
-              min="15"
-              max="480"
-              value={payload.expectedSessionMinutes}
-              onChange={(event) => updateField("expectedSessionMinutes", event.target.value)}
-            />
-          </div>
-          <div className="auth-row">
-            <label htmlFor="interval-minutes">Tutor round interval (minutes)</label>
-            <input
-              id="interval-minutes"
-              type="number"
-              min="5"
-              max="90"
-              value={payload.tutoringIntervalMinutes}
-              onChange={(event) => updateField("tutoringIntervalMinutes", event.target.value)}
-            />
-          </div>
-          <button type="button" className="btn btn-primary" onClick={createRoom} disabled={loading}>
-            {loading ? "Creating..." : "Create AI Live Room"}
-          </button>
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={loadRooms}
-            style={{ marginLeft: "0.5rem" }}
-          >
-            Refresh rooms
-          </button>
-          {error ? <p className="muted" style={{ color: "#ff8c8c" }}>{error}</p> : null}
-        </article>
-
-        <article className="panel">
-          <h3>Revenue and capability preview</h3>
-          {!response ? (
-            <p className="muted">
-              Create a room to preview LiveKit session details, curriculum coverage,
-              and organic revenue projections.
+    <div className="space-y-6">
+      <section className="grid gap-5 lg:grid-cols-[1fr_22rem]">
+        <GlassCard className="relative overflow-hidden p-6 sm:p-8">
+          <div className="absolute right-[-8rem] top-[-8rem] h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" />
+          <div className="relative">
+            <Pill icon={Radio}>AI streaming command center</Pill>
+            <h1 className="mt-5 max-w-3xl text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">
+              Launch live AI classrooms with creator-grade revenue intelligence.
+            </h1>
+            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600 dark:text-slate-300">
+              Configure the AI host, curriculum depth, learner capacity, organic participation, and payout model from one responsive studio.
             </p>
-          ) : (
-            <>
-              <div className="auth-row">
-                <label htmlFor="active-room">Select active room</label>
-                <select
-                  id="active-room"
-                  value={selectedRoomId}
-                  onChange={(event) => setSelectedRoomId(event.target.value)}
-                >
-                  {rooms.length ? null : (
-                    <option value={response.room.id}>{response.room.roomName}</option>
-                  )}
-                  {rooms.map((room) => (
-                    <option key={room.id} value={room.id}>
-                      {room.roomName} ({room.status})
-                    </option>
-                  ))}
-                </select>
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <MiniMetric label="Projected gross" value={money(projectedGross)} />
+              <MiniMetric label="CCWEB share" value={money(platformRevenue)} />
+              <MiniMetric label="Creator pool" value={money(projectedGross - platformRevenue)} />
+            </div>
+          </div>
+        </GlassCard>
+        <GlassCard className="p-6">
+          <p className="text-sm font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Room status</p>
+          <div className="mt-5 space-y-4">
+            <StatusRow label="API rooms" value={`${rooms.length} loaded`} />
+            <StatusRow label="Selected room" value={selectedRoom?.status || "Draft"} />
+            <StatusRow label="AI host" value={payload.hostModel} />
+          </div>
+        </GlassCard>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[1.05fr_.95fr]">
+        <GlassCard className="p-5 sm:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-black">Live room builder</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Mobile-first setup for curriculum, AI host, and revenue rules.</p>
+            </div>
+            <Clapperboard className="hidden h-8 w-8 text-cyan-500 sm:block" />
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <Field label="Room title" id="room-title">
+              <Input id="room-title" value={payload.roomTitle} onChange={(event) => updateField("roomTitle", event.target.value)} />
+            </Field>
+            <Field label="Curriculum" id="curriculum">
+              <Select
+                id="curriculum"
+                value={payload.curriculum}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  updateField("curriculum", value);
+                  updateField("expectedArppuUsd", autoArppuByCurriculum(value));
+                }}
+              >
+                {["AI", "Blockchain", "Web3", "Crypto", "Business", "Finance"].map((item) => <option key={item}>{item}</option>)}
+              </Select>
+            </Field>
+            <Field label="Course load" id="course-load">
+              <Select
+                id="course-load"
+                value={payload.courseLoad}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  updateField("courseLoad", value);
+                  updateField("expectedSessionMinutes", autoDurationForCourseLoad(value));
+                  updateField("tutoringIntervalMinutes", autoIntervalForCourseLoad(value));
+                }}
+              >
+                <option value="foundation">Foundation load</option>
+                <option value="standard">Standard load</option>
+                <option value="advanced">Advanced load</option>
+                <option value="intensive">Intensive load</option>
+                <option value="marathon">Marathon load</option>
+              </Select>
+            </Field>
+            <Field label="Session capacity" id="session-capacity">
+              <Input
+                id="session-capacity"
+                type="number"
+                min="20"
+                max="10000"
+                value={payload.sessionCapacity}
+                onChange={(event) => {
+                  const nextCapacity = event.target.value;
+                  updateField("sessionCapacity", nextCapacity);
+                  updateField("expectedAudience", autoAudienceByCapacity(nextCapacity));
+                }}
+              />
+            </Field>
+            <Field label="AI host model" id="host-model">
+              <Input id="host-model" value={payload.hostModel} onChange={(event) => updateField("hostModel", event.target.value)} />
+            </Field>
+            <Field label="Host locale" id="host-locale">
+              <Input id="host-locale" value={payload.hostLocale} onChange={(event) => updateField("hostLocale", event.target.value)} />
+            </Field>
+            <Field label="Expected audience" id="expected-audience">
+              <Input id="expected-audience" type="number" min="1" value={payload.expectedAudience} onChange={(event) => updateField("expectedAudience", event.target.value)} />
+            </Field>
+            <Field label="Expected ARPPU (USD)" id="arppu">
+              <Input id="arppu" type="number" min="0.1" step="0.1" value={payload.expectedArppuUsd} onChange={(event) => updateField("expectedArppuUsd", event.target.value)} />
+            </Field>
+            <Field label="Platform share %" id="platform-share">
+              <Input id="platform-share" type="number" min="35" max="40" value={payload.platformSharePercent} onChange={(event) => updateField("platformSharePercent", event.target.value)} />
+            </Field>
+            <Field label="Session minutes" id="expected-session-minutes">
+              <Input id="expected-session-minutes" type="number" min="15" max="480" value={payload.expectedSessionMinutes} onChange={(event) => updateField("expectedSessionMinutes", event.target.value)} />
+            </Field>
+            <Field label="Tutor interval" id="interval-minutes">
+              <Input id="interval-minutes" type="number" min="5" max="90" value={payload.tutoringIntervalMinutes} onChange={(event) => updateField("tutoringIntervalMinutes", event.target.value)} />
+            </Field>
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <ActionButton onClick={createRoom} disabled={loading}>
+              {loading ? "Creating room..." : "Create AI live room"} <Rocket className="h-4 w-4" />
+            </ActionButton>
+            <ActionButton variant="secondary" onClick={loadRooms}>Refresh rooms</ActionButton>
+          </div>
+          {error ? <Alert tone="error">{error}</Alert> : null}
+        </GlassCard>
+
+        <div className="space-y-5">
+          <GlassCard className="p-5 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-black">Preview and controls</h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Room intelligence, payout math, and attendee actions.</p>
               </div>
-              <p><strong>Room:</strong> {selectedRoom?.roomName || response.room.roomName}</p>
-              <p><strong>LiveKit SID hint:</strong> {selectedRoom?.livekit?.roomSidHint || response.room.livekit.roomSidHint}</p>
-              <p><strong>Status:</strong> {selectedRoom?.status || response.room.status}</p>
-              <p><strong>Topic:</strong> {selectedRoom?.topic || response.room.topic}</p>
-              <p><strong>AI Host:</strong> {selectedRoom?.aiHost?.displayName || response.room.aiHost.displayName}</p>
-              <p><strong>Course load:</strong> {selectedRoom?.configuration?.courseLoad || "standard"}</p>
-              <p><strong>Session capacity:</strong> {selectedRoom?.configuration?.sessionCapacity || payload.sessionCapacity}</p>
-              <p><strong>Starts at:</strong> {selectedRoom?.tutoringSchedule?.startedAt || "TBD"}</p>
-              <p><strong>Estimated end:</strong> {selectedRoom?.tutoringSchedule?.estimatedEndAt || "TBD"}</p>
-              <p>
-                <strong>Expected session:</strong> {selectedRoom?.tutoringSchedule?.expectedSessionMinutes || 0} minutes
-                {" · "}
-                <strong>Tutor interval:</strong> {selectedRoom?.tutoringSchedule?.tutoringIntervalMinutes || 0} minutes
-              </p>
-              <p>
-                <strong>Estimated teaching rounds:</strong>{" "}
-                {selectedRoom?.tutoringSchedule?.estimatedSegments || 0}
-              </p>
-              <p><strong>Platform share:</strong> {response.payout.platformRevenueSharePercent}%</p>
-              <p><strong>Estimated gross:</strong> ${response.payout.grossRevenueUsd}</p>
-              <p><strong>CCWEB revenue:</strong> ${response.payout.platformRevenueUsd}</p>
-              <p><strong>Creator pool:</strong> ${response.payout.creatorRevenueUsd}</p>
-              <p>
-                <strong>Auto capacity utilization:</strong>{" "}
-                {selectedRoom?.monetization?.autoCapacityUtilizationPercent ?? "n/a"}%
-              </p>
-              <p>
-                <strong>Participation weighting:</strong>{" "}
-                {selectedRoom?.monetization?.organicDistributionModel || "watch_minutes_weighted"}
-              </p>
-              <h4 style={{ marginBottom: "0.4rem", marginTop: "1rem" }}>Join/leave session</h4>
-              <div className="auth-row">
-                <label htmlFor="join-user-id">User ID</label>
-                <input
-                  id="join-user-id"
-                  value={joinPayload.userId}
-                  onChange={(event) =>
-                    setJoinPayload((prev) => ({ ...prev, userId: event.target.value }))
-                  }
-                />
+              <BarChart3 className="h-7 w-7 text-emerald-500" />
+            </div>
+
+            {!response ? (
+              <div className="mt-6 rounded-[1.5rem] border border-dashed border-slate-900/20 bg-slate-100/60 p-6 text-sm text-slate-600 dark:border-white/15 dark:bg-white/[0.03] dark:text-slate-300">
+                Create a room to unlock LiveKit details, curriculum coverage, and organic revenue projections.
               </div>
-              <div className="auth-row">
-                <label htmlFor="join-display-name">Display name</label>
-                <input
-                  id="join-display-name"
-                  value={joinPayload.displayName}
-                  onChange={(event) =>
-                    setJoinPayload((prev) => ({ ...prev, displayName: event.target.value }))
-                  }
-                />
+            ) : (
+              <div className="mt-6 space-y-5">
+                <Field label="Active room" id="active-room">
+                  <Select id="active-room" value={selectedRoomId} onChange={(event) => setSelectedRoomId(event.target.value)}>
+                    {rooms.length ? null : <option value={response.room.id}>{response.room.roomName}</option>}
+                    {rooms.map((room) => (
+                      <option key={room.id} value={room.id}>{room.roomName} ({room.status})</option>
+                    ))}
+                  </Select>
+                </Field>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <InfoTile label="Room" value={selectedRoom?.roomName || response.room.roomName} />
+                  <InfoTile label="Status" value={selectedRoom?.status || response.room.status} />
+                  <InfoTile label="LiveKit SID" value={selectedRoom?.livekit?.roomSidHint || response.room.livekit.roomSidHint} />
+                  <InfoTile label="AI Host" value={selectedRoom?.aiHost?.displayName || response.room.aiHost.displayName} />
+                  <InfoTile label="Gross" value={money(response.payout.grossRevenueUsd)} />
+                  <InfoTile label="Creator pool" value={money(response.payout.creatorRevenueUsd)} />
+                </div>
               </div>
-              <div className="auth-row">
-                <label htmlFor="join-watch-minutes">Watch minutes</label>
-                <input
-                  id="join-watch-minutes"
-                  type="number"
-                  min="0"
-                  value={joinPayload.watchMinutes}
-                  onChange={(event) =>
-                    setJoinPayload((prev) => ({ ...prev, watchMinutes: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="auth-row">
-                <label htmlFor="join-is-organic">Organic user</label>
-                <select
-                  id="join-is-organic"
-                  value={joinPayload.isOrganic ? "true" : "false"}
-                  onChange={(event) =>
-                    setJoinPayload((prev) => ({
-                      ...prev,
-                      isOrganic: event.target.value === "true",
-                    }))
-                  }
-                >
+            )}
+          </GlassCard>
+
+          <GlassCard className="p-5 sm:p-6">
+            <h3 className="text-xl font-black">Join session</h3>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <Field label="User ID" id="join-user-id">
+                <Input id="join-user-id" value={joinPayload.userId} onChange={(event) => setJoinPayload((prev) => ({ ...prev, userId: event.target.value }))} />
+              </Field>
+              <Field label="Display name" id="join-display-name">
+                <Input id="join-display-name" value={joinPayload.displayName} onChange={(event) => setJoinPayload((prev) => ({ ...prev, displayName: event.target.value }))} />
+              </Field>
+              <Field label="Watch minutes" id="join-watch-minutes">
+                <Input id="join-watch-minutes" type="number" min="0" value={joinPayload.watchMinutes} onChange={(event) => setJoinPayload((prev) => ({ ...prev, watchMinutes: event.target.value }))} />
+              </Field>
+              <Field label="Organic user" id="join-is-organic">
+                <Select id="join-is-organic" value={joinPayload.isOrganic ? "true" : "false"} onChange={(event) => setJoinPayload((prev) => ({ ...prev, isOrganic: event.target.value === "true" }))}>
                   <option value="true">true</option>
                   <option value="false">false</option>
-                </select>
-              </div>
-              <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
-                <button type="button" className="btn btn-primary" onClick={joinRoom} disabled={joinLoading}>
-                  {joinLoading ? "Joining..." : "Join stream"}
-                </button>
-                <button type="button" className="btn btn-outline" onClick={leaveRoom} disabled={joinLoading}>
-                  Leave stream
-                </button>
-                <button type="button" className="btn btn-outline" onClick={finishRoom} disabled={joinLoading}>
-                  Finish selected room
-                </button>
-              </div>
-              {activeSessionLock ? (
-                <div className="stream-lock-box">
-                  <p><strong>Active session lock:</strong> {activeSessionLock.roomName}</p>
-                  <p>
-                    You must leave or finish that session before joining another one.
-                  </p>
-                  <p className="muted">
-                    Estimated end: {activeSessionLock.estimatedEndAt || "Not available"}
-                  </p>
-                </div>
-              ) : null}
-              {joinError ? <p className="muted" style={{ color: "#ff8c8c" }}>{joinError}</p> : null}
-              {joinState ? (
-                <div className="stream-session-box">
-                  <p><strong>Session room:</strong> {joinState.roomId}</p>
-                  <p><strong>User active:</strong> {joinState.attendance?.isActive ? "yes" : "no"}</p>
-                  <p><strong>Active attenders:</strong> {joinState.metrics?.activeAttenders ?? 0}</p>
-                  <p><strong>Active organic attenders:</strong> {joinState.metrics?.activeOrganicAttenders ?? 0}</p>
-                </div>
-              ) : null}
-              <h4 style={{ marginBottom: "0.4rem" }}>AI host curriculum coverage</h4>
-              <ul className="list">
-                {(selectedRoom?.aiHost?.curriculumCoverage || response.room.aiHost.curriculumCoverage).map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </>
-          )}
-        </article>
-      </div>
-    </section>
+                </Select>
+              </Field>
+            </div>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <ActionButton onClick={joinRoom} disabled={joinLoading}>{joinLoading ? "Joining..." : "Join stream"}</ActionButton>
+              <ActionButton variant="secondary" onClick={leaveRoom} disabled={joinLoading}>Leave</ActionButton>
+              <ActionButton variant="secondary" onClick={finishRoom} disabled={joinLoading}>Finish</ActionButton>
+            </div>
+            {activeSessionLock ? <Alert tone="warning">Active session lock: {activeSessionLock.roomName}. Leave or finish it before joining another room.</Alert> : null}
+            {joinError ? <Alert tone="error">{joinError}</Alert> : null}
+            {joinState ? (
+              <Alert tone="success">
+                {joinState.attendance?.isActive ? "User joined" : "User left"} · active attenders {joinState.metrics?.activeAttenders ?? 0}
+              </Alert>
+            ) : null}
+          </GlassCard>
+        </div>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {streamBlueprints.map((item, index) => (
+          <GlassCard key={item} className="p-5">
+            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-slate-950 text-white dark:bg-white dark:text-slate-950">{index + 1}</span>
+            <p className="mt-4 font-bold">{item}</p>
+          </GlassCard>
+        ))}
+      </section>
+    </div>
   );
 }
 
 function PricingPage() {
   return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">Pricing</h1>
-        <p className="muted">Invest in your future. Cancel anytime.</p>
-      </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>Free</h3>
-          <p>
-            <strong>$0</strong> forever
-          </p>
-          <ul className="list">
-            <li>3 free courses</li>
-            <li>Community access</li>
-            <li>Basic AI tutor</li>
-          </ul>
-          <Link to="/signup" className="btn btn-outline">
-            Get Started
-          </Link>
-        </article>
-        <article className="panel">
-          <span className="badge">Most Popular</span>
-          <h3>Pro</h3>
-          <p>
-            <strong>$10/month</strong>
-          </p>
-          <ul className="list">
-            <li>All courses</li>
-            <li>Unlimited AI tutor</li>
-            <li>Earn tokens</li>
-            <li>Priority support</li>
-            <li>Certificate of completion</li>
-          </ul>
-          <Link to="/signup" className="btn btn-primary">
-            Subscribe Now
-          </Link>
-        </article>
-        <article className="panel">
-          <h3>Enterprise</h3>
-          <p>
-            <strong>$35/month</strong>
-          </p>
-          <ul className="list">
-            <li>Everything in Pro</li>
-            <li>Team management</li>
-            <li>Custom courses</li>
-            <li>API access</li>
-          </ul>
-          <Link to="/signup" className="btn btn-outline">
-            Contact Sales
-          </Link>
-        </article>
+    <PageShell eyebrow="Pricing" title="Simple plans for learners, creators, and teams." description="Start free, then unlock unlimited tutoring, live rooms, and token rewards.">
+      <div className="grid gap-4 lg:grid-cols-3">
+        {pricingPlans.map((plan) => (
+          <GlassCard key={plan.name} className={`p-6 ${plan.featured ? "ring-2 ring-cyan-400" : ""}`}>
+            {plan.featured ? <Pill icon={Flame}>Most popular</Pill> : null}
+            <h3 className="mt-5 text-2xl font-black">{plan.name}</h3>
+            <p className="mt-2 text-slate-600 dark:text-slate-300">{plan.description}</p>
+            <p className="mt-6 text-4xl font-black">{plan.price}<span className="text-base text-slate-500">/mo</span></p>
+            <ul className="mt-6 space-y-3">
+              {plan.features.map((feature) => <CheckItem key={feature}>{feature}</CheckItem>)}
+            </ul>
+          </GlassCard>
+        ))}
       </div>
-    </section>
+    </PageShell>
   );
 }
 
@@ -995,246 +920,226 @@ function AffiliatesPage() {
 }
 
 function CommunityPage() {
-  return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">Community</h1>
-        <p className="muted">Connect, collaborate, and grow with learners.</p>
-      </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>General Discussion</h3>
-          <p className="muted">8,400 members · 2.1K posts</p>
-        </article>
-        <article className="panel">
-          <h3>Crypto Trading</h3>
-          <p className="muted">5,200 members · 3.4K posts</p>
-        </article>
-        <article className="panel">
-          <h3>AI Projects</h3>
-          <p className="muted">3,100 members · 890 posts</p>
-        </article>
-        <article className="panel">
-          <h3>Study Groups</h3>
-          <p className="muted">2,800 members · 1.2K posts</p>
-        </article>
-      </div>
-    </section>
-  );
+  return <FeaturePage eyebrow="Community" title="A global network of builders, creators, and learners." icon={Globe2} features={["Live peer rooms", "Builder forums", "Weekly AMAs"]} />;
 }
 
 function BlogPage() {
-  return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">Blog</h1>
-        <p className="muted">Insights on crypto, AI, and digital education.</p>
-      </header>
-      <div className="card-grid">
-        <article className="panel">
-          <span className="badge">Crypto · Mar 28, 2026</span>
-          <h3>Understanding Zero-Knowledge Proofs</h3>
-          <p className="muted">
-            ZK proofs are revolutionizing privacy on blockchain.
-          </p>
-        </article>
-        <article className="panel">
-          <span className="badge">AI · Mar 25, 2026</span>
-          <h3>How AI is Transforming Education</h3>
-          <p className="muted">
-            Adaptive learning and personalized tutors are reshaping learning.
-          </p>
-        </article>
-        <article className="panel">
-          <span className="badge">DeFi · Mar 20, 2026</span>
-          <h3>What&apos;s Next for Decentralized Finance?</h3>
-          <p className="muted">
-            DeFi protocols continue to evolve beyond lending and swaps.
-          </p>
-        </article>
-      </div>
-    </section>
-  );
+  return <FeaturePage eyebrow="AI blog" title="Fresh explainers for AI, crypto, markets, and product systems." icon={BookOpen} features={["Research notes", "Course previews", "Founder essays"]} />;
 }
 
 function AboutPage() {
-  return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">About Us</h1>
-        <p className="muted">
-          Chrisccwebfoundation is on a mission to democratize crypto and AI
-          education.
-        </p>
-      </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>Mission</h3>
-          <p className="muted">
-            Make crypto and AI education accessible, affordable, and rewarding.
-          </p>
-        </article>
-        <article className="panel">
-          <h3>Vision</h3>
-          <p className="muted">
-            A world where financial and technical literacy unlocks opportunity.
-          </p>
-        </article>
-      </div>
-    </section>
-  );
+  return <FeaturePage eyebrow="About" title="CCWEB is building a practical AI and Web3 education economy." icon={ShieldCheck} features={["Education first", "Creator owned", "Accessible globally"]} />;
 }
 
 function FaqPage() {
-  const faqs = [
-    "What is Chrisccwebfoundation?",
-    "How do I earn tokens?",
-    "What does the Pro subscription include?",
-    "How does the affiliate program work?",
-    "Is the AI tutor available 24/7?",
-    "Can I cancel my subscription?",
-  ];
-
   return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">FAQ</h1>
-        <p className="muted">Got questions? We&apos;ve got answers.</p>
-      </header>
-      <article className="panel">
-        <ul className="list">
-          {faqs.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </article>
-    </section>
+    <PageShell eyebrow="FAQ" title="Answers for learners and stream creators." description="Everything you need before joining the CCWEB platform.">
+      <div className="grid gap-4 lg:grid-cols-2">
+        {[
+          ["Can I start free?", "Yes. Starter access includes sample courses, community previews, and limited AI tutor use."],
+          ["Do I need crypto experience?", "No. Beginner tracks explain wallets, tokens, and blockchain concepts step by step."],
+          ["How does streaming revenue work?", "The studio forecasts gross revenue, platform share, and creator pools before a room launches."],
+          ["Can teams use CCWEB?", "Yes. Studio plans support team cohorts, API access, and custom learning systems."],
+        ].map(([question, answer]) => (
+          <GlassCard key={question} className="p-6">
+            <h3 className="text-lg font-black">{question}</h3>
+            <p className="mt-3 text-slate-600 dark:text-slate-300">{answer}</p>
+          </GlassCard>
+        ))}
+      </div>
+    </PageShell>
   );
 }
 
 function LoginPage() {
-  return (
-    <AuthPage
-      title="Welcome Back"
-      subtitle="Sign in to continue learning"
-      action="Sign In"
-      prompt="Don't have an account?"
-      promptHref="/signup"
-      promptLabel="Sign Up"
-    />
-  );
+  return <AuthPage title="Welcome back" cta="Sign in" linkText="Need an account?" linkTo="/signup" />;
 }
 
 function SignupPage() {
-  return (
-    <AuthPage
-      title="Create Account"
-      subtitle="Start learning and earning today"
-      action="Create Account"
-      prompt="Already have an account?"
-      promptHref="/login"
-      promptLabel="Sign In"
-    />
-  );
-}
-
-function AuthPage({ title, subtitle, action, prompt, promptHref, promptLabel }) {
-  return (
-    <section className="auth-card">
-      <h1 className="section-title">{title}</h1>
-      <p className="muted">{subtitle}</p>
-      <div className="auth-row">
-        <label htmlFor="email">Email</label>
-        <input id="email" type="email" placeholder="you@example.com" />
-      </div>
-      <div className="auth-row">
-        <label htmlFor="password">Password</label>
-        <input id="password" type="password" placeholder="••••••••" />
-      </div>
-      <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
-        <button type="button" className="btn btn-primary">
-          {action}
-        </button>
-        <button type="button" className="btn btn-outline">
-          Continue with Google
-        </button>
-      </div>
-      <p className="muted" style={{ marginTop: "1rem" }}>
-        {prompt} <Link to={promptHref}>{promptLabel}</Link>
-      </p>
-    </section>
-  );
+  return <AuthPage title="Create your CCWEB account" cta="Create account" linkText="Already registered?" linkTo="/login" />;
 }
 
 function ContactPage() {
-  return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">Contact</h1>
-        <p className="muted">We&apos;d love to hear from you.</p>
-      </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>Email</h3>
-          <p className="muted">hello@chrisccweb.io</p>
-        </article>
-        <article className="panel">
-          <h3>Discord</h3>
-          <p className="muted">Join Server</p>
-        </article>
-        <article className="panel">
-          <h3>Location</h3>
-          <p className="muted">Worldwide</p>
-          <button type="button" className="btn btn-primary">
-            Send Message
-          </button>
-        </article>
-      </div>
-    </section>
-  );
+  return <FeaturePage eyebrow="Contact" title="Talk to the CCWEB team about cohorts, partnerships, and streaming." icon={Users} features={["Partnerships", "Enterprise cohorts", "Creator onboarding"]} />;
 }
 
 function DashboardPage() {
   return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">Dashboard</h1>
-        <p className="muted">Welcome back! Here&apos;s your learning overview.</p>
-      </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>Plan</h3>
-          <p>Free Plan</p>
-          <p className="muted">Upgrade now</p>
-        </article>
-        <article className="panel">
-          <h3>Courses Enrolled</h3>
-          <p>5</p>
-          <p className="muted">+1 this month</p>
-        </article>
-        <article className="panel">
-          <h3>Tokens Earned</h3>
-          <p>1,250</p>
-          <p className="muted">+180 this week</p>
-        </article>
-        <article className="panel">
-          <h3>Referrals</h3>
-          <p>12</p>
-          <p className="muted">+3 this month</p>
-        </article>
-        <article className="panel">
-          <h3>Affiliate Revenue</h3>
-          <p>$340</p>
-          <p className="muted">+$85 this week</p>
-        </article>
+    <PageShell eyebrow="Dashboard" title="Your learner command center." description="Track course momentum, token progress, and live stream participation.">
+      <div className="grid gap-4 lg:grid-cols-3">
+        <MetricCard icon={GraduationCap} label="Courses active" value="4" />
+        <MetricCard icon={Coins} label="Tokens earned" value="1,280" />
+        <MetricCard icon={Radio} label="Live sessions" value="2" />
       </div>
-      <section className="panel" style={{ marginTop: "1rem" }}>
-        <h3>Continue Learning</h3>
-        <p className="muted">Blockchain Fundamentals · 9/12 lessons · 75%</p>
-        <p className="muted">AI Basics · 4/10 lessons · 40%</p>
-      </section>
-    </section>
+    </PageShell>
   );
+}
+
+function FeaturePage({ eyebrow, title, icon: Icon, features }) {
+  return (
+    <PageShell eyebrow={eyebrow} title={title} description="A focused, responsive product surface designed for the next CCWEB release.">
+      <div className="grid gap-4 lg:grid-cols-[.8fr_1.2fr]">
+        <GlassCard className="grid min-h-72 place-items-center p-8">
+          <div className="grid h-28 w-28 place-items-center rounded-[2rem] bg-gradient-to-br from-cyan-400 to-violet-500 text-white shadow-2xl shadow-cyan-500/20">
+            <Icon className="h-12 w-12" />
+          </div>
+        </GlassCard>
+        <GlassCard className="p-6">
+          <h3 className="text-2xl font-black">Platform highlights</h3>
+          <ul className="mt-6 space-y-4">
+            {features.map((feature) => <CheckItem key={feature}>{feature}</CheckItem>)}
+          </ul>
+        </GlassCard>
+      </div>
+    </PageShell>
+  );
+}
+
+function AuthPage({ title, cta, linkText, linkTo }) {
+  return (
+    <div className="mx-auto max-w-md">
+      <GlassCard className="p-6 sm:p-8">
+        <Pill icon={Lock}>Secure access</Pill>
+        <h1 className="mt-6 text-3xl font-black">{title}</h1>
+        <div className="mt-6 space-y-4">
+          <Field label="Email" id="email"><Input id="email" type="email" placeholder="maya@ccweb.ai" /></Field>
+          <Field label="Password" id="password"><Input id="password" type="password" placeholder="••••••••" /></Field>
+        </div>
+        <ActionButton className="mt-6 w-full">{cta}</ActionButton>
+        <Link to={linkTo} className="mt-5 block text-center text-sm font-semibold text-cyan-500">{linkText}</Link>
+      </GlassCard>
+    </div>
+  );
+}
+
+function PageShell({ eyebrow, title, description, children }) {
+  return (
+    <div className="space-y-8">
+      <motion.header initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl">
+        <Pill icon={Zap}>{eyebrow}</Pill>
+        <h1 className="mt-5 text-4xl font-black tracking-tight sm:text-5xl">{title}</h1>
+        <p className="mt-4 text-base leading-7 text-slate-600 dark:text-slate-300">{description}</p>
+      </motion.header>
+      {children}
+    </div>
+  );
+}
+
+function GlassCard({ children, className = "" }) {
+  return (
+    <motion.article
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45 }}
+      className={`rounded-[2rem] border border-slate-900/10 bg-white/75 shadow-xl shadow-slate-950/[0.04] backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.06] dark:shadow-black/20 ${className}`}
+    >
+      {children}
+    </motion.article>
+  );
+}
+
+function Pill({ children, icon: Icon }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-cyan-600 dark:text-cyan-300">
+      <Icon className="h-3.5 w-3.5" /> {children}
+    </span>
+  );
+}
+
+function ButtonLink({ children, to, variant = "primary", className = "" }) {
+  const base = "inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-black transition duration-300 hover:-translate-y-0.5";
+  const styles = variant === "primary"
+    ? "bg-slate-950 text-white shadow-xl shadow-slate-950/15 hover:shadow-cyan-500/20 dark:bg-white dark:text-slate-950"
+    : "border border-slate-900/10 bg-white/70 text-slate-700 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10";
+  return <Link to={to} className={`${base} ${styles} ${className}`}>{children}</Link>;
+}
+
+function ActionButton({ children, variant = "primary", className = "", ...props }) {
+  const base = "inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-black transition duration-300 disabled:cursor-not-allowed disabled:opacity-60";
+  const styles = variant === "primary"
+    ? "bg-slate-950 text-white shadow-xl shadow-slate-950/15 hover:-translate-y-0.5 dark:bg-white dark:text-slate-950"
+    : "border border-slate-900/10 bg-white/70 text-slate-700 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10";
+  return <button type="button" className={`${base} ${styles} ${className}`} {...props}>{children}</button>;
+}
+
+function MetricCard({ icon: Icon, label, value }) {
+  return (
+    <GlassCard className="p-5">
+      <Icon className="h-6 w-6 text-cyan-500" />
+      <p className="mt-5 text-3xl font-black">{value}</p>
+      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{label}</p>
+    </GlassCard>
+  );
+}
+
+function MiniMetric({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-slate-900/10 bg-slate-100/70 p-4 dark:border-white/10 dark:bg-white/5">
+      <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="mt-1 text-lg font-black">{value}</p>
+    </div>
+  );
+}
+
+function Field({ label, id, children }) {
+  return (
+    <label htmlFor={id} className="block">
+      <span className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-200">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Input(props) {
+  return <input className="w-full rounded-2xl border border-slate-900/10 bg-white/90 px-4 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-cyan-400 focus:ring-4 focus:ring-cyan-400/10 dark:border-white/10 dark:bg-white/5 dark:text-white" {...props} />;
+}
+
+function Select(props) {
+  return <select className="w-full rounded-2xl border border-slate-900/10 bg-white/90 px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-400/10 dark:border-white/10 dark:bg-slate-950 dark:text-white" {...props} />;
+}
+
+function StatusRow({ label, value }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-900/10 bg-slate-100/60 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+      <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
+      <span className="max-w-[11rem] truncate text-sm font-bold">{value}</span>
+    </div>
+  );
+}
+
+function InfoTile({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-slate-900/10 bg-slate-100/60 p-4 dark:border-white/10 dark:bg-white/5">
+      <p className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="mt-2 truncate text-sm font-black">{value}</p>
+    </div>
+  );
+}
+
+function Alert({ children, tone = "success" }) {
+  const styles = {
+    success: "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
+    warning: "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    error: "border-rose-500/25 bg-rose-500/10 text-rose-600 dark:text-rose-300",
+  };
+  return <div className={`mt-4 rounded-2xl border px-4 py-3 text-sm font-semibold ${styles[tone]}`}>{children}</div>;
+}
+
+function CheckItem({ children }) {
+  return (
+    <li className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+      <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500/15 text-emerald-500"><Check className="h-4 w-4" /></span>
+      {children}
+    </li>
+  );
+}
+
+function money(value) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(Number(value) || 0);
 }
 
 function FindPage() {
@@ -2000,5 +1905,6 @@ function DappDashboardPage() {
     </section>
   );
 }
+
 
 export default App;

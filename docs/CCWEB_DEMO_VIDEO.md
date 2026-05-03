@@ -1,42 +1,59 @@
-# CCWEB — ~2 minute demo video (downloadable)
+# CCWEB demo & live preview video
 
-**Latest video title:** CCWEB App Demo — Login to Features (~2 min, 1080p)
+## A) Synthetic slide videos (no real UI)
 
-**Format:** MP4 (H.264), **1920×1080**, **~120 seconds**, `+faststart` (mobile-friendly).  
-**Content:** Title-card walkthrough of **latest work** (login → dashboard → Learn, Find, Build, Earn, token detail, APIs, disclaimer). These are **synthetic slides** for a small file size; for a full **screen recording** of the live UI, capture locally using `docs/DEMO_VIDEO_SCRIPT.md`.
+Small MP4s for instant sharing (title cards only):
+
+| Asset | Direct download |
+|-------|-----------------|
+| Latest slide walkthrough | https://github.com/chrisochei20-star/ccweb-project/releases/download/ccweb-app-demo-latest-2026-05-03/ccweb-app-demo-latest-1080p.mp4 |
+| Earlier slide deck | https://github.com/chrisochei20-star/ccweb-project/releases/download/ccweb-demo-video-2026-05-03/ccweb-demo-2min-1080p.mp4 |
+
+These are **not** screen recordings of the running app.
 
 ---
 
-## Primary — direct download (no login)
+## B) **Real** app recording — `ccweb-preview.mp4` (Playwright)
 
-https://github.com/chrisochei20-star/ccweb-project/releases/download/ccweb-app-demo-latest-2026-05-03/ccweb-app-demo-latest-1080p.mp4
+The repo includes an E2E flow that **records Chromium** while driving the **actual** UI (home → signup → dashboard → Learn → AI Streaming → Find scan → Early Signals → Build → AI Agents → Earn).
 
-**Approx. file size:** ~557 KB (optimized for mobile).
+### Option 1 — GitHub Actions (recommended, no local Node required)
 
-**Release page (preview / context):**  
-https://github.com/chrisochei20-star/ccweb-project/releases/tag/ccweb-app-demo-latest-2026-05-03
+1. Push this repo to GitHub.
+2. Open **Actions** → **“Record CCWEB live preview”** → **Run workflow**.
+3. When the job finishes, open the **`ccweb-live-preview`** artifact and download **`ccweb-preview.mp4`** (plus optional **`ccweb-preview-10s.gif`**).
 
-**QR (opens direct MP4 on phone):**  
-https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=https%3A%2F%2Fgithub.com%2Fchrisochei20-star%2Fccweb-project%2Freleases%2Fdownload%2Fccweb-app-demo-latest-2026-05-03%2Fccweb-app-demo-latest-1080p.mp4
+Workflow file: `.github/workflows/record-preview.yml`
+
+### Option 2 — Local (requires Node 20+)
+
+```bash
+npm ci
+npx playwright install chromium
+CI=1 npm run record:preview
+./scripts/finish-preview-video.sh ./ccweb-preview.mp4
+```
+
+### Option 3 — Docker (if Docker is installed)
+
+```bash
+./scripts/record-preview-docker.sh
+```
+
+---
+
+## After you have `ccweb-preview.mp4`
+
+Attach it to a **GitHub Release** (or Drive / unlisted YouTube). Example stable download pattern:
+
+`https://github.com/<org>/<repo>/releases/download/<tag>/ccweb-preview.mp4`
 
 **Instructions:** Tap the direct link to watch or download on your phone.
 
 ---
 
-## Regenerate the MP4 (maintainers)
+## QR for any public MP4 URL
 
-```bash
-chmod +x scripts/generate-demo-mp4.sh
-./scripts/generate-demo-mp4.sh ./ccweb-app-demo-latest-1080p.mp4
-# then upload to a new GitHub Release asset
-```
+Replace `ENCODED_URL` with URL-encoded link:
 
----
-
-## Legacy asset (older shorter slide deck)
-
-- https://github.com/chrisochei20-star/ccweb-project/releases/download/ccweb-demo-video-2026-05-03/ccweb-demo-2min-1080p.mp4
-
----
-
-**Note:** GitHub serves the file via a redirect to a CDN URL; the **`releases/download/...`** URL is the stable link to share.
+`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=ENCODED_URL`

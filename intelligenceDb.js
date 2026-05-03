@@ -7,6 +7,7 @@ const { MongoClient } = require("mongodb");
 
 const DB_NAME = process.env.MONGODB_DB || "ccweb";
 const COLLECTION = "tracked_wallets";
+const TOKEN_COLLECTION = "tracked_tokens";
 
 let client;
 let connecting;
@@ -78,8 +79,90 @@ async function removeTrackedWallet(address) {
   }
 }
 
+function tokenKey(symbol, chain, contractAddress) {
+  const c = (contractAddress || "").trim().toLowerCase();
+  if (c.startsWith("0x") && c.length === 42) return c;
+  return `${(symbol || "").toUpperCase()}|${(chain || "").toLowerCase()}`;
+}
+
+async function listTrackedTokens() {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+    const col = db.collection(TOKEN_COLLECTION);
+    const rows = await col.find({}).sort({ addedAt: -1 }).limit(100).toArray();
+    return rows.map((r) => ({
+      key: r.key,
+      symbol: r.symbol,
+      chain: r.chain,
+      contractAddress: r.contractAddress || null,
+      addedAt: r.addedAt,
+      alertsEnabled: !!r.alertsEnabled,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function isTokenTracked(key) {
+  try {
+    const db = await getDb();
+    if (!db) return false;
+    const col = db.collection(TOKEN_COLLECTION);
+    const doc = await col.findOne({ key }, { projection: { _id: 1 } });
+    return !!doc;
+  } catch {
+    return false;
+  }
+}
+
+async function addTrackedToken({ symbol, chain, contractAddress, alertsEnabled }) {
+  try {
+    const db = await getDb();
+    if (!db) return { persisted: false, reason: "MONGODB_URI not configured" };
+    const key = tokenKey(symbol, chain, contractAddress);
+    const col = db.collection(TOKEN_COLLECTION);
+    const now = new Date().toISOString();
+    await col.updateOne(
+      { key },
+      {
+        $set: {
+          key,
+          symbol: (symbol || "").toUpperCase(),
+          chain: (chain || "").toLowerCase(),
+          contractAddress: contractAddress || null,
+          alertsEnabled: !!alertsEnabled,
+          updatedAt: now,
+        },
+        $setOnInsert: { addedAt: now },
+      },
+      { upsert: true }
+    );
+    return { persisted: true, key };
+  } catch (e) {
+    return { persisted: false, reason: e.message || "MongoDB error" };
+  }
+}
+
+async function removeTrackedToken(key) {
+  try {
+    const db = await getDb();
+    if (!db) return { removed: false };
+    const col = db.collection(TOKEN_COLLECTION);
+    await col.deleteOne({ key });
+    return { removed: true };
+  } catch {
+    return { removed: false };
+  }
+}
+
 module.exports = {
   listTrackedWallets,
   addTrackedWallet,
   removeTrackedWallet,
+  listTrackedTokens,
+  addTrackedToken,
+  removeTrackedToken,
+  isTokenTracked,
+  tokenKey,
 };

@@ -1,59 +1,40 @@
 # CCWEB demo & live preview video
 
-## A) Synthetic slide videos (no real UI)
+## Live app screen recording (Playwright) — **recommended**
 
-Small MP4s for instant sharing (title cards only):
+**Video title:** CCWEB App Live Preview (Playwright capture)
 
-| Asset | Direct download |
-|-------|-----------------|
-| Latest slide walkthrough | https://github.com/chrisochei20-star/ccweb-project/releases/download/ccweb-app-demo-latest-2026-05-03/ccweb-app-demo-latest-1080p.mp4 |
-| Earlier slide deck | https://github.com/chrisochei20-star/ccweb-project/releases/download/ccweb-demo-video-2026-05-03/ccweb-demo-2min-1080p.mp4 |
+Real Chromium recording of the current UI: home → signup → dashboard → Learn → AI Streaming → Find (ETH scan) → Early Signals → token detail → Build → AI Agents → Earn → Community → home.
 
-These are **not** screen recordings of the running app.
+### Direct download (MP4, H.264, 1080p, no login)
 
----
+https://github.com/chrisochei20-star/ccweb-project/releases/download/ccweb-live-preview-2026-05-03/ccweb-preview.mp4
 
-## B) **Real** app recording — `ccweb-preview.mp4` (Playwright)
+**Stream / release page:**  
+https://github.com/chrisochei20-star/ccweb-project/releases/tag/ccweb-live-preview-2026-05-03
 
-The repo includes an E2E flow that **records Chromium** while driving the **actual** UI (home → signup → dashboard → Learn → AI Streaming → Find scan → Early Signals → Build → AI Agents → Earn).
+**Approx. duration:** ~2 min 17 sec · **File size:** ~5.4 MB
 
-### Option 1 — GitHub Actions (recommended, no local Node required)
+**10-second GIF preview:**  
+https://github.com/chrisochei20-star/ccweb-project/releases/download/ccweb-live-preview-2026-05-03/ccweb-preview-10s.gif
 
-1. Push this repo to GitHub.
-2. Open **Actions** → **“Record CCWEB live preview”** → **Run workflow**.
-3. When the job finishes, open the **`ccweb-live-preview`** artifact and download **`ccweb-preview.mp4`** (plus optional **`ccweb-preview-10s.gif`**).
-
-Workflow file: `.github/workflows/record-preview.yml`
-
-### Option 2 — Local (requires Node 20+)
-
-```bash
-npm ci
-npx playwright install chromium
-CI=1 npm run record:preview
-./scripts/finish-preview-video.sh ./ccweb-preview.mp4
-```
-
-### Option 3 — Docker (if Docker is installed)
-
-```bash
-./scripts/record-preview-docker.sh
-```
-
----
-
-## After you have `ccweb-preview.mp4`
-
-Attach it to a **GitHub Release** (or Drive / unlisted YouTube). Example stable download pattern:
-
-`https://github.com/<org>/<repo>/releases/download/<tag>/ccweb-preview.mp4`
+**QR (direct MP4):**  
+https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=https%3A%2F%2Fgithub.com%2Fchrisochei20-star%2Fccweb-project%2Freleases%2Fdownload%2Fccweb-live-preview-2026-05-03%2Fccweb-preview.mp4
 
 **Instructions:** Tap the direct link to watch or download on your phone.
 
+**Regenerate locally:** `npm run record:preview` then `./scripts/finish-preview-video.sh ./ccweb-preview.mp4`  
+**CI:** run workflow **Record CCWEB live preview** (requires `workflow` permission on the token).
+
 ---
 
-## QR for any public MP4 URL
+## Synthetic slide videos (not real UI)
 
-Replace `ENCODED_URL` with URL-encoded link:
+| Asset | Direct download |
+|-------|-----------------|
+| Slide walkthrough | https://github.com/chrisochei20-star/ccweb-project/releases/download/ccweb-app-demo-latest-2026-05-03/ccweb-app-demo-latest-1080p.mp4 |
+| Older slides | https://github.com/chrisochei20-star/ccweb-project/releases/download/ccweb-demo-video-2026-05-03/ccweb-demo-2min-1080p.mp4 |
 
-`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=ENCODED_URL`
+---
+
+**Note:** GitHub may 302 to a CDN URL; the `releases/download/...` path is the stable bookmark.

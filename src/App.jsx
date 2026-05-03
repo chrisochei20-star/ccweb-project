@@ -6,12 +6,15 @@ import {
   Outlet,
   Route,
   Routes,
+  useNavigate,
+  useOutletContext,
   useParams,
   useSearchParams,
 } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { EarlySignalsDashboard } from "./EarlySignalsDashboard";
 import { TokenDetailPage } from "./TokenDetailPage";
+import { fetchMe, getSessionToken, getStoredUser, logoutApi, setSession } from "./session";
 
 const navItems = [
   { label: "Home", to: "/" },
@@ -96,8 +99,11 @@ function App() {
           <Route path="login" element={<LoginPage />} />
           <Route path="signup" element={<SignupPage />} />
           <Route path="contact" element={<ContactPage />} />
+          <Route path="privacy" element={<PrivacyPage />} />
+          <Route path="terms" element={<TermsPage />} />
           <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="profile" element={<Navigate to="/login" replace />} />
+          <Route path="profile" element={<ProfilePage />} />
+          <Route path="forgot-password" element={<ForgotPasswordPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
@@ -106,6 +112,26 @@ function App() {
 }
 
 function Layout() {
+  const [user, setUser] = useState(() => getStoredUser());
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const u = await fetchMe();
+      if (!cancelled) setUser(u);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleLogout() {
+    await logoutApi();
+    setUser(null);
+    navigate("/");
+  }
+
   return (
     <div className="site-shell">
       <header className="navbar">
@@ -128,19 +154,38 @@ function Layout() {
             ))}
           </nav>
           <div className="nav-cta">
-            <NavLink to="/login" className="nav-link">
-              Login
-            </NavLink>
-            <Link to="/signup" className="btn btn-primary">
-              Get Started
-            </Link>
+            {user ? (
+              <>
+                <span className="nav-link" style={{ cursor: "default", opacity: 0.9 }}>
+                  {user.displayName}
+                </span>
+                <NavLink to="/dashboard" className="nav-link">
+                  Dashboard
+                </NavLink>
+                <NavLink to="/profile" className="nav-link">
+                  Profile
+                </NavLink>
+                <button type="button" className="btn btn-outline" onClick={handleLogout}>
+                  Log out
+                </button>
+              </>
+            ) : (
+              <>
+                <NavLink to="/login" className="nav-link">
+                  Login
+                </NavLink>
+                <Link to="/signup" className="btn btn-primary">
+                  Get Started
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
 
       <main className="main-content">
         <div className="container">
-          <Outlet />
+          <Outlet context={{ user, setUser }} />
         </div>
       </main>
 
@@ -148,6 +193,10 @@ function Layout() {
         <div className="container">
           © {new Date().getFullYear()} Chrisccwebfoundation ·{" "}
           <Link to="/contact">Contact</Link> · <Link to="/dashboard">Dashboard</Link>
+          {" · "}
+          <Link to="/privacy">Privacy</Link>
+          {" · "}
+          <Link to="/terms">Terms</Link>
         </div>
       </footer>
     </div>
@@ -1122,54 +1171,224 @@ function FaqPage() {
 }
 
 function LoginPage() {
+  const { setUser } = useOutletContext();
   return (
     <AuthPage
+      mode="login"
       title="Welcome Back"
       subtitle="Sign in to continue learning"
       action="Sign In"
       prompt="Don't have an account?"
       promptHref="/signup"
       promptLabel="Sign Up"
+      setUser={setUser}
     />
   );
 }
 
 function SignupPage() {
+  const { setUser } = useOutletContext();
   return (
     <AuthPage
+      mode="signup"
       title="Create Account"
       subtitle="Start learning and earning today"
       action="Create Account"
       prompt="Already have an account?"
       promptHref="/login"
       promptLabel="Sign In"
+      setUser={setUser}
     />
   );
 }
 
-function AuthPage({ title, subtitle, action, prompt, promptHref, promptLabel }) {
+function ForgotPasswordPage() {
+  const [email, setEmail] = useState("");
+  const [token, setToken] = useState("");
+  const [pw, setPw] = useState("");
+  const [step, setStep] = useState("request");
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+
+  async function requestReset() {
+    setErr(null);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/auth/password/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Request failed");
+      setMsg(data.message);
+      if (data.debugToken) setMsg(`${data.message} (dev token: ${data.debugToken})`);
+      setStep("reset");
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  async function doReset() {
+    setErr(null);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/auth/password/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, token, newPassword: pw }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Reset failed");
+      setMsg("Password updated. You can sign in now.");
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  return (
+    <section className="auth-card">
+      <h1 className="section-title">Reset password</h1>
+      <p className="muted">
+        Prototype flow: request a reset, then complete with the token (set{" "}
+        <code>AUTH_DEBUG=1</code> on the API to return a dev token in the response).
+      </p>
+      <div className="auth-row">
+        <label htmlFor="re-email">Email</label>
+        <input
+          id="re-email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+        />
+      </div>
+      {step === "request" && (
+        <button type="button" className="btn btn-primary" onClick={requestReset}>
+          Send reset link (prototype)
+        </button>
+      )}
+      {step === "reset" && (
+        <>
+          <div className="auth-row">
+            <label htmlFor="re-token">Reset token</label>
+            <input id="re-token" value={token} onChange={(e) => setToken(e.target.value)} placeholder="paste token" />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="re-pw">New password</label>
+            <input
+              id="re-pw"
+              type="password"
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+              placeholder="min 8 characters"
+            />
+          </div>
+          <button type="button" className="btn btn-primary" onClick={doReset}>
+            Update password
+          </button>
+        </>
+      )}
+      {msg && <p className="muted" style={{ marginTop: "1rem" }}>{msg}</p>}
+      {err && <p style={{ marginTop: "1rem", color: "#ff6b6b" }}>{err}</p>}
+      <p className="muted" style={{ marginTop: "1rem" }}>
+        <Link to="/login">Back to login</Link>
+      </p>
+    </section>
+  );
+}
+
+function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLabel, setUser }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  async function submit() {
+    setError(null);
+    setLoading(true);
+    try {
+      const path = mode === "signup" ? "/api/auth/register" : "/api/auth/login";
+      const body =
+        mode === "signup"
+          ? { email, password, displayName: displayName.trim() || undefined }
+          : { email, password };
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Authentication failed");
+      setSession(data.token, data.user);
+      setUser(data.user);
+      navigate("/dashboard");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <section className="auth-card">
       <h1 className="section-title">{title}</h1>
       <p className="muted">{subtitle}</p>
+      {mode === "signup" && (
+        <div className="auth-row">
+          <label htmlFor="displayName">Display name</label>
+          <input
+            id="displayName"
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Your name"
+          />
+        </div>
+      )}
       <div className="auth-row">
         <label htmlFor="email">Email</label>
-        <input id="email" type="email" placeholder="you@example.com" />
+        <input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+        />
       </div>
       <div className="auth-row">
         <label htmlFor="password">Password</label>
-        <input id="password" type="password" placeholder="••••••••" />
+        <input
+          id="password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="min 8 characters"
+        />
       </div>
+      {error && <p style={{ color: "#ff6b6b", marginBottom: "0.75rem" }}>{error}</p>}
       <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
-        <button type="button" className="btn btn-primary">
-          {action}
+        <button type="button" className="btn btn-primary" disabled={loading} onClick={submit}>
+          {loading ? "Please wait…" : action}
         </button>
-        <button type="button" className="btn btn-outline">
-          Continue with Google
+        <button type="button" className="btn btn-outline" disabled>
+          Continue with Google (coming soon)
         </button>
       </div>
       <p className="muted" style={{ marginTop: "1rem" }}>
         {prompt} <Link to={promptHref}>{promptLabel}</Link>
+        {mode === "login" && (
+          <>
+            {" · "}
+            <Link to="/forgot-password">Forgot password?</Link>
+          </>
+        )}
+      </p>
+      <p className="muted" style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>
+        Sessions use an in-memory token store on the API server; data resets when the server restarts. Replace with
+        production auth before app store release.
       </p>
     </section>
   );
@@ -1204,11 +1423,28 @@ function ContactPage() {
 }
 
 function DashboardPage() {
+  const { user } = useOutletContext();
+  if (!user) {
+    return (
+      <section>
+        <header className="page-header">
+          <h1 className="section-title">Dashboard</h1>
+          <p className="muted">Sign in to see your personalized overview.</p>
+        </header>
+        <Link to="/login" className="btn btn-primary">
+          Sign in
+        </Link>
+      </section>
+    );
+  }
+
   return (
     <section>
       <header className="page-header">
         <h1 className="section-title">Dashboard</h1>
-        <p className="muted">Welcome back! Here&apos;s your learning overview.</p>
+        <p className="muted">
+          Welcome back, <strong>{user.displayName}</strong>. Here&apos;s your learning overview (prototype data).
+        </p>
       </header>
       <div className="card-grid">
         <article className="panel">
@@ -1242,6 +1478,141 @@ function DashboardPage() {
         <p className="muted">Blockchain Fundamentals · 9/12 lessons · 75%</p>
         <p className="muted">AI Basics · 4/10 lessons · 40%</p>
       </section>
+      <section className="panel" style={{ marginTop: "1rem" }}>
+        <h3>Pillars quick links</h3>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
+          <Link to="/courses" className="btn btn-outline">
+            Learn
+          </Link>
+          <Link to="/find" className="btn btn-outline">
+            Find
+          </Link>
+          <Link to="/dapp-builder" className="btn btn-outline">
+            Build
+          </Link>
+          <Link to="/earn" className="btn btn-outline">
+            Earn
+          </Link>
+          <Link to="/ai-streaming" className="btn btn-outline">
+            AI Streaming
+          </Link>
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function ProfilePage() {
+  const { user, setUser } = useOutletContext();
+  const [displayName, setDisplayName] = useState(user?.displayName || "");
+  const [pushEnabled, setPushEnabled] = useState(user?.pushEnabled !== false);
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    if (user) {
+      setDisplayName(user.displayName || "");
+      setPushEnabled(user.pushEnabled !== false);
+    }
+  }, [user]);
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  async function save() {
+    setErr(null);
+    setMsg(null);
+    const token = getSessionToken();
+    try {
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          displayName: displayName.trim(),
+          pushEnabled,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Save failed");
+      setUser(data);
+      setSession(token, data);
+      setMsg("Profile saved.");
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  return (
+    <section>
+      <header className="page-header">
+        <h1 className="section-title">Profile</h1>
+        <p className="muted">Signed in as {user.email || user.id}</p>
+      </header>
+      <article className="panel" style={{ maxWidth: 480 }}>
+        <div className="auth-row">
+          <label htmlFor="p-name">Display name</label>
+          <input
+            id="p-name"
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+          />
+        </div>
+        <div className="auth-row" style={{ alignItems: "center" }}>
+          <label htmlFor="p-push">Push notifications</label>
+          <input
+            id="p-push"
+            type="checkbox"
+            checked={pushEnabled}
+            onChange={(e) => setPushEnabled(e.target.checked)}
+          />
+        </div>
+        {err && <p style={{ color: "#ff6b6b" }}>{err}</p>}
+        {msg && <p className="muted">{msg}</p>}
+        <button type="button" className="btn btn-primary" style={{ marginTop: "0.75rem" }} onClick={save}>
+          Save changes
+        </button>
+      </article>
+    </section>
+  );
+}
+
+function PrivacyPage() {
+  return (
+    <section>
+      <header className="page-header">
+        <h1 className="section-title">Privacy policy (draft)</h1>
+        <p className="muted">Replace with counsel-reviewed policy before store submission.</p>
+      </header>
+      <article className="panel">
+        <p className="muted">
+          This prototype may process email and usage data in memory on the server you control. For production, document
+          data categories, retention, subprocessors, and user rights (access, deletion, portability) per GDPR/CCPA and
+          store guidelines.
+        </p>
+      </article>
+    </section>
+  );
+}
+
+function TermsPage() {
+  return (
+    <section>
+      <header className="page-header">
+        <h1 className="section-title">Terms of service (draft)</h1>
+        <p className="muted">Replace with counsel-reviewed terms before store submission.</p>
+      </header>
+      <article className="panel">
+        <p className="muted">
+          CCWEB provides educational and tooling prototypes. Crypto and AI features output signals, not financial or
+          legal advice. Users accept risks of volatile markets and experimental software.
+        </p>
+      </article>
     </section>
   );
 }

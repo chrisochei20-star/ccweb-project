@@ -15,8 +15,8 @@ The Vite config proxies `/api` requests to `http://127.0.0.1:3000`. Start the AP
 ### Build
 `npm run build` — outputs to `dist/`. Styling uses **Tailwind CSS v4** (`@tailwindcss/vite`) plus legacy `src/styles.css`.
 
-### Lint / Test
-No lint or test tooling is currently configured in this project (no ESLint, Prettier, Jest, or Vitest). If lint/test scripts are added later, update this section.
+### Test
+`npm test` — runs Vitest unit tests (`tests/*.test.js`).
 
 ### Key API endpoints for verification
 - `GET /api/applicants` — list applicant profiles
@@ -26,6 +26,10 @@ No lint or test tooling is currently configured in this project (no ESLint, Pret
 - `GET /api/intelligence/dashboard` — Early Signals dashboard payload (feed, narratives, risk alerts, smart money)
 - `GET /api/intelligence/stream` — SSE heartbeat (~12s) to trigger client refresh
 - `GET /api/intelligence/token/:slug` — Token detail payload (symbol, `0x` address, or Solana mint in path)
+- `POST /api/auth/register` — Register (email, password, optional displayName); returns Bearer token + user
+- `POST /api/auth/login` — Login; returns Bearer token + user
+- `GET /api/auth/me` — Current user (requires `Authorization: Bearer <token>`)
+- `POST /api/auth/logout` — Invalidate session token
 
 ### Gotchas
 - The `GET /api/streaming/curriculum` endpoint documented in the README returns 404; the curriculum data is embedded in the room creation response instead.

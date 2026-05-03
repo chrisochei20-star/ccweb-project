@@ -433,13 +433,29 @@ function discoverTokens(query) {
   };
 }
 
-function trackWallet(address, action, body) {
+async function trackWallet(address, action, body) {
   const norm = normalizeWalletAddress(address);
   if (!norm) {
     return { error: "Invalid wallet address." };
   }
   const watchlist = body && Array.isArray(body.watchlist) ? body.watchlist : [];
   const alertsEnabled = !!(body && body.alertsEnabled);
+  let persistence = { persisted: false, reason: "not_attempted" };
+  try {
+    const intelligenceDb = require("./intelligenceDb");
+    if ((action || "register") === "register" || action === "add") {
+      persistence = await intelligenceDb.addTrackedWallet(
+        norm,
+        (body && body.label) || "Tracked wallet",
+        alertsEnabled
+      );
+    } else if (action === "remove" || action === "unregister") {
+      const r = await intelligenceDb.removeTrackedWallet(norm);
+      persistence = { persisted: r.removed, reason: r.removed ? "removed" : "not_found" };
+    }
+  } catch (e) {
+    persistence = { persisted: false, reason: e.message };
+  }
   return {
     address: norm,
     action: action || "status",
@@ -447,7 +463,12 @@ function trackWallet(address, action, body) {
     alertsEnabled,
     watchlistCount: watchlist.length,
     lastSyncedAt: new Date().toISOString(),
-    note: "In-memory demo: tracking state resets when the server restarts.",
+    note: persistence.persisted
+      ? "Wallet saved to MongoDB (when MONGODB_URI is set)."
+      : process.env.MONGODB_URI
+        ? "MongoDB configured but persistence step did not confirm."
+        : "MONGODB_URI not set — tracking is session-only until you configure MongoDB.",
+    persistence,
     disclaimer: DISCLAIMER,
   };
 }

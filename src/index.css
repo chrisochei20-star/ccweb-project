@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+/* CCWEB base + Tailwind coexist with legacy styles.css */
+@theme {
+  --color-ccweb-bg: #040a1a;
+  --color-ccweb-card: rgba(10, 19, 40, 0.55);
+  --color-ccweb-border: rgba(117, 160, 214, 0.22);
+  --color-ccweb-cyan: #11d4ff;
+  --color-ccweb-violet: #9159ff;
+  --color-ccweb-green: #23d89f;
+  --color-ccweb-muted: #8ca3c4;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}

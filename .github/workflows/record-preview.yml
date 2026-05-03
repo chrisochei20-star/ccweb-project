@@ -1,0 +1,53 @@
+# Records a real Playwright browser session and uploads ccweb-preview.mp4 as an artifact.
+# Trigger: Actions → "Record CCWEB live preview" → Run workflow
+name: Record CCWEB live preview
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Record browser session (video)
+        env:
+          CI: "1"
+        run: npm run record:preview
+
+      - name: Transcode to H.264 MP4 (1080p)
+        run: |
+          chmod +x scripts/finish-preview-video.sh
+          ./scripts/finish-preview-video.sh "$GITHUB_WORKSPACE/ccweb-preview.mp4"
+          ls -lh ccweb-preview.mp4
+
+      - name: Optional 10s GIF preview
+        run: |
+          ffmpeg -y -i ccweb-preview.mp4 -t 10 -vf "fps=10,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" \
+            ccweb-preview-10s.gif
+          ls -lh ccweb-preview-10s.gif
+
+      - name: Upload MP4 + GIF
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccweb-live-preview
+          path: |
+            ccweb-preview.mp4
+            ccweb-preview-10s.gif
+          retention-days: 90

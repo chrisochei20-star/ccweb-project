@@ -11,6 +11,7 @@ import {
 } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { EarlySignalsDashboard } from "./EarlySignalsDashboard";
+import { TokenDetailPage } from "./TokenDetailPage";
 
 const navItems = [
   { label: "Home", to: "/" },
@@ -80,6 +81,7 @@ function App() {
           <Route path="crypto/early-signals" element={<FindPage initialTab="signals" />} />
           <Route path="crypto/wallets" element={<FindPage initialTab="wallets" />} />
           <Route path="early-signals" element={<EarlySignalsDashboard />} />
+          <Route path="token/:slug" element={<TokenDetailPage />} />
           <Route path="dapp-builder" element={<DappBuilderPage />} />
           <Route path="dapp-dashboard" element={<DappDashboardPage />} />
           <Route path="ai-agents" element={<AiAgentsPage />} />
@@ -1657,6 +1659,18 @@ function FindPage({ initialTab = "scanner" }) {
               {scanResult.disclaimer && (
                 <p className="find-disclaimer glass-panel">{scanResult.disclaimer}</p>
               )}
+              <div style={{ marginTop: "1rem" }}>
+                <Link
+                  className="btn btn-primary"
+                  to={
+                    scanResult.contractAddress
+                      ? `/token/${encodeURIComponent(scanResult.contractAddress)}`
+                      : `/token/${encodeURIComponent(scanResult.token)}`
+                  }
+                >
+                  Open full token detail
+                </Link>
+              </div>
             </div>
           )}
         </div>
@@ -1701,7 +1715,12 @@ function FindPage({ initialTab = "scanner" }) {
               <h3>Alpha discovery (new &amp; early liquidity)</h3>
               <div className="find-discover-grid">
                 {discover.tokens.map((t) => (
-                  <article key={t.id} className="panel glass-panel find-discover-card">
+                  <Link
+                    key={t.id}
+                    to={`/token/${encodeURIComponent(t.symbol)}`}
+                    className="panel glass-panel find-discover-card"
+                    style={{ textDecoration: "none", color: "inherit", display: "block" }}
+                  >
                     <div className="find-discover-head">
                       <strong>{t.symbol}</strong>
                       <span className="badge">{t.network}</span>
@@ -1724,7 +1743,10 @@ function FindPage({ initialTab = "scanner" }) {
                       ))}
                     </div>
                     <p className="muted small-print">{t.dataSourceNote}</p>
-                  </article>
+                    <p className="muted small-print" style={{ marginTop: "0.5rem", color: "var(--brand-cyan)" }}>
+                      Full detail page →
+                    </p>
+                  </Link>
                 ))}
               </div>
             </>

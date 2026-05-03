@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 const trendLabel = {
   warming: "Warming",
@@ -140,9 +141,10 @@ export function EarlySignalsDashboard() {
           </div>
           <div className="space-y-3">
             {items.map((t) => (
-              <article
+              <Link
                 key={t.id}
-                className="rounded-2xl border border-ccweb-border bg-ccweb-card p-4 shadow-lg backdrop-blur-xl sm:p-5"
+                to={`/token/${encodeURIComponent(t.symbol)}`}
+                className="block rounded-2xl border border-ccweb-border bg-ccweb-card p-4 shadow-lg backdrop-blur-xl transition hover:border-ccweb-cyan/40 hover:bg-ccweb-card sm:p-5"
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
@@ -202,7 +204,8 @@ export function EarlySignalsDashboard() {
                     ))}
                   </ul>
                 )}
-              </article>
+                <p className="mt-3 text-xs font-medium text-ccweb-cyan">Open token detail →</p>
+              </Link>
             ))}
           </div>
         </section>

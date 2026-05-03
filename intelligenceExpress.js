@@ -5,6 +5,7 @@
 const express = require("express");
 const earlySignalsEngine = require("./earlySignalsEngine");
 const intelligenceDb = require("./intelligenceDb");
+const { buildTokenDetail } = require("./tokenDetail");
 
 function normalizeAddress(addr) {
   const a = String(addr || "").trim().toLowerCase();
@@ -106,6 +107,53 @@ function createIntelligenceRouter() {
     }
     await intelligenceDb.removeTrackedWallet(address);
     res.json({ ok: true, address });
+  });
+
+  router.get("/token/:slug", async (req, res) => {
+    try {
+      const slug = decodeURIComponent(req.params.slug || "");
+      if (!slug) {
+        res.status(400).json({ error: "Token slug required." });
+        return;
+      }
+      const data = buildTokenDetail(slug);
+      const key = intelligenceDb.tokenKey(data.symbol, data.chain, data.contractAddress);
+      const isTracked = await intelligenceDb.isTokenTracked(key);
+      res.json({ ...data, tracking: { isTracked, key } });
+    } catch (err) {
+      res.status(500).json({ error: err.message || "Token detail failed" });
+    }
+  });
+
+  router.post("/tracked-tokens", express.json(), async (req, res) => {
+    const symbol = String(req.body.symbol || "").trim();
+    const chain = String(req.body.chain || "").trim().toLowerCase();
+    const contractAddress = req.body.contractAddress ? String(req.body.contractAddress).trim() : "";
+    if (!symbol && !(contractAddress.startsWith("0x") && contractAddress.length === 42)) {
+      res.status(400).json({ error: "symbol or contractAddress required." });
+      return;
+    }
+    const result = await intelligenceDb.addTrackedToken({
+      symbol: symbol || "TOKEN",
+      chain: chain || "ethereum",
+      contractAddress: contractAddress || null,
+      alertsEnabled: !!req.body.alertsEnabled,
+    });
+    res.json({
+      ok: true,
+      persistence: result,
+      disclaimer: earlySignalsEngine.DISCLAIMER,
+    });
+  });
+
+  router.delete("/tracked-tokens/:key", async (req, res) => {
+    const key = decodeURIComponent(req.params.key || "");
+    if (!key) {
+      res.status(400).json({ error: "key required." });
+      return;
+    }
+    await intelligenceDb.removeTrackedToken(key);
+    res.json({ ok: true, key });
   });
 
   return router;

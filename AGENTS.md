@@ -25,9 +25,10 @@ No lint or test tooling is currently configured in this project (no ESLint, Pret
 - `GET /api/streaming/rooms` — list active rooms
 - `GET /api/intelligence/dashboard` — Early Signals dashboard payload (feed, narratives, risk alerts, smart money)
 - `GET /api/intelligence/stream` — SSE heartbeat (~12s) to trigger client refresh
+- `GET /api/intelligence/token/:slug` — Token detail payload (symbol, `0x` address, or Solana mint in path)
 
 ### Gotchas
 - The `GET /api/streaming/curriculum` endpoint documented in the README returns 404; the curriculum data is embedded in the room creation response instead.
 - The backend serves both API routes and static files from `/public`. In production mode (`npm start`), it serves the built `dist/` folder.
 - The in-memory data resets on every server restart.
-- Without `MONGODB_URI`, tracked wallets for Early Signals are not persisted (API still returns sample market data).
+- Without `MONGODB_URI`, tracked wallets and tracked tokens are not persisted (API still returns sample market data).

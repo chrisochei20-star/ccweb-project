@@ -14,7 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "record:preview": "playwright test e2e/preview-recording.spec.js --project=chromium",
+    "record:preview": "PW_SLOW_MO=450 CI=1 playwright test e2e/preview-recording.spec.js --project=chromium",
     "mobile:sync": "npm run build && npx cap sync"
   },
   "engines": {

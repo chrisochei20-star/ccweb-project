@@ -18,6 +18,10 @@ The Vite config proxies `/api` requests to `http://127.0.0.1:3000`. Start the AP
 ### Test
 `npm test` — runs Vitest unit tests (`tests/*.test.js`).
 
+### E2E / live preview recording (real browser capture)
+- `npm run record:preview` — Playwright starts API + Vite, drives the UI, and saves video under `test-results/`. Run `./scripts/finish-preview-video.sh ./ccweb-preview.mp4` for H.264 1080p.
+- GitHub Actions: workflow **Record CCWEB live preview** (`.github/workflows/record-preview.yml`) uploads `ccweb-preview.mp4` + a 10s GIF as an artifact.
+
 ### Key API endpoints for verification
 - `GET /api/applicants` — list applicant profiles
 - `POST /api/applicants` — create an applicant (requires `fullName` in body)

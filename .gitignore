@@ -2,6 +2,11 @@ node_modules/
 npm-debug.log*
 dist/
 *.mp4
+ccweb-preview.mp4
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
 .DS_Store
 .env
 .env.local

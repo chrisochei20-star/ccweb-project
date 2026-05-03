@@ -1,6 +1,7 @@
 node_modules/
 npm-debug.log*
 dist/
+*.mp4
 .DS_Store
 .env
 .env.local

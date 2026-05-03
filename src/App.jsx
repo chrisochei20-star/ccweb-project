@@ -49,11 +49,13 @@ import { AutomationHubPage } from "./pages/AutomationHubPage.jsx";
 const navItems = [
   { label: "Home", to: "/" },
   { label: "Automation", to: "/automation" },
-  { label: "Courses", to: "/courses" },
+  { label: "Learn", to: "/courses" },
   { label: "AI Tutor", to: "/ai-tutor" },
   { label: "Streaming", to: "/ai-streaming" },
-  { label: "Pricing", to: "/pricing" },
-  { label: "Tokens", to: "/tokens" },
+  { label: "Find", to: "/find" },
+  { label: "Build", to: "/dapp-builder" },
+  { label: "AI Agents", to: "/ai-agents" },
+  { label: "Earn", to: "/earn" },
   { label: "Community", to: "/community" },
   { label: "Blog", to: "/blog" },
 ];
@@ -141,6 +143,11 @@ function App() {
           <Route path="courses/:id" element={<CourseNotFoundPage />} />
           <Route path="ai-tutor" element={<AiTutorPage />} />
           <Route path="ai-streaming" element={<AiStreamingPage />} />
+          <Route path="find" element={<FindPage />} />
+          <Route path="dapp-builder" element={<DappBuilderPage />} />
+          <Route path="dapp-dashboard" element={<DappDashboardPage />} />
+          <Route path="ai-agents" element={<AiAgentsPage />} />
+          <Route path="earn" element={<EarnPage />} />
           <Route path="pricing" element={<PricingPage />} />
           <Route path="tokens" element={<TokensPage />} />
           <Route path="affiliates" element={<AffiliatesPage />} />
@@ -357,6 +364,22 @@ function HomePage() {
             <h3 className="mt-5 text-xl font-black">{title}</h3>
             <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{body}</p>
           </GlassCard>
+        ))}
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          ["Learn", "Adaptive courses, AI tutoring, quizzes, and live session memory.", "/courses", BrainCircuit],
+          ["Find", "Safety scanning, early signals, smart money, and narrative detection.", "/find", Search],
+          ["Build", "DApp templates, AI agents, and workflow automation tools.", "/dapp-builder", Boxes],
+          ["Earn", "Affiliate income, streaming revenue, skill payouts, and agent rewards.", "/earn", CircleDollarSign],
+        ].map(([title, body, to, Icon]) => (
+          <Link key={title} to={to} className="group rounded-[2rem] border border-slate-900/10 bg-white/70 p-6 shadow-xl shadow-slate-950/[0.04] transition duration-300 hover:-translate-y-1 hover:border-cyan-400/50 dark:border-white/10 dark:bg-white/[0.05]">
+            <Icon className="h-7 w-7 text-cyan-500" />
+            <h3 className="mt-5 text-xl font-black">{title}</h3>
+            <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{body}</p>
+            <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-cyan-500">Open {title} <ChevronRight className="h-4 w-4 transition group-hover:translate-x-1" /></span>
+          </Link>
         ))}
       </section>
     </div>
@@ -889,11 +912,11 @@ function PricingPage() {
 }
 
 function TokensPage() {
-  return <FeaturePage eyebrow="CCWEB Token" title="A utility token for learning, access, rewards, and governance." icon={Wallet} features={["Token-gated cohorts", "Learn and earn quests", "Governance voting", "Staking rewards"]} />;
+  return <Navigate to="/earn" replace />;
 }
 
 function AffiliatesPage() {
-  return <FeaturePage eyebrow="Affiliate program" title="Recurring commissions for creators who grow the CCWEB academy." icon={CircleDollarSign} features={["Instant referral links", "30% recurring commission", "Creator analytics"]} />;
+  return <Navigate to="/earn" replace />;
 }
 
 function CommunityPage() {
@@ -1118,5 +1141,770 @@ function money(value) {
     maximumFractionDigits: 0,
   }).format(Number(value) || 0);
 }
+
+function FindPage() {
+  const [tab, setTab] = useState("scanner");
+  const [scanQuery, setScanQuery] = useState("");
+  const [scanResult, setScanResult] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const [signals, setSignals] = useState([]);
+  const [smartMoney, setSmartMoney] = useState(null);
+  const [loadingSignals, setLoadingSignals] = useState(false);
+  const [loadingSm, setLoadingSm] = useState(false);
+
+  async function doScan() {
+    if (!scanQuery.trim()) return;
+    setScanning(true);
+    setScanResult(null);
+    try {
+      const res = await fetch(`/api/find/scan?token=${encodeURIComponent(scanQuery.trim().toUpperCase())}`);
+      const data = await res.json();
+      setScanResult(data);
+    } catch { /* ignore */ }
+    setScanning(false);
+  }
+
+  async function loadSignals() {
+    setLoadingSignals(true);
+    try {
+      const res = await fetch("/api/find/signals");
+      const data = await res.json();
+      setSignals(data.signals || []);
+    } catch { /* ignore */ }
+    setLoadingSignals(false);
+  }
+
+  async function loadSmartMoney() {
+    setLoadingSm(true);
+    try {
+      const res = await fetch("/api/find/smart-money");
+      const data = await res.json();
+      setSmartMoney(data);
+    } catch { /* ignore */ }
+    setLoadingSm(false);
+  }
+
+  useEffect(() => {
+    if (tab === "signals" && !signals.length) loadSignals();
+    if (tab === "smart-money" && !smartMoney) loadSmartMoney();
+  }, [tab]);
+
+  const scoreColor = (score) => score >= 70 ? "find-score-safe" : score >= 40 ? "find-score-warn" : "find-score-danger";
+
+  return (
+    <section className="find-page">
+      <header className="page-header">
+        <span className="pill">FIND — Discovery &amp; Intelligence</span>
+        <h1 className="section-title">Crypto Intelligence Hub</h1>
+        <p className="muted">Discover opportunities, insights, and risks — before the crowd.</p>
+      </header>
+
+      <div className="dash-tabs">
+        {[["scanner", "Safety Scanner"], ["signals", "Early Signals"], ["smart-money", "Smart Money"]].map(([key, label]) => (
+          <button key={key} className={`dash-tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>{label}</button>
+        ))}
+      </div>
+
+      {tab === "scanner" && (
+        <div className="find-scanner">
+          <div className="panel" style={{ maxWidth: 600 }}>
+            <h3>Crypto Safety Scanner</h3>
+            <p className="muted">Analyze any token for honeypot risk, rug pull indicators, contract verification, and liquidity locks.</p>
+            <div className="find-scan-form">
+              <input type="text" value={scanQuery} onChange={(e) => setScanQuery(e.target.value)} placeholder="Enter token symbol (e.g. ETH, SHIB)" onKeyDown={(e) => e.key === "Enter" && doScan()} />
+              <button className="btn btn-primary" onClick={doScan} disabled={scanning}>{scanning ? "Scanning..." : "Scan Token"}</button>
+            </div>
+          </div>
+          {scanResult && (
+            <div className="find-scan-result panel">
+              <div className="find-scan-header">
+                <h3>{scanResult.name} ({scanResult.token})</h3>
+                <div className={`find-score-badge ${scoreColor(scanResult.score)}`}>{scanResult.score}/100</div>
+              </div>
+              <div className="find-scan-grid">
+                <div className="find-check-item"><span className={scanResult.contractVerified ? "check-pass" : "check-fail"}>{scanResult.contractVerified ? "✓" : "✗"}</span> Contract Verified</div>
+                <div className="find-check-item"><span className={scanResult.liquidityLocked ? "check-pass" : "check-fail"}>{scanResult.liquidityLocked ? "✓" : "✗"}</span> Liquidity Locked</div>
+                <div className="find-check-item"><span className={scanResult.ownershipRenounced ? "check-pass" : "check-fail"}>{scanResult.ownershipRenounced ? "✓" : "✗"}</span> Ownership Renounced</div>
+                <div className="find-check-item"><span>Honeypot Risk:</span> <strong className={scanResult.honeypotRisk === "none" || scanResult.honeypotRisk === "low" ? "check-pass" : "check-fail"}>{scanResult.honeypotRisk}</strong></div>
+                <div className="find-check-item"><span>Rug Pull Risk:</span> <strong className={scanResult.rugPullRisk === "very_low" || scanResult.rugPullRisk === "low" ? "check-pass" : "check-fail"}>{scanResult.rugPullRisk}</strong></div>
+                <div className="find-check-item"><span>Network:</span> <strong>{scanResult.network}</strong></div>
+              </div>
+              {scanResult.flags.length > 0 && (
+                <div className="find-flags"><strong>Flags:</strong> <div className="pill-row">{scanResult.flags.map((f) => (<span key={f} className="tiny-pill find-flag-pill">{f.replace(/_/g, " ")}</span>))}</div></div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "signals" && (
+        <div className="find-signals">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+            <h3 style={{ margin: 0 }}>Early Signals Dashboard</h3>
+            <button className="btn btn-outline btn-sm" onClick={loadSignals} disabled={loadingSignals}>Refresh</button>
+          </div>
+          {loadingSignals && <p className="muted">Loading signals...</p>}
+          <div className="find-signals-grid">
+            {signals.map((sig) => (
+              <article key={sig.id} className="find-signal-card panel">
+                <div className="find-signal-header">
+                  <span className="badge">{sig.type.replace(/_/g, " ")}</span>
+                  <span className="find-confidence">{sig.confidence}%</span>
+                </div>
+                <h4>{sig.title}</h4>
+                <p className="muted">{sig.description}</p>
+                <div className="pill-row">{sig.tokens.map((t) => (<span key={t} className="tiny-pill">{t}</span>))}</div>
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "smart-money" && (
+        <div className="find-smart-money">
+          {loadingSm && <p className="muted">Loading smart money data...</p>}
+          {smartMoney && (
+            <>
+              <h3>Whale Trends</h3>
+              <div className="find-trends-grid">
+                {smartMoney.trends.map((t) => (
+                  <div key={t.token} className="find-trend-card panel">
+                    <strong>{t.token}</strong>
+                    <div className={t.direction === "accumulation" ? "find-trend-up" : "find-trend-down"}>
+                      {t.direction === "accumulation" ? "↑" : "↓"} ${(t.netFlow / 1e6).toFixed(1)}M
+                    </div>
+                    <span className="muted">{t.whaleCount} whales · {t.direction}</span>
+                  </div>
+                ))}
+              </div>
+              <h3 style={{ marginTop: "1.5rem" }}>Smart Money Wallets</h3>
+              <div className="find-wallets-list">
+                {smartMoney.wallets.map((w) => (
+                  <div key={w.address} className="find-wallet-card panel">
+                    <div className="find-wallet-header">
+                      <strong>{w.label}</strong>
+                      <span className="muted">{w.address}</span>
+                    </div>
+                    <div className="find-wallet-stats">
+                      <span>Win: {w.winRate}%</span>
+                      <span>Avg Return: {w.avgReturn}%</span>
+                      <span>Portfolio: ${(w.totalValueUsd / 1e6).toFixed(0)}M</span>
+                    </div>
+                    <div className="find-wallet-moves">
+                      {w.recentMoves.map((m, i) => (
+                        <span key={i} className={`find-move ${m.action === "buy" ? "move-buy" : "move-sell"}`}>
+                          {m.action.toUpperCase()} {m.token} · ${(m.amountUsd / 1e6).toFixed(1)}M
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AiAgentsPage() {
+  const [agents, setAgents] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/build/agents").then((r) => r.json()).then((d) => { setAgents(d.agents || []); setLoading(false); });
+  }, []);
+
+  return (
+    <section>
+      <header className="page-header">
+        <span className="pill">BUILD — AI Agent Operator</span>
+        <h1 className="section-title">AI Agents</h1>
+        <p className="muted">
+          Autonomous agents that run research loops, execute workflows, automate operations, and replace fragmented SaaS tools.
+        </p>
+      </header>
+
+      {loading && <p className="muted">Loading agents...</p>}
+
+      <div className="agents-grid">
+        {agents.map((agent) => (
+          <article key={agent.id} className="agent-card panel">
+            <div className="agent-card-header">
+              <span className={`agent-status ${agent.status === "active" ? "status-active" : ""}`}>{agent.status}</span>
+              <span className="badge">{agent.category}</span>
+            </div>
+            <h3>{agent.name}</h3>
+            <p className="muted">{agent.description}</p>
+            <div className="agent-stats">
+              <span className="agent-stat">{agent.tasksCompleted.toLocaleString()} tasks completed</span>
+            </div>
+            <div className="pill-row">
+              {agent.capabilities.map((cap) => (<span key={cap} className="dapp-feature-tag">{cap}</span>))}
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <section className="panel" style={{ marginTop: "1.5rem" }}>
+        <h3>Workflow Operator System</h3>
+        <p className="muted">The Agent Operator designs workflows, connects tools and data, translates problems into execution, and monitors performance continuously.</p>
+        <div className="card-grid" style={{ marginTop: "0.8rem" }}>
+          <div className="panel"><h4>Design</h4><p className="muted">Visual workflow builder for complex multi-step automations.</p></div>
+          <div className="panel"><h4>Connect</h4><p className="muted">Integrates APIs, data sources, and external tools seamlessly.</p></div>
+          <div className="panel"><h4>Execute</h4><p className="muted">Runs workflows autonomously with error handling and retries.</p></div>
+          <div className="panel"><h4>Optimize</h4><p className="muted">Monitors performance metrics and improves over time.</p></div>
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function EarnPage() {
+  return (
+    <section>
+      <header className="page-header">
+        <span className="pill">EARN — Revenue Streams</span>
+        <h1 className="section-title">Earn With CCWEB</h1>
+        <p className="muted">
+          Multiple revenue streams powered by real utility — no platform token required.
+          Earn through skills, referrals, and participation.
+        </p>
+      </header>
+
+      <div className="card-grid">
+        <article className="panel">
+          <h3>🎓 Affiliate Program</h3>
+          <p className="muted">30% recurring commissions on all referred subscriptions. Share your unique link and earn passive income.</p>
+          <ul className="list">
+            <li>Recurring monthly commissions</li>
+            <li>Real-time tracking dashboard</li>
+            <li>Payout in USDC or fiat</li>
+          </ul>
+          <Link to="/signup" className="btn btn-primary" style={{ marginTop: "0.6rem" }}>Become an Affiliate</Link>
+        </article>
+        <article className="panel">
+          <h3>📡 Streaming Revenue</h3>
+          <p className="muted">Create AI-powered live learning sessions and earn organic revenue share based on attendance and engagement.</p>
+          <ul className="list">
+            <li>63% creator revenue share</li>
+            <li>Watch-time weighted distribution</li>
+            <li>Payout via USDC settlement</li>
+          </ul>
+          <Link to="/ai-streaming" className="btn btn-outline" style={{ marginTop: "0.6rem" }}>Start Streaming</Link>
+        </article>
+        <article className="panel">
+          <h3>🏗️ Skill-Based Income</h3>
+          <p className="muted">Use the Business Engine to match your skills with real client needs. Get paid for completed work through secure escrow.</p>
+          <ul className="list">
+            <li>AI-matched opportunities</li>
+            <li>Secure escrow payments</li>
+            <li>Performance-based bonuses</li>
+          </ul>
+        </article>
+        <article className="panel">
+          <h3>🤖 Agent Rewards</h3>
+          <p className="muted">Deploy AI agents that generate value, optimize workflows, and earn based on measurable outcomes.</p>
+          <ul className="list">
+            <li>Revenue from agent operations</li>
+            <li>Performance-linked payouts</li>
+            <li>Scalable passive income</li>
+          </ul>
+          <Link to="/ai-agents" className="btn btn-outline" style={{ marginTop: "0.6rem" }}>Deploy Agents</Link>
+        </article>
+      </div>
+
+      <section className="panel" style={{ marginTop: "1.5rem" }}>
+        <h3>No Platform Token Required</h3>
+        <p className="muted">
+          All earnings are paid in external tokens (USDC, ETH) or fiat. CCWEB focuses on real utility and
+          measurable value — not token speculation. You earn by contributing real skills, content, and referrals.
+        </p>
+      </section>
+    </section>
+  );
+}
+
+function DappBuilderPage() {
+  const [templates, setTemplates] = useState([]);
+  const [networks, setNetworks] = useState([]);
+  const [prices, setPrices] = useState({});
+  const [deployments, setDeployments] = useState([]);
+  const [step, setStep] = useState("select");
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [selectedNetwork, setSelectedNetwork] = useState("");
+  const [selectedToken, setSelectedToken] = useState("ETH");
+  const [walletAddress, setWalletAddress] = useState("");
+  const [walletConnected, setWalletConnected] = useState(false);
+  const [walletType, setWalletType] = useState("");
+  const [contractName, setContractName] = useState("");
+  const [contractSymbol, setContractSymbol] = useState("");
+  const [deploying, setDeploying] = useState(false);
+  const [deployResult, setDeployResult] = useState(null);
+  const [error, setError] = useState("");
+  const [filterCategory, setFilterCategory] = useState("All");
+
+  useEffect(() => {
+    fetch("/api/dapp/templates").then((r) => r.json()).then((d) => setTemplates(d.templates || []));
+    fetch("/api/dapp/networks").then((r) => r.json()).then((d) => setNetworks(d.networks || []));
+    fetch("/api/dapp/prices").then((r) => r.json()).then((d) => setPrices(d.prices || {}));
+    fetch("/api/dapp/deployments").then((r) => r.json()).then((d) => setDeployments(d.deployments || []));
+  }, []);
+
+  const categories = ["All", ...new Set(templates.map((t) => t.category))];
+  const filteredTemplates = filterCategory === "All" ? templates : templates.filter((t) => t.category === filterCategory);
+
+  const availableNetworks = selectedTemplate
+    ? networks.filter((n) => selectedTemplate.networks.includes(n.id))
+    : networks;
+
+  const currentNetworkInfo = networks.find((n) => n.id === selectedNetwork);
+  const feeUsd = selectedTemplate ? selectedTemplate.baseFeeUsd : 0;
+  const tokenPrice = prices[selectedToken];
+  const feeInToken = tokenPrice ? (feeUsd / tokenPrice.priceUsd).toFixed(6) : "—";
+
+  function connectWallet(type) {
+    const mockAddress = type === "phantom"
+      ? `${crypto.getRandomValues(new Uint8Array(4)).reduce((s, b) => s + b.toString(16).padStart(2, "0"), "")}...sol`
+      : `0x${crypto.getRandomValues(new Uint8Array(20)).reduce((s, b) => s + b.toString(16).padStart(2, "0"), "")}`;
+    setWalletAddress(mockAddress);
+    setWalletConnected(true);
+    setWalletType(type);
+  }
+
+  function disconnectWallet() {
+    setWalletAddress("");
+    setWalletConnected(false);
+    setWalletType("");
+  }
+
+  function selectTemplate(tmpl) {
+    setSelectedTemplate(tmpl);
+    setSelectedNetwork(tmpl.networks[0] || "");
+    setContractName(tmpl.name);
+    setContractSymbol(tmpl.id.toUpperCase().slice(0, 5));
+    setStep("configure");
+    setError("");
+    const net = networks.find((n) => n.id === tmpl.networks[0]);
+    if (net) {
+      setSelectedToken(net.wallet === "phantom" ? "SOL" : "ETH");
+    }
+  }
+
+  function handleNetworkChange(networkId) {
+    setSelectedNetwork(networkId);
+    const net = networks.find((n) => n.id === networkId);
+    if (net?.wallet === "phantom") setSelectedToken("SOL");
+  }
+
+  async function handleDeploy() {
+    if (!walletConnected) { setError("Please connect a wallet first."); return; }
+    if (!selectedNetwork) { setError("Please select a network."); return; }
+    if (!contractName.trim()) { setError("Contract name is required."); return; }
+    if (!contractSymbol.trim()) { setError("Contract symbol is required."); return; }
+
+    setDeploying(true);
+    setError("");
+
+    const idempotencyKey = `${walletAddress}-${selectedTemplate.id}-${selectedNetwork}-${Date.now()}`;
+
+    try {
+      const resp = await fetch("/api/dapp/deploy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateId: selectedTemplate.id,
+          network: selectedNetwork,
+          paymentToken: selectedToken,
+          contractName: contractName.trim(),
+          contractSymbol: contractSymbol.trim().toUpperCase(),
+          walletAddress,
+          parameters: {},
+          idempotencyKey,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { setError(data.error || "Deployment failed."); setDeploying(false); return; }
+      setDeployResult(data);
+      setStep("success");
+      setDeployments((prev) => [data, ...prev]);
+    } catch {
+      setError("Network error. Please try again.");
+    }
+    setDeploying(false);
+  }
+
+  function resetBuilder() {
+    setStep("select");
+    setSelectedTemplate(null);
+    setDeployResult(null);
+    setError("");
+    setContractName("");
+    setContractSymbol("");
+  }
+
+  const tokenOptions = currentNetworkInfo?.wallet === "phantom" ? ["SOL"] : ["ETH", "MATIC", "USDC", "BNB"];
+
+  return (
+    <section className="dapp-builder">
+      <header className="page-header">
+        <span className="pill">Native DApp Builder</span>
+        <h1 className="section-title">Deploy Decentralized Applications</h1>
+        <p className="muted">
+          Build and deploy smart contracts with multi-token payments. Supports Ethereum, Polygon, BNB Chain, and Solana.
+        </p>
+        <div style={{ marginTop: "0.8rem" }}>
+          <Link to="/dapp-dashboard" className="btn btn-outline btn-sm">View Dashboard</Link>
+        </div>
+      </header>
+
+      <div className="dapp-wallet-bar">
+        {walletConnected ? (
+          <div className="dapp-wallet-connected">
+            <span className="dapp-wallet-indicator"></span>
+            <span className="dapp-wallet-label">
+              {walletType === "phantom" ? "Phantom" : "MetaMask"}: <code>{walletAddress.slice(0, 10)}...{walletAddress.slice(-6)}</code>
+            </span>
+            <button className="btn btn-outline btn-sm" onClick={disconnectWallet}>Disconnect</button>
+          </div>
+        ) : (
+          <div className="dapp-wallet-buttons">
+            <span className="muted" style={{ alignSelf: "center", fontSize: "0.85rem" }}>Connect your wallet to begin:</span>
+            <button className="btn btn-outline" onClick={() => connectWallet("metamask")}>
+              🦊 MetaMask
+            </button>
+            <button className="btn btn-outline" onClick={() => connectWallet("phantom")}>
+              👻 Phantom
+            </button>
+          </div>
+        )}
+      </div>
+
+      {step === "select" && (
+        <>
+          <div className="dapp-filter-bar">
+            <h2 className="dapp-step-title" style={{ margin: 0 }}>Choose a Template</h2>
+            <div className="dapp-filter-pills">
+              {categories.map((cat) => (
+                <button key={cat} className={`dapp-filter-pill ${filterCategory === cat ? "active" : ""}`} onClick={() => setFilterCategory(cat)}>{cat}</button>
+              ))}
+            </div>
+          </div>
+          <div className="dapp-template-grid">
+            {filteredTemplates.map((tmpl) => (
+              <article key={tmpl.id} className="dapp-template-card" onClick={() => selectTemplate(tmpl)}>
+                <div className="dapp-template-header">
+                  <span className="badge">{tmpl.category}</span>
+                  <span className="dapp-fee">${tmpl.baseFeeUsd}</span>
+                </div>
+                <h3>{tmpl.name}</h3>
+                <p className="muted">{tmpl.description}</p>
+                <div className="dapp-template-networks">
+                  {tmpl.networks.map((n) => (
+                    <span key={n} className="tiny-pill">{n}</span>
+                  ))}
+                </div>
+                <div className="dapp-template-features">
+                  {tmpl.features.map((f) => (
+                    <span key={f} className="dapp-feature-tag">{f}</span>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+
+      {step === "configure" && selectedTemplate && (
+        <>
+          <button className="btn btn-outline btn-sm" onClick={resetBuilder} style={{ marginBottom: "1rem" }}>← Back to Templates</button>
+          <h2 className="dapp-step-title">Configure & Deploy: {selectedTemplate.name}</h2>
+          <div className="dapp-config-grid">
+            <div className="dapp-config-form panel">
+              <h3>Contract Configuration</h3>
+              <div className="dapp-form-row">
+                <label>Contract Name</label>
+                <input type="text" value={contractName} onChange={(e) => setContractName(e.target.value)} placeholder="My Token" />
+              </div>
+              <div className="dapp-form-row">
+                <label>Symbol</label>
+                <input type="text" value={contractSymbol} onChange={(e) => setContractSymbol(e.target.value.toUpperCase())} placeholder="TKN" maxLength={10} />
+              </div>
+              <div className="dapp-form-row">
+                <label>Network</label>
+                <select value={selectedNetwork} onChange={(e) => handleNetworkChange(e.target.value)}>
+                  {availableNetworks.map((n) => (<option key={n.id} value={n.id}>{n.name}</option>))}
+                </select>
+              </div>
+              <div className="dapp-form-row">
+                <label>Payment Token</label>
+                <select value={selectedToken} onChange={(e) => setSelectedToken(e.target.value)}>
+                  {tokenOptions.map((t) => (<option key={t} value={t}>{t} — ${prices[t]?.priceUsd || "..."}</option>))}
+                </select>
+              </div>
+              <div className="dapp-fee-summary">
+                <div className="dapp-fee-row"><span>Deployment Fee</span><span>${feeUsd} USD</span></div>
+                <div className="dapp-fee-row"><span>Pay in {selectedToken}</span><strong>{feeInToken} {selectedToken}</strong></div>
+                <div className="dapp-fee-row muted"><span>Estimated Gas</span><span>{selectedTemplate.estimatedGas}</span></div>
+              </div>
+              {error && <p className="error-text">{error}</p>}
+              <button className="btn btn-primary dapp-deploy-btn" onClick={handleDeploy} disabled={deploying || !walletConnected}>
+                {deploying ? "Processing Payment..." : !walletConnected ? "Connect Wallet First" : `Deploy & Pay ${feeInToken} ${selectedToken}`}
+              </button>
+              {!walletConnected && <p className="muted" style={{ textAlign: "center", fontSize: "0.82rem", marginTop: "0.4rem" }}>Wallet connection required before deployment</p>}
+            </div>
+            <div className="dapp-config-preview panel">
+              <h3>Template Details</h3>
+              <p className="muted">{selectedTemplate.description}</p>
+              <h4>Features</h4>
+              <ul className="list">{selectedTemplate.features.map((f) => (<li key={f}>{f}</li>))}</ul>
+              <h4>Supported Networks</h4>
+              <div className="pill-row">{selectedTemplate.networks.map((n) => (<span key={n} className="tiny-pill">{n}</span>))}</div>
+              <h4 style={{ marginTop: "1rem" }}>Payment Tokens</h4>
+              <div className="dapp-token-grid">
+                {Object.entries(prices).map(([sym, info]) => (
+                  <div key={sym} className={`dapp-token-card ${selectedToken === sym ? "active" : ""}`} onClick={() => tokenOptions.includes(sym) && setSelectedToken(sym)}>
+                    <strong>{sym}</strong>
+                    <span className="muted">${info.priceUsd}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {step === "success" && deployResult && (
+        <div className="dapp-success">
+          <div className="dapp-success-card panel">
+            <div className="dapp-success-icon">✓</div>
+            <h2>Deployment Successful!</h2>
+            <p className="muted">Your {deployResult.templateName} has been deployed to {deployResult.network}.</p>
+            <div className="dapp-success-details">
+              <div className="dapp-detail-row"><span className="muted">Contract Address</span><code>{deployResult.contractAddress}</code></div>
+              <div className="dapp-detail-row"><span className="muted">Network</span><span>{deployResult.network}</span></div>
+              <div className="dapp-detail-row"><span className="muted">Payment</span><span>{deployResult.payment.amountToken} {deployResult.payment.token} (${deployResult.payment.amountUsd})</span></div>
+              <div className="dapp-detail-row"><span className="muted">Tx Hash</span><code style={{ fontSize: "0.75rem" }}>{deployResult.payment.txHash.slice(0, 22)}...</code></div>
+              <div className="dapp-detail-row"><span className="muted">Status</span><span className="dapp-deploy-status">{deployResult.status}</span></div>
+            </div>
+            <div className="dapp-success-actions">
+              <a href={deployResult.explorerUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline">View on Explorer</a>
+              <Link to="/dapp-dashboard" className="btn btn-outline">Go to Dashboard</Link>
+              <button className="btn btn-primary" onClick={resetBuilder}>Deploy Another</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DappDashboardPage() {
+  const [stats, setStats] = useState(null);
+  const [deployments, setDeployments] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [tab, setTab] = useState("overview");
+  const [loading, setLoading] = useState(true);
+  const [expandedDeploy, setExpandedDeploy] = useState(null);
+
+  async function loadAll() {
+    setLoading(true);
+    try {
+      const [statsRes, deploymentsRes, txRes] = await Promise.all([
+        fetch("/api/dapp/dashboard").then((r) => r.json()),
+        fetch("/api/dapp/deployments").then((r) => r.json()),
+        fetch("/api/dapp/transactions").then((r) => r.json()),
+      ]);
+      setStats(statsRes);
+      setDeployments(deploymentsRes.deployments || []);
+      setTransactions(txRes.transactions || []);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }
+
+  useEffect(() => { loadAll(); }, []);
+
+  const statusColor = (status) => {
+    if (status === "deployed" || status === "confirmed") return "dapp-status-green";
+    if (status === "failed") return "dapp-status-red";
+    return "dapp-status-yellow";
+  };
+
+  return (
+    <section className="dapp-dashboard">
+      <header className="page-header">
+        <span className="pill">DApp Dashboard</span>
+        <h1 className="section-title">Deployment Dashboard</h1>
+        <p className="muted">View deployed DApps, transaction history, and track deployment status.</p>
+        <div style={{ marginTop: "0.8rem", display: "flex", gap: "0.6rem" }}>
+          <Link to="/dapp-builder" className="btn btn-primary btn-sm">Deploy New DApp</Link>
+          <button className="btn btn-outline btn-sm" onClick={loadAll}>Refresh</button>
+        </div>
+      </header>
+
+      <div className="dash-tabs">
+        {["overview", "deployments", "transactions"].map((t) => (
+          <button key={t} className={`dash-tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
+            {t === "overview" ? "Overview" : t === "deployments" ? "Deployed DApps" : "Transactions"}
+          </button>
+        ))}
+      </div>
+
+      {loading && <p className="muted" style={{ textAlign: "center", padding: "2rem" }}>Loading dashboard...</p>}
+
+      {!loading && tab === "overview" && stats && (
+        <>
+          <div className="dash-kpi-grid">
+            <div className="dash-kpi-card">
+              <div className="dash-kpi-value">{stats.overview.totalDeployments}</div>
+              <div className="muted">Total Deployments</div>
+            </div>
+            <div className="dash-kpi-card">
+              <div className="dash-kpi-value dash-kpi-green">{stats.overview.activeDeployments}</div>
+              <div className="muted">Active / Deployed</div>
+            </div>
+            <div className="dash-kpi-card">
+              <div className="dash-kpi-value dash-kpi-red">{stats.overview.failedDeployments}</div>
+              <div className="muted">Failed</div>
+            </div>
+            <div className="dash-kpi-card">
+              <div className="dash-kpi-value">${stats.overview.totalSpentUsd}</div>
+              <div className="muted">Total Spent</div>
+            </div>
+            <div className="dash-kpi-card">
+              <div className="dash-kpi-value">{stats.overview.totalTransactions}</div>
+              <div className="muted">Total Transactions</div>
+            </div>
+          </div>
+
+          {Object.keys(stats.networkBreakdown).length > 0 && (
+            <div className="dash-section">
+              <h3>Network Distribution</h3>
+              <div className="dash-bar-grid">
+                {Object.entries(stats.networkBreakdown).map(([net, count]) => (
+                  <div key={net} className="dash-bar-item">
+                    <div className="dash-bar-label"><span className="tiny-pill">{net}</span><span>{count} deployment{count !== 1 ? "s" : ""}</span></div>
+                    <div className="dash-bar-track"><div className="dash-bar-fill" style={{ width: `${Math.min(100, (count / Math.max(1, stats.overview.totalDeployments)) * 100)}%` }} /></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {Object.keys(stats.tokenSpending).length > 0 && (
+            <div className="dash-section">
+              <h3>Token Spending</h3>
+              <div className="dash-token-spend-grid">
+                {Object.entries(stats.tokenSpending).map(([token, info]) => (
+                  <div key={token} className="dash-token-spend-card panel">
+                    <strong>{token}</strong>
+                    <div style={{ fontSize: "1.2rem", fontWeight: 700, margin: "0.3rem 0" }}>{info.totalAmount} {token}</div>
+                    <div className="muted">${info.totalUsd} USD · {info.count} tx{info.count !== 1 ? "s" : ""}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {stats.recentDeployments.length > 0 && (
+            <div className="dash-section">
+              <h3>Recent Deployments</h3>
+              <div className="dapp-deploy-list">
+                {stats.recentDeployments.map((dep) => (
+                  <div key={dep.id} className="dapp-deploy-item">
+                    <div className="dapp-deploy-info">
+                      <strong>{dep.contractName}</strong>
+                      <span className="tiny-pill">{dep.network}</span>
+                      <span className={`dapp-deploy-status ${statusColor(dep.status)}`}>{dep.status}</span>
+                    </div>
+                    <div className="muted" style={{ fontSize: "0.83rem" }}>
+                      {dep.contractAddress.slice(0, 20)}... · {dep.payment.amountToken} {dep.payment.token} · {dep.templateName}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {!loading && tab === "deployments" && (
+        <div className="dash-section">
+          <h3>All Deployed DApps ({deployments.length})</h3>
+          {deployments.length === 0 ? (
+            <div className="panel" style={{ textAlign: "center", padding: "2rem" }}>
+              <p className="muted">No deployments yet.</p>
+              <Link to="/dapp-builder" className="btn btn-primary">Deploy Your First DApp</Link>
+            </div>
+          ) : (
+            <div className="dash-deploy-table">
+              {deployments.map((dep) => (
+                <div key={dep.id} className={`dash-deploy-row ${expandedDeploy === dep.id ? "expanded" : ""}`}>
+                  <div className="dash-deploy-row-main" onClick={() => setExpandedDeploy(expandedDeploy === dep.id ? null : dep.id)}>
+                    <div className="dash-deploy-row-left">
+                      <strong>{dep.contractName}</strong>
+                      <span className="badge">{dep.category}</span>
+                      <span className="tiny-pill">{dep.network}</span>
+                      <span className={`dapp-deploy-status ${statusColor(dep.status)}`}>{dep.status}</span>
+                    </div>
+                    <div className="dash-deploy-row-right muted">
+                      {dep.payment.amountToken} {dep.payment.token} · {new Date(dep.deployedAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                  {expandedDeploy === dep.id && (
+                    <div className="dash-deploy-expanded">
+                      <div className="dapp-detail-row"><span className="muted">Deployment ID</span><code>{dep.id}</code></div>
+                      <div className="dapp-detail-row"><span className="muted">Contract</span><code>{dep.contractAddress}</code></div>
+                      <div className="dapp-detail-row"><span className="muted">Symbol</span><span>{dep.contractSymbol}</span></div>
+                      <div className="dapp-detail-row"><span className="muted">Template</span><span>{dep.templateName}</span></div>
+                      <div className="dapp-detail-row"><span className="muted">Payment</span><span>{dep.payment.amountToken} {dep.payment.token} (${dep.payment.amountUsd})</span></div>
+                      <div className="dapp-detail-row"><span className="muted">Tx Hash</span><code style={{ fontSize: "0.73rem" }}>{dep.payment.txHash.slice(0, 30)}...</code></div>
+                      <div className="dapp-detail-row"><span className="muted">Deployed</span><span>{new Date(dep.deployedAt).toLocaleString()}</span></div>
+                      <div className="dapp-detail-row"><span className="muted">Features</span><div className="pill-row">{dep.features.map((f) => (<span key={f} className="dapp-feature-tag">{f}</span>))}</div></div>
+                      <div style={{ marginTop: "0.6rem" }}>
+                        <a href={dep.explorerUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">View on Explorer</a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!loading && tab === "transactions" && (
+        <div className="dash-section">
+          <h3>Transaction History ({transactions.length})</h3>
+          {transactions.length === 0 ? (
+            <div className="panel" style={{ textAlign: "center", padding: "2rem" }}>
+              <p className="muted">No transactions recorded yet.</p>
+            </div>
+          ) : (
+            <div className="dash-tx-list">
+              {transactions.map((tx) => (
+                <div key={tx.id} className="dash-tx-item">
+                  <div className="dash-tx-header">
+                    <span className={`dash-tx-type ${tx.type === "payment" ? "type-payment" : tx.type === "deployment" ? "type-deploy" : "type-retry"}`}>{tx.type}</span>
+                    <span className={`dapp-deploy-status ${statusColor(tx.status)}`}>{tx.status}</span>
+                    <span className="muted" style={{ fontSize: "0.8rem", marginLeft: "auto" }}>{new Date(tx.createdAt).toLocaleString()}</span>
+                  </div>
+                  <p style={{ margin: "0.3rem 0 0", fontSize: "0.88rem" }}>{tx.description}</p>
+                  <div className="muted" style={{ fontSize: "0.8rem", marginTop: "0.2rem" }}>
+                    {tx.txHash && <span>Tx: {tx.txHash.slice(0, 18)}... · </span>}
+                    {tx.amountToken && <span>{tx.amountToken} {tx.token} · </span>}
+                    {tx.network && <span>{tx.network}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 
 export default App;

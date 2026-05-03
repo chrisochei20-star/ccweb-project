@@ -4,8 +4,10 @@ const fs = require("fs/promises");
 const path = require("path");
 const { URL } = require("url");
 const cryptoSafety = require("./cryptoSafety");
+const { createIntelligenceApp } = require("./intelligenceExpress");
 
 const PORT = Number(process.env.PORT || 3000);
+const intelligenceApp = createIntelligenceApp();
 const PLATFORM_FEE_RATE = 0.08;
 
 const deals = new Map();
@@ -2766,7 +2768,7 @@ async function handleTrackWallet(req, res) {
 
   const address = body.address || body.wallet;
   const action = body.action || "register";
-  const result = cryptoSafety.trackWallet(address, action, body);
+  const result = await cryptoSafety.trackWallet(address, action, body);
   if (result.error) {
     sendJson(res, 400, result);
     return;
@@ -2791,6 +2793,18 @@ function handleAiAgents(res) {
   sendJson(res, 200, { count: agents.length, agents });
 }
 
+function delegateIntelligence(req, res) {
+  const origUrl = req.url || "/";
+  const stripped = origUrl.startsWith("/api/intelligence")
+    ? origUrl.slice("/api/intelligence".length) || "/"
+    : origUrl;
+  req.url = stripped;
+  intelligenceApp(req, res, () => {
+    req.url = origUrl;
+    sendJson(res, 404, { error: "Intelligence route not found." });
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   if (!req.url) {
     sendJson(res, 400, { error: "Invalid request URL." });
@@ -2799,6 +2813,20 @@ const server = http.createServer(async (req, res) => {
 
   const requestUrl = new URL(req.url, `http://localhost:${PORT}`);
   const { pathname } = requestUrl;
+
+  if (pathname.startsWith("/api/intelligence") && ["GET", "POST", "DELETE", "OPTIONS"].includes(req.method || "GET")) {
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      });
+      res.end();
+      return;
+    }
+    delegateIntelligence(req, res);
+    return;
+  }
 
   if (pathname === "/health") {
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
@@ -3048,11 +3076,6 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === "/api/dapp/retry" && req.method === "POST") {
     await handleDappRetryDeployment(req, res);
-    return;
-  }
-
-  if (pathname === "/api/find/scan" && req.method === "GET") {
-    handleCryptoScan(requestUrl, res);
     return;
   }
 

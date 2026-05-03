@@ -10,13 +10,14 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { useEffect, useState } from "react";
-import "./styles.css";
+import { EarlySignalsDashboard } from "./EarlySignalsDashboard";
 
 const navItems = [
   { label: "Home", to: "/" },
   { label: "Learn", to: "/courses" },
   { label: "AI Streaming", to: "/ai-streaming" },
   { label: "Find", to: "/find" },
+  { label: "Early Signals", to: "/early-signals" },
   { label: "Build", to: "/dapp-builder" },
   { label: "AI Agents", to: "/ai-agents" },
   { label: "Earn", to: "/earn" },
@@ -78,6 +79,7 @@ function App() {
           <Route path="crypto/trending" element={<FindPage initialTab="trending" />} />
           <Route path="crypto/early-signals" element={<FindPage initialTab="signals" />} />
           <Route path="crypto/wallets" element={<FindPage initialTab="wallets" />} />
+          <Route path="early-signals" element={<EarlySignalsDashboard />} />
           <Route path="dapp-builder" element={<DappBuilderPage />} />
           <Route path="dapp-dashboard" element={<DappDashboardPage />} />
           <Route path="ai-agents" element={<AiAgentsPage />} />

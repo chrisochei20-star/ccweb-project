@@ -1,6 +1,6 @@
 {
   "name": "ccweb-project",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "The world's first AI-powered Web3 Academy and Business Engine",
   "main": "server.js",
@@ -10,7 +10,10 @@
     "dev:api": "node server.js",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "mobile:sync": "npm run build && npx cap sync"
   },
   "engines": {
     "node": ">=20"
@@ -38,9 +41,11 @@
     "mongodb": "^6.16.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.3.1",
     "@tailwindcss/vite": "^4.1.11",
     "@vitejs/plugin-react": "^5.1.0",
     "tailwindcss": "^4.1.11",
-    "vite": "^7.1.10"
+    "vite": "^7.1.10",
+    "vitest": "^3.2.4"
   }
 }

@@ -801,6 +801,216 @@ a {
 /* ─── FIND Page Styles ─── */
 .find-page { padding-bottom: 2rem; }
 
+.glass-panel {
+  background: rgba(10, 19, 40, 0.55);
+  border: 1px solid rgba(117, 160, 214, 0.22);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(14px);
+  border-radius: 1rem;
+}
+
+.find-hub-header {
+  margin-bottom: 0.5rem;
+}
+
+.find-hub-tabs {
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.find-scanner-wide {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.find-scan-input-panel {
+  max-width: 720px;
+}
+
+.find-scan-form-stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.find-scan-form-stack input {
+  min-width: 100%;
+}
+
+.find-legal-note {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0.75rem 0 0;
+}
+
+.find-scan-results-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: start;
+}
+
+.find-scan-result {
+  margin-top: 0;
+  max-width: none;
+  grid-column: span 1;
+}
+
+.find-score-row {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.find-score-pair {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+}
+
+.find-band-label {
+  margin: 0.5rem 0 0.75rem;
+  font-size: 0.88rem;
+}
+
+.find-module-card h4 {
+  margin-top: 0;
+  color: #b8d4ff;
+}
+
+.find-bullet-list,
+.find-insight-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: #b4c8e8;
+}
+
+.find-insight-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.find-insight-list li {
+  padding: 0.45rem 0;
+  border-bottom: 1px solid rgba(117, 160, 214, 0.12);
+}
+
+.find-ai-card {
+  grid-column: 1 / -1;
+}
+
+.find-disclaimer {
+  grid-column: 1 / -1;
+  font-size: 0.78rem;
+  color: #9cb0d0;
+  padding: 0.75rem 1rem;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.find-disclaimer.inline {
+  grid-column: auto;
+  margin-top: 0.75rem;
+}
+
+.find-mono {
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  word-break: break-all;
+}
+
+.find-mono-small {
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  margin-top: 0.75rem;
+}
+
+.small-print {
+  font-size: 0.78rem;
+}
+
+.find-inline-code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+  background: rgba(17, 212, 255, 0.08);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+}
+
+.find-signals-toolbar,
+.find-smart-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.find-discover-grid {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.find-discover-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.find-discover-stats {
+  margin: 0.5rem 0;
+  padding-left: 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.find-wallets-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.find-wallet-scan-panel {
+  max-width: 900px;
+}
+
+.find-wallet-scan-result {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(117, 160, 214, 0.15);
+}
+
+.find-alerts-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.find-alert-card h4 {
+  margin: 0.4rem 0 0.2rem;
+}
+
+.find-alert-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.find-alert-card.sev-high {
+  border-color: rgba(255, 107, 107, 0.35);
+}
+
+.find-alert-card.sev-medium {
+  border-color: rgba(255, 199, 0, 0.3);
+}
+
 .find-scan-form {
   display: flex;
   gap: 0.6rem;

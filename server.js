@@ -3,6 +3,7 @@ const http = require("http");
 const fs = require("fs/promises");
 const path = require("path");
 const { URL } = require("url");
+const cryptoSafety = require("./cryptoSafety");
 
 const PORT = Number(process.env.PORT || 3000);
 const PLATFORM_FEE_RATE = 0.08;
@@ -2668,14 +2669,7 @@ async function handleDappRetryDeployment(req, res) {
   sendJson(res, 200, deployment);
 }
 
-// ─── FIND Pillar: Crypto Safety Scanner, Signals, Smart Money ───
-
-const SAMPLE_SCANS = [
-  { token: "ETH", name: "Ethereum", network: "ethereum", contractVerified: true, liquidityLocked: true, ownershipRenounced: true, honeypotRisk: "none", rugPullRisk: "very_low", score: 97, flags: [] },
-  { token: "BTC", name: "Bitcoin", network: "bitcoin", contractVerified: true, liquidityLocked: true, ownershipRenounced: true, honeypotRisk: "none", rugPullRisk: "very_low", score: 99, flags: [] },
-  { token: "SHIB", name: "Shiba Inu", network: "ethereum", contractVerified: true, liquidityLocked: true, ownershipRenounced: false, honeypotRisk: "low", rugPullRisk: "low", score: 72, flags: ["high_supply_concentration", "meme_token"] },
-  { token: "UNKNOWN", name: "ScamCoin", network: "ethereum", contractVerified: false, liquidityLocked: false, ownershipRenounced: false, honeypotRisk: "high", rugPullRisk: "critical", score: 12, flags: ["unverified_contract", "no_liquidity_lock", "ownership_not_renounced", "honeypot_detected", "no_audit"] },
-];
+// ─── FIND Pillar: Crypto Safety Scanner, Alpha Engine, On-chain Intel ───
 
 function handleCryptoScan(requestUrl, res) {
   const token = (requestUrl.searchParams.get("token") || "").toUpperCase().trim();
@@ -2686,60 +2680,102 @@ function handleCryptoScan(requestUrl, res) {
     return;
   }
 
-  const found = SAMPLE_SCANS.find((s) => s.token === token);
-  if (found) {
-    sendJson(res, 200, { ...found, scannedAt: new Date().toISOString() });
-    return;
-  }
-
-  const hash = crypto.createHash("md5").update(token || address).digest("hex");
-  const seedNum = parseInt(hash.slice(0, 8), 16);
-  const score = 20 + (seedNum % 60);
-  const isRisky = score < 50;
-  sendJson(res, 200, {
-    token: token || "CUSTOM",
-    name: token || `Contract ${(address || "").slice(0, 10)}...`,
-    network: "ethereum",
-    contractVerified: !isRisky,
-    liquidityLocked: score > 40,
-    ownershipRenounced: score > 60,
-    honeypotRisk: isRisky ? "medium" : "low",
-    rugPullRisk: score < 30 ? "high" : score < 50 ? "medium" : "low",
-    score,
-    flags: isRisky ? ["low_liquidity", "concentrated_holders"] : [],
-    scannedAt: new Date().toISOString(),
-  });
+  sendJson(res, 200, cryptoSafety.buildTokenScanFromQuery(token, address));
 }
 
 function handleEarlySignals(res) {
-  const now = new Date();
-  const signals = [
-    { id: "sig-001", type: "narrative_shift", title: "AI x DePIN convergence", description: "Multiple DePIN protocols integrating AI inference layers. Sector capital inflows up 340% this week.", confidence: 89, timestamp: new Date(now - 3600000).toISOString(), tokens: ["RNDR", "FET", "OCEAN"], category: "ai_depin" },
-    { id: "sig-002", type: "whale_accumulation", title: "Smart money loading RWA tokens", description: "Top 50 wallets accumulated $42M in RWA tokens over 48h. Tokenized treasuries sector heating up.", confidence: 82, timestamp: new Date(now - 7200000).toISOString(), tokens: ["ONDO", "MKR", "COMP"], category: "rwa" },
-    { id: "sig-003", type: "on_chain_anomaly", title: "Layer 2 TVL surge on Base", description: "Base chain TVL grew 28% in 7 days. New DEX deployments indicate growing DeFi ecosystem.", confidence: 76, timestamp: new Date(now - 14400000).toISOString(), tokens: ["BASE", "AERO"], category: "layer2" },
-    { id: "sig-004", type: "social_momentum", title: "Solana DeFi narrative gaining steam", description: "Social mentions of Solana DeFi up 520%. Jupiter and Raydium hitting ATH volumes.", confidence: 71, timestamp: new Date(now - 21600000).toISOString(), tokens: ["JUP", "RAY", "SOL"], category: "defi" },
-    { id: "sig-005", type: "funding_round", title: "Modular blockchain raises $60M", description: "Celestia ecosystem project closes Series B. Modular thesis gaining institutional backing.", confidence: 85, timestamp: new Date(now - 43200000).toISOString(), tokens: ["TIA", "MANTA"], category: "infrastructure" },
-    { id: "sig-006", type: "regulatory_catalyst", title: "ETH ETF options approval expected", description: "SEC anticipated to approve ETH ETF options within 30 days. Institutional demand signal.", confidence: 78, timestamp: new Date(now - 86400000).toISOString(), tokens: ["ETH", "LDO", "RPL"], category: "regulatory" },
-  ];
-  sendJson(res, 200, { count: signals.length, signals, updatedAt: now.toISOString() });
+  const feed = cryptoSafety.getIntelligenceFeed();
+  sendJson(res, 200, {
+    count: feed.signals.length,
+    signals: feed.signals,
+    updatedAt: feed.updatedAt,
+    disclaimer: feed.disclaimer,
+  });
 }
 
 function handleSmartMoney(res) {
-  const now = new Date();
-  const wallets = [
-    { address: "0x28C6...9a4F", label: "Jump Trading", totalValueUsd: 847000000, recentMoves: [{ action: "buy", token: "ETH", amountUsd: 12500000, timestamp: new Date(now - 1800000).toISOString() }, { action: "buy", token: "SOL", amountUsd: 4200000, timestamp: new Date(now - 5400000).toISOString() }], winRate: 84, avgReturn: 32 },
-    { address: "0x7a3B...e21D", label: "Paradigm Fund", totalValueUsd: 2100000000, recentMoves: [{ action: "buy", token: "ONDO", amountUsd: 8000000, timestamp: new Date(now - 3600000).toISOString() }, { action: "sell", token: "DYDX", amountUsd: 3100000, timestamp: new Date(now - 7200000).toISOString() }], winRate: 79, avgReturn: 45 },
-    { address: "0xF92a...b8C1", label: "Wintermute", totalValueUsd: 560000000, recentMoves: [{ action: "buy", token: "ARB", amountUsd: 6700000, timestamp: new Date(now - 2700000).toISOString() }], winRate: 76, avgReturn: 28 },
-    { address: "0x3eD9...44aF", label: "a16z Crypto", totalValueUsd: 4500000000, recentMoves: [{ action: "buy", token: "UNI", amountUsd: 15000000, timestamp: new Date(now - 10800000).toISOString() }, { action: "buy", token: "MKR", amountUsd: 9200000, timestamp: new Date(now - 14400000).toISOString() }], winRate: 88, avgReturn: 56 },
-    { address: "0xC4b2...7f3E", label: "Nansen Smart Money", totalValueUsd: 320000000, recentMoves: [{ action: "buy", token: "FET", amountUsd: 2100000, timestamp: new Date(now - 900000).toISOString() }], winRate: 72, avgReturn: 24 },
-  ];
-  const trends = [
-    { token: "ETH", netFlow: 42000000, direction: "accumulation", whaleCount: 12 },
-    { token: "SOL", netFlow: 18000000, direction: "accumulation", whaleCount: 8 },
-    { token: "ONDO", netFlow: 11000000, direction: "accumulation", whaleCount: 5 },
-    { token: "ARB", netFlow: -3500000, direction: "distribution", whaleCount: 3 },
-  ];
-  sendJson(res, 200, { wallets, trends, updatedAt: now.toISOString() });
+  const feed = cryptoSafety.getIntelligenceFeed();
+  sendJson(res, 200, {
+    wallets: feed.smartMoney.wallets,
+    trends: feed.smartMoney.trends,
+    updatedAt: feed.updatedAt,
+    disclaimer: feed.disclaimer,
+  });
+}
+
+async function handleScanTokenPost(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const token = (body.token || "").toUpperCase().trim();
+  const address = (body.address || "").trim();
+  if (!token && !address) {
+    sendJson(res, 400, { error: "token or address is required in the JSON body." });
+    return;
+  }
+
+  sendJson(res, 200, cryptoSafety.buildTokenScanFromQuery(token, address));
+}
+
+async function handleScanWalletPost(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const address = body.address || body.wallet;
+  const result = cryptoSafety.buildWalletScan(address);
+  if (result.error) {
+    sendJson(res, 400, result);
+    return;
+  }
+  sendJson(res, 200, result);
+}
+
+function handleScanWalletGet(requestUrl, res) {
+  const address = requestUrl.searchParams.get("address") || requestUrl.searchParams.get("wallet");
+  const result = cryptoSafety.buildWalletScan(address);
+  if (result.error) {
+    sendJson(res, 400, result);
+    return;
+  }
+  sendJson(res, 200, result);
+}
+
+function handleDiscoverTokens(requestUrl, res) {
+  const chain = requestUrl.searchParams.get("chain") || "";
+  const minSignalStrength = requestUrl.searchParams.get("minSignalStrength");
+  sendJson(res, 200, cryptoSafety.discoverTokens({ chain, minSignalStrength }));
+}
+
+async function handleTrackWallet(req, res) {
+  let body = {};
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    body = {};
+  }
+
+  const address = body.address || body.wallet;
+  const action = body.action || "register";
+  const result = cryptoSafety.trackWallet(address, action, body);
+  if (result.error) {
+    sendJson(res, 400, result);
+    return;
+  }
+  sendJson(res, 200, result);
+}
+
+function handleCryptoAlerts(res) {
+  sendJson(res, 200, cryptoSafety.getAlertsSnapshot());
 }
 
 // ─── BUILD Pillar: AI Agents ───
@@ -3020,6 +3056,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname === "/api/find/scan" && req.method === "GET") {
+    handleCryptoScan(requestUrl, res);
+    return;
+  }
+
   if (pathname === "/api/find/signals" && req.method === "GET") {
     handleEarlySignals(res);
     return;
@@ -3027,6 +3068,41 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === "/api/find/smart-money" && req.method === "GET") {
     handleSmartMoney(res);
+    return;
+  }
+
+  if (pathname === "/api/scan-token" && req.method === "POST") {
+    await handleScanTokenPost(req, res);
+    return;
+  }
+
+  if (pathname === "/api/scan-token" && req.method === "GET") {
+    handleCryptoScan(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/scan-wallet" && req.method === "POST") {
+    await handleScanWalletPost(req, res);
+    return;
+  }
+
+  if (pathname === "/api/scan-wallet" && req.method === "GET") {
+    handleScanWalletGet(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/discover-tokens" && req.method === "GET") {
+    handleDiscoverTokens(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/track-wallet" && req.method === "POST") {
+    await handleTrackWallet(req, res);
+    return;
+  }
+
+  if (pathname === "/api/crypto/alerts" && req.method === "GET") {
+    handleCryptoAlerts(res);
     return;
   }
 

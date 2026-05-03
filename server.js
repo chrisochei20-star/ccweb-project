@@ -5,6 +5,7 @@ const path = require("path");
 const { URL } = require("url");
 const cryptoSafety = require("./cryptoSafety");
 const { createIntelligenceApp } = require("./intelligenceExpress");
+const authService = require("./authService");
 
 const PORT = Number(process.env.PORT || 3000);
 const intelligenceApp = createIntelligenceApp();
@@ -225,8 +226,10 @@ function buildUserProfile(input, existing = null) {
   const fallbackId = existing?.id || `user-${crypto.randomUUID().slice(0, 8)}`;
   const id = (input.id || input.userId || fallbackId).toString().trim();
   const displayName = (input.displayName || existing?.displayName || id).toString().trim();
+  const email = (input.email !== undefined ? input.email : existing?.email) || null;
   return {
     id,
+    email: email ? String(email).trim().toLowerCase() : null,
     displayName,
     isOrganic: input.isOrganic === undefined ? existing?.isOrganic ?? true : Boolean(input.isOrganic),
     roles: Array.isArray(input.roles) && input.roles.length ? input.roles : existing?.roles || ["member"],
@@ -239,6 +242,7 @@ function buildUserProfile(input, existing = null) {
 function sanitizeUser(user) {
   return {
     id: user.id,
+    email: user.email || null,
     displayName: user.displayName,
     isOrganic: user.isOrganic,
     roles: user.roles,
@@ -607,6 +611,7 @@ function handleListUsers(res) {
 }
 
 async function handleUpsertUser(req, res) {
+  const tokenUserId = authService.getSessionUserId(getBearerToken(req));
   let body;
   try {
     body = await readJsonBody(req);
@@ -616,6 +621,11 @@ async function handleUpsertUser(req, res) {
   }
 
   const requestedId = (body.id || body.userId || "").toString().trim();
+  if (requestedId && tokenUserId && requestedId !== tokenUserId) {
+    sendJson(res, 403, { error: "Cannot modify another user's profile." });
+    return;
+  }
+
   const existing = requestedId ? ccwebUsers.get(requestedId) : null;
   const profile = buildUserProfile(body, existing);
   ccwebUsers.set(profile.id, profile);
@@ -623,10 +633,15 @@ async function handleUpsertUser(req, res) {
   sendJson(res, existing ? 200 : 201, sanitizeUser(profile));
 }
 
-function handleListNotifications(requestUrl, res) {
-  const userId = (requestUrl.searchParams.get("userId") || "").trim();
+function handleListNotifications(req, requestUrl, res) {
+  const tokenUserId = authService.getSessionUserId(getBearerToken(req));
+  const userId = (requestUrl.searchParams.get("userId") || tokenUserId || "").trim();
   if (!userId) {
-    sendJson(res, 400, { error: "userId is required." });
+    sendJson(res, 400, { error: "userId is required or sign in." });
+    return;
+  }
+  if (tokenUserId && userId !== tokenUserId) {
+    sendJson(res, 403, { error: "Cannot read another user's notifications." });
     return;
   }
   ensureUser(userId);
@@ -646,6 +661,7 @@ function handleListNotifications(requestUrl, res) {
 }
 
 async function handleMarkNotificationsRead(req, res) {
+  const tokenUserId = authService.getSessionUserId(getBearerToken(req));
   let body;
   try {
     body = await readJsonBody(req);
@@ -654,9 +670,13 @@ async function handleMarkNotificationsRead(req, res) {
     return;
   }
 
-  const userId = (body.userId || "").toString().trim();
+  const userId = (body.userId || tokenUserId || "").toString().trim();
   if (!userId) {
-    sendJson(res, 400, { error: "userId is required." });
+    sendJson(res, 400, { error: "userId is required or sign in." });
+    return;
+  }
+  if (tokenUserId && userId !== tokenUserId) {
+    sendJson(res, 403, { error: "Cannot modify another user's notifications." });
     return;
   }
   ensureUser(userId);
@@ -1163,6 +1183,20 @@ async function serveFile(filePath, res) {
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(payload));
+}
+
+function sendJsonCors(res, statusCode, payload) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  sendJson(res, statusCode, payload);
+}
+
+function getBearerToken(req) {
+  const h = req.headers && req.headers.authorization;
+  if (!h || typeof h !== "string") return null;
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  return m ? m[1].trim() : null;
 }
 
 async function readJsonBody(req) {
@@ -2776,6 +2810,106 @@ async function handleTrackWallet(req, res) {
   sendJson(res, 200, result);
 }
 
+async function handleAuthRegister(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJsonCors(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+  const out = authService.registerUser(ccwebUsers, buildUserProfile, {
+    email: body.email,
+    password: body.password,
+    displayName: body.displayName,
+  });
+  if (out.error) {
+    sendJsonCors(res, 400, { error: out.error });
+    return;
+  }
+  const login = authService.loginUser(ccwebUsers, { email: body.email, password: body.password });
+  sendJsonCors(res, 201, {
+    user: sanitizeUser(out.user),
+    token: login.token,
+    expiresAt: login.expiresAt,
+    note: "Prototype auth: replace with managed identity before production.",
+  });
+}
+
+async function handleAuthLogin(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJsonCors(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+  const login = authService.loginUser(ccwebUsers, { email: body.email, password: body.password });
+  if (login.error) {
+    sendJsonCors(res, 401, { error: login.error });
+    return;
+  }
+  const user = ccwebUsers.get(login.userId);
+  sendJsonCors(res, 200, {
+    user: sanitizeUser(user),
+    token: login.token,
+    expiresAt: login.expiresAt,
+  });
+}
+
+function handleAuthLogout(req, res) {
+  const token = getBearerToken(req);
+  authService.logoutToken(token);
+  sendJsonCors(res, 200, { ok: true });
+}
+
+function handleAuthMe(req, res) {
+  const token = getBearerToken(req);
+  const userId = authService.getSessionUserId(token);
+  if (!userId) {
+    sendJsonCors(res, 401, { error: "Unauthorized." });
+    return;
+  }
+  const user = ccwebUsers.get(userId);
+  if (!user) {
+    sendJsonCors(res, 401, { error: "Session invalid." });
+    return;
+  }
+  sendJsonCors(res, 200, { user: sanitizeUser(user) });
+}
+
+async function handleAuthPasswordRequest(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJsonCors(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+  const out = authService.requestPasswordReset(body.email);
+  sendJsonCors(res, 200, out);
+}
+
+async function handleAuthPasswordReset(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJsonCors(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+  const out = authService.completePasswordReset({
+    email: body.email,
+    token: body.token,
+    newPassword: body.newPassword,
+  });
+  if (out.error) {
+    sendJsonCors(res, 400, { error: out.error });
+    return;
+  }
+  sendJsonCors(res, 200, { ok: true });
+}
+
 function handleCryptoAlerts(res) {
   sendJson(res, 200, cryptoSafety.getAlertsSnapshot());
 }
@@ -2819,12 +2953,52 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(204, {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
       });
       res.end();
       return;
     }
     delegateIntelligence(req, res);
+    return;
+  }
+
+  if (pathname.startsWith("/api/auth") && req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    });
+    res.end();
+    return;
+  }
+
+  if (pathname === "/api/auth/register" && req.method === "POST") {
+    await handleAuthRegister(req, res);
+    return;
+  }
+
+  if (pathname === "/api/auth/login" && req.method === "POST") {
+    await handleAuthLogin(req, res);
+    return;
+  }
+
+  if (pathname === "/api/auth/logout" && req.method === "POST") {
+    handleAuthLogout(req, res);
+    return;
+  }
+
+  if (pathname === "/api/auth/me" && req.method === "GET") {
+    handleAuthMe(req, res);
+    return;
+  }
+
+  if (pathname === "/api/auth/password/request" && req.method === "POST") {
+    await handleAuthPasswordRequest(req, res);
+    return;
+  }
+
+  if (pathname === "/api/auth/password/reset" && req.method === "POST") {
+    await handleAuthPasswordReset(req, res);
     return;
   }
 
@@ -2892,7 +3066,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/notifications" && req.method === "GET") {
-    handleListNotifications(requestUrl, res);
+    handleListNotifications(req, requestUrl, res);
     return;
   }
 

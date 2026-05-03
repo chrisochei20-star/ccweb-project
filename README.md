@@ -2,50 +2,73 @@
 
 The world's first AI-powered Web3 Academy and Business Engine.
 
-Core pillars: Learn -> Find -> Build -> Earn.
+**Pillars:** Learn → Find → Build → Earn.
 
-## Development setup
+## Prerequisites
 
-### Prerequisites
+- **Node.js 20+** and npm
 
-- Node.js 18+ and npm
+## Install
 
-### Install dependencies
+```bash
+npm install
+```
 
-Run:
+## Development (two terminals)
 
-`npm install`
+1. **API** (port **3000**): `npm run dev:api`
+2. **Vite** (port **5173**): `npm run dev`
 
-### Start the application
+Open **http://localhost:5173**. The Vite dev server proxies `/api` to `http://127.0.0.1:3000`.
 
-Run:
+## Production-style run
 
-`npm run dev`
+```bash
+npm run build
+npm start
+```
 
-Then open `http://localhost:3000`.
+`npm start` serves the built `dist/` folder and the same API as dev.
 
-### Production-style run
+## Tests
 
-Run:
+```bash
+npm test
+```
 
-`npm start`
+## Mobile (Capacitor)
 
-## Business applicant + income engine APIs
+After `npm run build`:
 
-The prototype now includes applicant profile and secure payout workflow APIs:
+```bash
+npm run mobile:sync
+```
 
-- `GET /api/applicants` - list applicant profiles, stats, skill capacity, certificates
-- `GET /api/applicants/:id` - fetch one applicant profile
-- `POST /api/applicants` - create/update applicant profile with capacity and certificates
-- `GET /api/engine/match?applicantId=:id&city=:city&query=:query` - AI business finder compatibility matching
-- `POST /api/deals/:id/confirm` - secure payout release with role + token checks
+Requires `@capacitor/cli` (devDependency). Add iOS with `npx cap add ios` on macOS if needed.
 
-## AI web streaming APIs
+## Documentation
 
-LiveKit-style AI web streaming prototype endpoints:
+| Doc | Purpose |
+|-----|---------|
+| [AGENTS.md](./AGENTS.md) | Agent / cloud workspace notes and key endpoints |
+| [CHANGELOG.md](./CHANGELOG.md) | Release and milestone notes |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | System map and extension points |
+| [docs/STORE_RELEASE.md](./docs/STORE_RELEASE.md) | Play / App Store checklist |
+| [docs/DEMO_VIDEO_SCRIPT.md](./docs/DEMO_VIDEO_SCRIPT.md) | 2-minute demo shot list |
+| [docs/CODE_INVENTORY.md](./docs/CODE_INVENTORY.md) | Refined / changed / outdated snapshot |
 
-- `GET /api/streaming/curriculum` - list curriculum/courses supported by AI host
-- `GET /api/streaming/rooms` - list active and scheduled live rooms
-- `POST /api/streaming/rooms` - create a live room with host, curriculum, and revenue split target
-- `POST /api/streaming/rooms/:id/revenue` - add revenue events and compute platform/host payout split
-- `POST /api/streaming/rooms/:id/close` - close room and return final revenue summary
+## Auth (prototype)
+
+Email + password register/login against the API. Sessions use **Bearer** tokens stored in `sessionStorage` on the client and **in-memory** on the server — **data resets when the API restarts**. Replace with a managed identity provider before production.
+
+## Key API areas
+
+- **Applicants & deals:** `GET/POST /api/applicants`, `POST /api/deals`, etc.
+- **Streaming:** `GET/POST /api/streaming/rooms`, payouts, attendance
+- **Intelligence:** `/api/intelligence/*` (dashboard, token detail, tracked wallets/tokens)
+- **Auth:** `/api/auth/register`, `/api/auth/login`, `/api/auth/me`, password reset stubs
+
+## Gotchas
+
+- `GET /api/streaming/curriculum` is **not** implemented; curriculum context is embedded in room creation responses (see AGENTS.md).
+- Crypto / intelligence outputs are **signals and probabilities**, not financial advice.

@@ -1,5 +1,7 @@
 node_modules/
 npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 dist/
 *.mp4
 ccweb-preview.mp4
@@ -8,5 +10,15 @@ playwright-report/
 blob-report/
 playwright/.cache/
 .DS_Store
+Thumbs.db
 .env
-.env.local
+.env.*
+!.env.example
+logs/
+tmp/
+temp/
+.cache/
+coverage/
+*.log
+*.local
+.idea/

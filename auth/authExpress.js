@@ -9,6 +9,7 @@ const rateLimit = require("./rateLimit");
 const authStore = require("./authStore");
 const { decryptSecret } = require("./cryptoSecret");
 const totpLib = require("./totp");
+const { verifyGoogleIdToken, verifyAppleIdToken } = require("./oauthProviders");
 
 function getClientIp(req) {
   return (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "";
@@ -246,6 +247,72 @@ function mountAt(app, basePath) {
     const out = await authEngine.completePasswordReset(req.body || {});
     if (out.error) return res.status(400).json(out);
     res.json({ ok: true });
+  });
+
+  app.post(`${p}/oauth/google`, async (req, res) => {
+    try {
+      const { ccwebUsers, buildUserProfile, sanitizeUser } = getDeps(req);
+      const idToken = (req.body && req.body.idToken) || "";
+      if (!idToken) return res.status(400).json({ error: "idToken required." });
+      const g = await verifyGoogleIdToken(idToken);
+      const out = await authEngine.oauthSignIn(ccwebUsers, buildUserProfile, {
+        provider: "google",
+        email: g.email,
+        oauthSub: g.sub,
+        displayName: g.name,
+      });
+      if (out.error) return res.status(400).json({ error: out.error });
+      sendTokens(
+        res,
+        200,
+        {
+          user: sanitizeUser(out.user),
+          accessToken: out.accessToken,
+          token: out.accessToken,
+          expiresIn: out.expiresIn,
+          tokenType: out.tokenType,
+        },
+        out.refreshToken
+      );
+    } catch (e) {
+      res.status(401).json({ error: e.message || "Google sign-in failed." });
+    }
+  });
+
+  app.post(`${p}/oauth/apple`, async (req, res) => {
+    try {
+      const { ccwebUsers, buildUserProfile, sanitizeUser } = getDeps(req);
+      const idToken = (req.body && req.body.idToken) || "";
+      if (!idToken) return res.status(400).json({ error: "idToken required." });
+      const a = await verifyAppleIdToken(idToken);
+      if (!a.email) {
+        return res.status(400).json({
+          error: "Apple did not return email. Use the first sign-in with email scope, or link from an existing session.",
+        });
+      }
+      const out = await authEngine.oauthSignIn(ccwebUsers, buildUserProfile, {
+        provider: "apple",
+        email: a.email,
+        oauthSub: a.sub,
+        appleSub: a.sub,
+        displayName: req.body?.displayName,
+      });
+      if (out.error) return res.status(400).json({ error: out.error });
+      sendTokens(
+        res,
+        200,
+        {
+          user: sanitizeUser(out.user),
+          accessToken: out.accessToken,
+          token: out.accessToken,
+          expiresIn: out.expiresIn,
+          tokenType: out.tokenType,
+        },
+        out.refreshToken
+      );
+    } catch (e) {
+      res.status(401).json({ error: e.message || "Apple sign-in failed." });
+    }
   });
 }
 

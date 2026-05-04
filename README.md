@@ -59,8 +59,15 @@ Requires `@capacitor/cli` (devDependency). Add iOS with `npx cap add ios` on mac
 | [docs/REPOSITORY_LAYOUT.md](./docs/REPOSITORY_LAYOUT.md) | Where frontend, backend, API, and SDK live in this repo |
 | [docs/BACKEND_SECURITY_ARCHITECTURE.md](./docs/BACKEND_SECURITY_ARCHITECTURE.md) | Backend security layers, scaling, checklist |
 | [docs/AUTH_API.md](./docs/AUTH_API.md) | JWT, 2FA, wallet sign-in, curl examples |
+| [docs/GROWTH_HUB.md](./docs/GROWTH_HUB.md) | Marketing agent, marketplace, escrow API |
 
-## Auth **JWT** access + rotating **refresh** (httpOnly cookie; use `AUTH_REFRESH_IN_BODY=1` for Vite dev), optional **TOTP** 2FA, and **wallet** sign-in (EVM / Solana). Configure **`AUTH_JWT_SECRET`** (32+ chars) and **`MONGODB_URI`** for production persistence. See [docs/AUTH_API.md](./docs/AUTH_API.md).
+## Auth
+
+Email + password with **bcrypt**, **JWT** access + rotating **refresh** (httpOnly cookie; use `AUTH_REFRESH_IN_BODY=1` for Vite dev), optional **TOTP** 2FA, and **wallet** sign-in (EVM / Solana). Configure **`AUTH_JWT_SECRET`** (32+ chars) and **`MONGODB_URI`** for production persistence. See [docs/AUTH_API.md](./docs/AUTH_API.md).
+
+## Growth Hub
+
+Global marketing workspace, marketplace, and simulated escrow: **`/growth-hub`** in the app, **`/api/growth/*`** on the API. See [docs/GROWTH_HUB.md](./docs/GROWTH_HUB.md).
 
 ## Key API areas
 
@@ -68,8 +75,7 @@ Requires `@capacitor/cli` (devDependency). Add iOS with `npx cap add ios` on mac
 - **Streaming:** `GET/POST /api/streaming/rooms`, payouts, attendance
 - **Intelligence:** `/api/intelligence/*` (dashboard, token detail, tracked wallets/tokens)
 - **Auth:** `/api/auth/*` and `/auth/*` — JWT, 2FA, wallet, refresh (see `docs/AUTH_API.md`)
-
-## Gotchas
+- **Growth hub:** `/api/growth/*` — marketing campaigns, marketplace, escrow (see `docs/GROWTH_HUB.md`)
 
 - `GET /api/streaming/curriculum` is **not** implemented; curriculum context is embedded in room creation responses (see AGENTS.md).
 - Crypto / intelligence outputs are **signals and probabilities**, not financial advice.

@@ -10,7 +10,7 @@ This document maps **logical** areas to **physical** paths. The app is intention
 | **Backend** | HTTP API + static `public/` + production `dist/` | `server.js`, `public/` |
 | **API modules** | Mounted routers / shared logic | `*_Express.js`, `auth/`, `cryptoSafety.js`, `intelligenceDb.js`, … |
 | **Security** | Cross-cutting controls | `security/` (Helmet + CORS defaults), rate limits in `auth/`, API key limits in `developerPlatform.js` |
-| **Developer ecosystem** | Public `/v1`, console `/api/developer` | `developerExpress.js`, `developerPlatform.js`, `developerWeb3.js` |
+| **Growth / automation** | Business growth hub (prototype) | `businessGrowthHub.js`, `growthExpress.js`, `src/GrowthHubPage.jsx` |
 | **Agents / automation (SDK)** | Published-style packages (not npm-linked by default) | `packages/ccweb-sdk/`, `packages/ccweb-cli/` |
 | **Docs** | Architecture, DX, store | `docs/`, `AGENTS.md`, `README.md` |
 | **E2E / QA** | Playwright | `e2e/`, `playwright.config.*` |

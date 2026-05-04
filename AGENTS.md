@@ -37,6 +37,7 @@ The Vite config proxies `/api`, `/v1`, and `/auth` to `http://127.0.0.1:3000`. S
 - `GET /api/auth/me` — Current user (`Authorization: Bearer <accessToken>`)
 - `POST /api/auth/logout` — Revoke refresh
 - `POST /api/auth/wallet/nonce` + `POST /api/auth/wallet/connect` — Wallet sign-in (see [docs/AUTH_API.md](./docs/AUTH_API.md))
+- `GET /api/growth/overview` — Growth hub KPIs, fees, policy text ([docs/GROWTH_HUB.md](./docs/GROWTH_HUB.md))
 - **Developer onboarding:** `/developers/onboarding` (guided ~5 min) · **Quick start:** [docs/DEVELOPER_QUICKSTART.md](https://github.com/chrisochei20-star/ccweb-project/blob/main/docs/DEVELOPER_QUICKSTART.md) and static `/docs/DEVELOPER_QUICKSTART.md` when served
 
 - **Security architecture:** [docs/BACKEND_SECURITY_ARCHITECTURE.md](./docs/BACKEND_SECURITY_ARCHITECTURE.md) (gateway, services, checklist)

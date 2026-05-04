@@ -11,8 +11,10 @@ const { isValidEvmAddress } = require("./developerWeb3");
 const authEngine = require("./auth/authEngine");
 const { createAuthApp } = require("./auth/authExpress");
 const { createGrowthApp } = require("./growthExpress");
+const telemetryHub = require("./telemetryHub");
 
 const PORT = Number(process.env.PORT || 3000);
+const CCWEB_ADMIN_KEY = (process.env.CCWEB_ADMIN_KEY || "").trim();
 const intelligenceApp = createIntelligenceApp();
 const growthApp = createGrowthApp();
 const PLATFORM_FEE_RATE = 0.08;
@@ -29,6 +31,8 @@ const notificationInbox = new Map();
 const communityPosts = new Map();
 const communityChats = new Map();
 const communityReactions = new Map();
+const communityBugReports = new Map();
+const communityComments = new Map();
 const aiBlogs = new Map();
 const dappDeployments = new Map();
 const dappPayments = new Map();
@@ -43,6 +47,8 @@ let nextNotificationId = 1;
 let nextCommunityPostId = 1;
 let nextCommunityChatId = 1;
 let nextCommunityReactionId = 1;
+let nextCommunityBugReportId = 1;
+let nextCommunityCommentId = 1;
 let nextAiBlogId = 1;
 let nextDappDeploymentId = 1;
 let nextDappPaymentId = 1;
@@ -618,6 +624,11 @@ function handleListUsers(res) {
   sendJson(res, 200, { count: users.length, users });
 }
 
+function adminKeyOk(req) {
+  const h = req.headers && req.headers["x-ccweb-admin"];
+  return Boolean(CCWEB_ADMIN_KEY && typeof h === "string" && h.trim() === CCWEB_ADMIN_KEY);
+}
+
 async function handleUpsertUser(req, res) {
   const tokenUserId = authEngine.getUserIdFromAccess(getBearerToken(req));
   let body;
@@ -702,7 +713,13 @@ async function handleMarkNotificationsRead(req, res) {
 }
 
 function handleListCommunityPosts(res) {
-  const posts = Array.from(communityPosts.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const counts = new Map();
+  for (const c of communityComments.values()) {
+    counts.set(c.postId, (counts.get(c.postId) || 0) + 1);
+  }
+  const posts = Array.from(communityPosts.values())
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .map((p) => ({ ...p, commentCount: counts.get(p.id) || 0 }));
   sendJson(res, 200, { count: posts.length, posts });
 }
 
@@ -745,6 +762,69 @@ async function handleCreateCommunityPost(req, res) {
   });
 
   sendJson(res, 201, post);
+}
+
+function handleGetCommunityPost(postId, res) {
+  const post = communityPosts.get(postId);
+  if (!post) {
+    sendJson(res, 404, { error: "Post not found." });
+    return;
+  }
+  const comments = Array.from(communityComments.values())
+    .filter((c) => c.postId === postId)
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  sendJson(res, 200, { post, comments });
+}
+
+function handleListPostComments(postId, res) {
+  if (!communityPosts.has(postId)) {
+    sendJson(res, 404, { error: "Post not found." });
+    return;
+  }
+  const comments = Array.from(communityComments.values())
+    .filter((c) => c.postId === postId)
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  sendJson(res, 200, { postId, count: comments.length, comments });
+}
+
+async function handleCreatePostComment(req, res, postId) {
+  if (!communityPosts.has(postId)) {
+    sendJson(res, 404, { error: "Post not found." });
+    return;
+  }
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+  const authorUserId = (body.authorUserId || "").toString().trim();
+  const text = (body.body || body.content || "").toString().trim();
+  if (!authorUserId || !text) {
+    sendJson(res, 400, { error: "authorUserId and body (or content) are required." });
+    return;
+  }
+  const author = ensureUser(authorUserId, { displayName: body.authorDisplayName });
+  const id = `cmt-${String(nextCommunityCommentId++).padStart(5, "0")}`;
+  const row = {
+    id,
+    postId,
+    authorUserId: author.id,
+    authorDisplayName: author.displayName,
+    body: text.slice(0, 2000),
+    createdAt: new Date().toISOString(),
+  };
+  communityComments.set(id, row);
+  const post = communityPosts.get(postId);
+  createNotification({
+    type: "community_post_comment",
+    title: "New comment on your post",
+    message: `${author.displayName} commented on: ${post.title}`,
+    targetUserIds: [post.authorUserId].filter((uid) => uid && uid !== author.id),
+    metadata: { postId, commentId: id },
+  });
+  sendJson(res, 201, row);
 }
 
 function handleListCommunityChats(requestUrl, res) {
@@ -852,6 +932,50 @@ async function handleCreateCommunityReaction(req, res) {
     });
   }
 
+  sendJson(res, 201, record);
+}
+
+function handleListBugReports(res) {
+  const reports = Array.from(communityBugReports.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  sendJson(res, 200, { count: reports.length, reports });
+}
+
+async function handleCreateBugReport(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const reporterUserId = (body.reporterUserId || "").toString().trim();
+  const title = (body.title || "").toString().trim();
+  const description = (body.description || "").toString().trim();
+  const path = (body.path || "").toString().trim();
+  if (!title || !description) {
+    sendJson(res, 400, { error: "title and description are required." });
+    return;
+  }
+
+  const reporter = reporterUserId ? ensureUser(reporterUserId, { displayName: body.reporterDisplayName }) : null;
+  const id = `bug-${String(nextCommunityBugReportId++).padStart(5, "0")}`;
+  const record = {
+    id,
+    reporterUserId: reporter?.id || null,
+    reporterDisplayName: reporter?.displayName || null,
+    title: title.slice(0, 160),
+    description: description.slice(0, 4000),
+    path: path.slice(0, 400),
+    severity: (body.severity || "normal").toString().trim().slice(0, 32),
+    createdAt: new Date().toISOString(),
+  };
+  communityBugReports.set(id, record);
+  telemetryHub.recordEvent({
+    name: "bug_report_submitted",
+    path: record.path || "/",
+    metadata: { bugId: id, severity: record.severity },
+  });
   sendJson(res, 201, record);
 }
 
@@ -3064,6 +3188,59 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname === "/api/telemetry/event" && req.method === "POST") {
+    let body = {};
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      sendJson(res, 400, { error: "Body must be valid JSON." });
+      return;
+    }
+    const row = telemetryHub.recordEvent(body);
+    sendJson(res, 201, { ok: true, id: row.id });
+    return;
+  }
+
+  if (pathname === "/api/telemetry/client-error" && req.method === "POST") {
+    let body = {};
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      sendJson(res, 400, { error: "Body must be valid JSON." });
+      return;
+    }
+    const row = telemetryHub.recordClientError(body);
+    sendJson(res, 201, { ok: true, id: row.id });
+    return;
+  }
+
+  if (pathname === "/api/admin/telemetry/summary" && req.method === "GET") {
+    if (!adminKeyOk(req)) {
+      sendJson(res, 401, { error: "Admin key required (header X-CCWEB-Admin)." });
+      return;
+    }
+    sendJson(res, 200, telemetryHub.summary());
+    return;
+  }
+
+  if (pathname === "/api/admin/users" && req.method === "GET") {
+    if (!adminKeyOk(req)) {
+      sendJson(res, 401, { error: "Admin key required (header X-CCWEB-Admin)." });
+      return;
+    }
+    handleListUsers(res);
+    return;
+  }
+
+  if (pathname === "/api/admin/community/bugs" && req.method === "GET") {
+    if (!adminKeyOk(req)) {
+      sendJson(res, 401, { error: "Admin key required (header X-CCWEB-Admin)." });
+      return;
+    }
+    handleListBugReports(res);
+    return;
+  }
+
   if (pathname === "/api/maps-search" && req.method === "GET") {
     handleSearchResponse(
       res,
@@ -3141,6 +3318,25 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  const postCommentsMatch = pathname.match(/^\/api\/community\/posts\/([^/]+)\/comments$/);
+  if (postCommentsMatch) {
+    const postId = postCommentsMatch[1];
+    if (req.method === "GET") {
+      handleListPostComments(postId, res);
+      return;
+    }
+    if (req.method === "POST") {
+      await handleCreatePostComment(req, res, postId);
+      return;
+    }
+  }
+
+  const singlePostMatch = pathname.match(/^\/api\/community\/posts\/([^/]+)$/);
+  if (singlePostMatch && req.method === "GET") {
+    handleGetCommunityPost(singlePostMatch[1], res);
+    return;
+  }
+
   if (pathname === "/api/community/chats" && req.method === "GET") {
     handleListCommunityChats(requestUrl, res);
     return;
@@ -3158,6 +3354,16 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === "/api/community/reactions" && req.method === "POST") {
     await handleCreateCommunityReaction(req, res);
+    return;
+  }
+
+  if (pathname === "/api/community/bugs" && req.method === "GET") {
+    handleListBugReports(res);
+    return;
+  }
+
+  if (pathname === "/api/community/bugs" && req.method === "POST") {
+    await handleCreateBugReport(req, res);
     return;
   }
 

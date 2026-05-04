@@ -1,39 +1,54 @@
 import {
   BrowserRouter,
   Link,
-  NavLink,
   Navigate,
   Outlet,
   Route,
   Routes,
+  useLocation,
   useNavigate,
   useOutletContext,
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { EarlySignalsDashboard } from "./EarlySignalsDashboard";
-import { DeveloperOnboardingPage } from "./DeveloperOnboardingPage";
-import { DeveloperPlatformPage } from "./DeveloperPlatformPage";
-import { VisualDappBuilderPage } from "./VisualDappBuilderPage";
-import { GrowthHubPage } from "./GrowthHubPage";
-import { fetchMe, getSessionToken, getStoredUser, logoutApi, setSession } from "./session";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { getSessionToken, getRefreshToken, setSession } from "./session";
+import { reportClientError, trackEvent } from "./telemetry";
+import { AppBottomNav, AppHeader, AppShellSidebar, GlassCard, MobileMenuDrawer, PrimaryButtonLink } from "./ui";
+import { useAuthStore } from "./store/authStore";
+import { api, unwrap } from "./lib/api";
+import { TwoFactorLoginPage } from "./pages/TwoFactorLoginPage";
+import { Setup2FaPage } from "./pages/Setup2FaPage";
+import { WalletConnectPanel } from "./pages/WalletConnectPanel";
+import { MarketplacePage, MarketplaceDetailPage } from "./pages/MarketplacePage";
 
-const navItems = [
-  { label: "Home", to: "/" },
-  { label: "Learn", to: "/courses" },
-  { label: "AI Streaming", to: "/ai-streaming" },
-  { label: "Find", to: "/find" },
-  { label: "Early Signals", to: "/early-signals" },
-  { label: "Build", to: "/dapp-builder" },
-  { label: "Developers", to: "/developers" },
-  { label: "Dev onboarding", to: "/developers/onboarding" },
-  { label: "AI Agents", to: "/ai-agents" },
-  { label: "Growth Hub", to: "/growth-hub" },
-  { label: "Earn", to: "/earn" },
-  { label: "Community", to: "/community" },
-  { label: "About", to: "/about" },
-];
+const EarlySignalsDashboard = lazy(() =>
+  import("./EarlySignalsDashboard").then((m) => ({ default: m.EarlySignalsDashboard }))
+);
+const DeveloperOnboardingPage = lazy(() =>
+  import("./DeveloperOnboardingPage").then((m) => ({ default: m.DeveloperOnboardingPage }))
+);
+const DeveloperPlatformPage = lazy(() =>
+  import("./DeveloperPlatformPage").then((m) => ({ default: m.DeveloperPlatformPage }))
+);
+const VisualDappBuilderPage = lazy(() =>
+  import("./VisualDappBuilderPage").then((m) => ({ default: m.VisualDappBuilderPage }))
+);
+const GrowthHubPage = lazy(() => import("./GrowthHubPage").then((m) => ({ default: m.GrowthHubPage })));
+
+function LazyBoundary({ children }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[200px] items-center justify-center text-sm text-ccweb-muted">Loading…</div>
+      }
+    >
+      {children}
+    </Suspense>
+  );
+}
+
+const WELCOME_KEY = "ccweb_welcome_done";
 
 const courses = [
   {
@@ -80,33 +95,75 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
+          <Route path="welcome" element={<WelcomeOnboardingPage />} />
+          <Route path="learn" element={<LearnHubPage />} />
+          <Route path="build" element={<BuildHubPage />} />
           <Route path="courses" element={<CoursesPage />} />
           <Route path="courses/:id" element={<CourseNotFoundPage />} />
           <Route path="ai-tutor" element={<AiTutorPage />} />
           <Route path="ai-streaming" element={<AiStreamingPage />} />
-          <Route path="find" element={<FindPage />} />
+          <Route path="find" element={<FindPage initialTab="hub" />} />
           <Route path="crypto-scanner" element={<FindPage initialTab="scanner" />} />
           <Route path="crypto/trending" element={<FindPage initialTab="trending" />} />
           <Route path="crypto/early-signals" element={<FindPage initialTab="signals" />} />
           <Route path="crypto/wallets" element={<FindPage initialTab="wallets" />} />
-          <Route path="early-signals" element={<EarlySignalsDashboard />} />
+          <Route
+            path="early-signals"
+            element={
+              <LazyBoundary>
+                <EarlySignalsDashboard />
+              </LazyBoundary>
+            }
+          />
           <Route path="token/:slug" element={<TokenDetailPage />} />
-          <Route path="developers" element={<DeveloperPlatformPage />} />
-          <Route path="developers/onboarding" element={<DeveloperOnboardingPage />} />
-          <Route path="dapp-builder" element={<VisualDappBuilderPage />} />
+          <Route
+            path="developers"
+            element={
+              <LazyBoundary>
+                <DeveloperPlatformPage />
+              </LazyBoundary>
+            }
+          />
+          <Route
+            path="developers/onboarding"
+            element={
+              <LazyBoundary>
+                <DeveloperOnboardingPage />
+              </LazyBoundary>
+            }
+          />
+          <Route
+            path="dapp-builder"
+            element={
+              <LazyBoundary>
+                <VisualDappBuilderPage />
+              </LazyBoundary>
+            }
+          />
           <Route path="dapp-dashboard" element={<DappDashboardPage />} />
           <Route path="ai-agents" element={<AiAgentsPage />} />
-          <Route path="growth-hub" element={<GrowthHubPage />} />
+          <Route
+            path="growth-hub"
+            element={
+              <LazyBoundary>
+                <GrowthHubPage />
+              </LazyBoundary>
+            }
+          />
           <Route path="earn" element={<EarnPage />} />
           <Route path="pricing" element={<PricingPage />} />
           <Route path="tokens" element={<Navigate to="/earn" replace />} />
           <Route path="affiliates" element={<Navigate to="/earn" replace />} />
           <Route path="community" element={<CommunityPage />} />
+          <Route path="marketplace" element={<MarketplacePage />} />
+          <Route path="marketplace/:id" element={<MarketplaceDetailPage />} />
           <Route path="blog" element={<BlogPage />} />
           <Route path="about" element={<AboutPage />} />
           <Route path="faq" element={<FaqPage />} />
           <Route path="login" element={<LoginPage />} />
+          <Route path="login/2fa" element={<TwoFactorLoginPage />} />
           <Route path="signup" element={<SignupPage />} />
+          <Route path="setup-2fa" element={<Setup2FaPage />} />
           <Route path="contact" element={<ContactPage />} />
           <Route path="privacy" element={<PrivacyPage />} />
           <Route path="terms" element={<TermsPage />} />
@@ -121,169 +178,352 @@ function App() {
 }
 
 function Layout() {
-  const [user, setUser] = useState(() => getStoredUser());
+  const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
+  const hydrate = useAuthStore((s) => s.hydrate);
+  const logoutStore = useAuthStore((s) => s.logout);
+  const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const u = await fetchMe();
-      if (!cancelled) setUser(u);
-    })();
+    hydrate();
+  }, [hydrate]);
+
+  useEffect(() => {
+    trackEvent("page_view", { title: document.title }).catch(() => {});
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    function onErr(ev) {
+      const m = ev.error?.message || ev.message || "Unknown error";
+      reportClientError(m, { source: "error" });
+    }
+    function onRej(ev) {
+      reportClientError(String(ev.reason || "unhandledrejection"), { source: "rejection" });
+    }
+    window.addEventListener("error", onErr);
+    window.addEventListener("unhandledrejection", onRej);
     return () => {
-      cancelled = true;
+      window.removeEventListener("error", onErr);
+      window.removeEventListener("unhandledrejection", onRej);
     };
   }, []);
 
   async function handleLogout() {
-    await logoutApi();
+    await logoutStore();
     setUser(null);
     navigate("/");
   }
 
-  return (
-    <div className="site-shell">
-      <header className="navbar">
-        <div className="container navbar-content">
-          <Link to="/" className="brand">
-            <span className="brand-bolt">⚡</span>
-            CHRISCCWEB
-          </Link>
-          <nav className="nav-links">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.label}
-                to={item.to}
-                className={({ isActive }) =>
-                  `nav-link${isActive ? " active" : ""}`
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-          <div className="nav-cta">
-            {user ? (
-              <>
-                <span className="nav-link" style={{ cursor: "default", opacity: 0.9 }}>
-                  {user.displayName}
-                </span>
-                <NavLink to="/dashboard" className="nav-link">
-                  Dashboard
-                </NavLink>
-                <NavLink to="/profile" className="nav-link">
-                  Profile
-                </NavLink>
-                <button type="button" className="btn btn-outline" onClick={handleLogout}>
-                  Log out
-                </button>
-              </>
-            ) : (
-              <>
-                <NavLink to="/login" className="nav-link">
-                  Login
-                </NavLink>
-                <Link to="/signup" className="btn btn-primary">
-                  Get Started
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+  const hideChrome =
+    location.pathname === "/login" ||
+    location.pathname === "/login/2fa" ||
+    location.pathname === "/signup" ||
+    location.pathname === "/welcome";
 
-      <main className="main-content">
-        <div className="container">
+  return (
+    <div className="site-shell relative min-h-dvh">
+      {!hideChrome && (
+        <>
+          <div
+            className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(56,189,248,0.14),transparent_50%),radial-gradient(ellipse_80%_50%_at_100%_50%,rgba(99,102,241,0.1),transparent_45%),linear-gradient(180deg,#020617_0%,#071422_40%,#0c2744_100%)]"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none fixed inset-0 -z-10 opacity-[0.07]"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 5 Q45 20 30 35 Q15 20 30 5' fill='none' stroke='%23ffffff' stroke-width='0.5'/%3E%3C/svg%3E")`,
+              backgroundSize: "48px 48px",
+            }}
+            aria-hidden
+          />
+        </>
+      )}
+
+      {!hideChrome && <AppHeader user={user} onOpenMenu={() => setMenuOpen(true)} />}
+      {!hideChrome && <MobileMenuDrawer open={menuOpen} onClose={() => setMenuOpen(false)} />}
+
+      <main
+        className={
+          hideChrome
+            ? "main-content main-content--flush"
+            : "mx-auto w-full max-w-[min(70rem,92vw)] px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:pt-5 lg:flex lg:gap-6 lg:pb-8 lg:pt-6"
+        }
+      >
+        {!hideChrome && <AppShellSidebar />}
+        <div className="min-w-0 flex-1">
           <Outlet context={{ user, setUser }} />
         </div>
       </main>
 
-      <footer className="footer">
-        <div className="container">
-          © {new Date().getFullYear()} Chrisccwebfoundation ·{" "}
-          <Link to="/contact">Contact</Link> · <Link to="/dashboard">Dashboard</Link>
-          {" · "}
-          <Link to="/privacy">Privacy</Link>
-          {" · "}
-          <Link to="/terms">Terms</Link>
-        </div>
-      </footer>
+      {!hideChrome && <AppBottomNav pathname={location.pathname} />}
+
+      {!hideChrome && (
+        <footer className="ccweb-footer mx-auto mb-[calc(4.25rem+env(safe-area-inset-bottom))] mt-6 max-w-[min(70rem,92vw)] border-t border-white/[0.08] px-4 py-6 text-center text-xs text-ccweb-muted sm:px-5 lg:mb-6">
+          © {new Date().getFullYear()} Chrisccwebfoundation · <Link to="/contact">Contact</Link> ·{" "}
+          <Link to="/dashboard">Dashboard</Link> · <Link to="/privacy">Privacy</Link> · <Link to="/terms">Terms</Link>
+          {user ? (
+            <>
+              {" · "}
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="border-none bg-transparent p-0 text-inherit underline decoration-white/20 underline-offset-2 hover:text-ccweb-sky-200"
+              >
+                Log out
+              </button>
+            </>
+          ) : null}
+        </footer>
+      )}
     </div>
   );
 }
 
-function HomePage() {
-  return (
-    <section className="hero">
-      <span className="pill">AI-Powered Web3 Academy &amp; Business Engine</span>
-      <h1 className="hero-title">
-        <span className="accent-cyan">Learn.</span>{" "}
-        <span className="accent-violet">Find.</span>
-        <br />
-        <span className="accent-green">Build.</span>{" "}
-        <span className="accent-cyan">Earn.</span>
-      </h1>
-      <p className="hero-subtitle">
-        CCWEB combines AI-powered education, crypto intelligence, decentralized app
-        deployment, and real revenue streams — all in one platform.
-      </p>
-      <div className="hero-actions">
-        <Link to="/signup" className="btn btn-primary">
-          Get Started Free
-        </Link>
-        <Link to="/find" className="btn btn-outline">
-          Explore Intelligence
-        </Link>
-      </div>
-      <div className="stats-grid">
-        <StatCard value="50K+" label="Learners" />
-        <StatCard value="200+" label="AI Courses" />
-        <StatCard value="8" label="DApp Templates" />
-        <StatCard value="99.9%" label="Uptime" />
-      </div>
+function WelcomeOnboardingPage() {
+  const navigate = useNavigate();
 
-      <div className="pillars-grid">
-        <Link to="/courses" className="pillar-card pillar-learn">
-          <div className="pillar-icon">🧠</div>
-          <h3>LEARN</h3>
-          <p>AI-powered academy with live streaming sessions, adaptive tutoring, quizzes, and session memory.</p>
-          <span className="pillar-link">Explore Courses →</span>
+  function pick(path) {
+    try {
+      localStorage.setItem(WELCOME_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    trackEvent("welcome_interest", { path }).catch(() => {});
+    navigate(path);
+  }
+
+  function skip() {
+    try {
+      localStorage.setItem(WELCOME_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    navigate("/dashboard");
+  }
+
+  return (
+    <section className="welcome-onboarding">
+      <header className="page-header">
+        <span className="pill">First-time setup</span>
+        <h1 className="section-title">Welcome to CCWEB</h1>
+        <p className="muted">
+          Pick where you want to start. You can change your mind anytime from the bottom navigation.
+        </p>
+      </header>
+      <div className="welcome-grid">
+        <button type="button" className="panel welcome-tile" onClick={() => pick("/learn")}>
+          <div className="welcome-tile-icon">🧠</div>
+          <h3>Learn</h3>
+          <p className="muted">Courses, AI tutor, and live AI streaming.</p>
+        </button>
+        <button type="button" className="panel welcome-tile" onClick={() => pick("/find")}>
+          <div className="welcome-tile-icon">🔍</div>
+          <h3>Find</h3>
+          <p className="muted">Scanner, early signals, and wallet intelligence.</p>
+        </button>
+        <button type="button" className="panel welcome-tile" onClick={() => pick("/build")}>
+          <div className="welcome-tile-icon">🏗️</div>
+          <h3>Build</h3>
+          <p className="muted">DApp builder, agents, developers, and growth hub.</p>
+        </button>
+        <button type="button" className="panel welcome-tile" onClick={() => pick("/earn")}>
+          <div className="welcome-tile-icon">💰</div>
+          <h3>Earn</h3>
+          <p className="muted">Affiliates, streaming revenue, and agent rewards.</p>
+        </button>
+      </div>
+      <p className="muted" style={{ marginTop: "1.25rem" }}>
+        <button type="button" className="btn btn-outline" onClick={skip}>
+          Skip for now
+        </button>
+        {" · "}
+        <Link to="/">Back to home</Link>
+      </p>
+    </section>
+  );
+}
+
+function LearnHubPage() {
+  return (
+    <section>
+      <header className="page-header">
+        <span className="pill">LEARN</span>
+        <h1 className="section-title">Learn hub</h1>
+        <p className="muted">Courses, AI tutoring, and live streaming — one place to start.</p>
+      </header>
+      <div className="card-grid">
+        <Link to="/courses" className="panel pillar-card pillar-learn" style={{ textDecoration: "none" }}>
+          <h3>Course library</h3>
+          <p className="muted">Structured tracks across crypto, AI, and Web3 product skills.</p>
+          <span className="pillar-link">Browse courses →</span>
         </Link>
-        <Link to="/find" className="pillar-card pillar-find">
-          <div className="pillar-icon">🔍</div>
-          <h3>FIND</h3>
-          <p>Crypto Safety Scanner, Early Signals Dashboard, Smart Money Tracking, and narrative detection.</p>
-          <span className="pillar-link">View Intelligence →</span>
+        <Link to="/ai-tutor" className="panel pillar-card pillar-learn" style={{ textDecoration: "none" }}>
+          <h3>AI tutor</h3>
+          <p className="muted">Ask questions and get adaptive explanations tied to CCWEB curriculum.</p>
+          <span className="pillar-link">Open tutor →</span>
         </Link>
-        <Link to="/dapp-builder" className="pillar-card pillar-build">
-          <div className="pillar-icon">🏗️</div>
-          <h3>BUILD</h3>
-          <p>DApp Builder, AI Agents, Business Automation Hub, and workflow operator system.</p>
-          <span className="pillar-link">Start Building →</span>
-        </Link>
-        <Link to="/growth-hub" className="pillar-card pillar-build" style={{ borderStyle: "dashed", opacity: 0.95 }}>
-          <div className="pillar-icon">🌍</div>
-          <h3>GROWTH HUB</h3>
-          <p>Global marketing agent, marketplace, escrow monetization, and lead engine — organic-first.</p>
-          <span className="pillar-link">Open Growth Hub →</span>
-        </Link>
-        <Link to="/earn" className="pillar-card pillar-earn">
-          <div className="pillar-icon">💰</div>
-          <h3>EARN</h3>
-          <p>Affiliate revenue, streaming income, referral commissions, and skill-based payouts.</p>
-          <span className="pillar-link">Start Earning →</span>
+        <Link to="/ai-streaming" className="panel pillar-card pillar-learn" style={{ textDecoration: "none" }}>
+          <h3>AI streaming</h3>
+          <p className="muted">Host or join live rooms with curriculum-aware AI hosts and session memory.</p>
+          <span className="pillar-link">Go live →</span>
         </Link>
       </div>
     </section>
   );
 }
 
+function BuildHubPage() {
+  return (
+    <section>
+      <header className="page-header">
+        <span className="pill">BUILD</span>
+        <h1 className="section-title">Build hub</h1>
+        <p className="muted">Ship DApps, wire agents, and plug into the developer platform.</p>
+      </header>
+      <div className="card-grid">
+        <Link to="/dapp-builder" className="panel pillar-card pillar-build" style={{ textDecoration: "none" }}>
+          <h3>Visual DApp builder</h3>
+          <p className="muted">Drag-and-drop canvas, templates, and simulated multi-chain deploy.</p>
+          <span className="pillar-link">Open builder →</span>
+        </Link>
+        <Link to="/dapp-dashboard" className="panel pillar-card pillar-build" style={{ textDecoration: "none" }}>
+          <h3>DApp dashboard</h3>
+          <p className="muted">Deployments, transactions, and network breakdown for your builds.</p>
+          <span className="pillar-link">View dashboard →</span>
+        </Link>
+        <Link to="/ai-agents" className="panel pillar-card pillar-build" style={{ textDecoration: "none" }}>
+          <h3>AI agents</h3>
+          <p className="muted">Research, content, and workflow agents with operator-style orchestration.</p>
+          <span className="pillar-link">Explore agents →</span>
+        </Link>
+        <Link to="/developers" className="panel pillar-card pillar-build" style={{ textDecoration: "none" }}>
+          <h3>Developer platform</h3>
+          <p className="muted">API keys, public API, webhooks, and usage logs.</p>
+          <span className="pillar-link">Open console →</span>
+        </Link>
+        <Link
+          to="/developers/onboarding"
+          className="panel pillar-card pillar-build"
+          style={{ textDecoration: "none" }}
+        >
+          <h3>Developer onboarding</h3>
+          <p className="muted">Five-minute path: project, API key, sandbox, and CLI quick start.</p>
+          <span className="pillar-link">Start onboarding →</span>
+        </Link>
+        <Link to="/growth-hub" className="panel pillar-card pillar-build" style={{ textDecoration: "none" }}>
+          <h3>Growth hub</h3>
+          <p className="muted">Marketplace, escrow prototype, campaigns, and lead engine.</p>
+          <span className="pillar-link">Open growth hub →</span>
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function HomePage() {
+  return (
+    <div className="space-y-6 pb-8">
+      <GlassCard className="relative overflow-hidden">
+        <div
+          className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-gradient-to-br from-ccweb-cyan-400/25 to-ccweb-indigo-500/20 blur-3xl"
+          aria-hidden
+        />
+        <div className="relative">
+          <span className="inline-block rounded-full border border-white/15 bg-white/[0.06] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ccweb-sky-200 sm:text-[11px]">
+            Web3 + AI campus
+          </span>
+          <h1 className="mt-4 max-w-[18ch] text-3xl font-bold leading-tight tracking-tight text-ccweb-text sm:text-4xl md:text-5xl">
+            Learn smarter.{" "}
+            <span className="bg-gradient-to-r from-ccweb-sky-200 via-ccweb-cyan-300 to-ccweb-indigo-300 bg-clip-text text-transparent">
+              Ship faster.
+            </span>
+          </h1>
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-ccweb-muted sm:text-base">
+            One glass shell for courses, on-chain intelligence, builders, and revenue — signals over hype, built for
+            mobile-first teams.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <PrimaryButtonLink to="/signup">Get started free</PrimaryButtonLink>
+            <Link
+              to="/find"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-[14px] border border-white/15 bg-white/[0.04] px-5 py-2.5 text-sm font-semibold text-ccweb-sky-100 shadow-ccweb-glow backdrop-blur-sm transition hover:border-ccweb-sky-400/30 hover:bg-white/[0.08]"
+            >
+              Explore intelligence
+            </Link>
+          </div>
+        </div>
+      </GlassCard>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard value="50K+" label="Learners" />
+        <StatCard value="200+" label="AI paths" />
+        <StatCard value="8" label="DApp templates" />
+        <StatCard value="99.9%" label="Target uptime" />
+      </div>
+
+      <div>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-ccweb-muted">Pillars</h2>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <Link to="/learn" className="group block no-underline">
+            <GlassCard className="h-full transition group-hover:border-ccweb-cyan-400/25 group-hover:shadow-ccweb-glow">
+              <div className="text-2xl">🧠</div>
+              <h3 className="mt-2 text-lg font-bold text-ccweb-text">Learn</h3>
+              <p className="mt-1 text-sm text-ccweb-muted">
+                Streaming, tutor, and structured tracks — session memory included.
+              </p>
+              <span className="mt-3 inline-block text-sm font-semibold text-ccweb-sky-300">Open hub →</span>
+            </GlassCard>
+          </Link>
+          <Link to="/find" className="group block no-underline">
+            <GlassCard className="h-full transition group-hover:border-ccweb-cyan-400/25 group-hover:shadow-ccweb-glow">
+              <div className="text-2xl">🔍</div>
+              <h3 className="mt-2 text-lg font-bold text-ccweb-text">Find</h3>
+              <p className="mt-1 text-sm text-ccweb-muted">Scanner, early signals, and wallet context — probabilities, not promises.</p>
+              <span className="mt-3 inline-block text-sm font-semibold text-ccweb-sky-300">View hub →</span>
+            </GlassCard>
+          </Link>
+          <Link to="/build" className="group block no-underline">
+            <GlassCard className="h-full transition group-hover:border-ccweb-cyan-400/25 group-hover:shadow-ccweb-glow">
+              <div className="text-2xl">🏗️</div>
+              <h3 className="mt-2 text-lg font-bold text-ccweb-text">Build</h3>
+              <p className="mt-1 text-sm text-ccweb-muted">Visual DApp builder, agents, developer API, and growth workspace.</p>
+              <span className="mt-3 inline-block text-sm font-semibold text-ccweb-sky-300">Start building →</span>
+            </GlassCard>
+          </Link>
+          <Link to="/growth-hub" className="group block no-underline sm:col-span-2 xl:col-span-1">
+            <GlassCard className="h-full border-dashed border-white/20 transition group-hover:border-ccweb-indigo-400/35">
+              <div className="text-2xl">🌍</div>
+              <h3 className="mt-2 text-lg font-bold text-ccweb-text">Growth hub</h3>
+              <p className="mt-1 text-sm text-ccweb-muted">Marketplace + escrow prototype for organic-first GTM plays.</p>
+              <span className="mt-3 inline-block text-sm font-semibold text-ccweb-indigo-300">Open workspace →</span>
+            </GlassCard>
+          </Link>
+          <Link to="/earn" className="group block no-underline sm:col-span-2 xl:col-span-2">
+            <GlassCard className="h-full bg-gradient-to-br from-white/[0.06] to-transparent transition group-hover:border-ccweb-cyan-400/20">
+              <div className="text-2xl">💰</div>
+              <h3 className="mt-2 text-lg font-bold text-ccweb-text">Earn</h3>
+              <p className="mt-1 text-sm text-ccweb-muted max-w-prose">
+                Affiliates, streaming splits, and agent-linked outcomes — external settlement, no platform-token gimmicks.
+              </p>
+              <span className="mt-3 inline-block text-sm font-semibold text-ccweb-green-400">View earn hub →</span>
+            </GlassCard>
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StatCard({ value, label }) {
   return (
-    <article className="stat-card">
-      <div className="stat-value">{value}</div>
-      <div className="muted">{label}</div>
-    </article>
+    <GlassCard padding="p-4 sm:p-5" className="text-center sm:text-left">
+      <div className="bg-gradient-to-r from-ccweb-sky-200 to-ccweb-cyan-300 bg-clip-text text-2xl font-bold tracking-tight text-transparent sm:text-3xl">
+        {value}
+      </div>
+      <div className="mt-1 text-xs font-medium uppercase tracking-wide text-ccweb-muted">{label}</div>
+    </GlassCard>
   );
 }
 
@@ -1068,30 +1308,362 @@ function AffiliatesPage() {
 }
 
 function CommunityPage() {
+  const { user } = useOutletContext();
+  const [posts, setPosts] = useState([]);
+  const [chats, setChats] = useState([]);
+  const [channel, setChannel] = useState("general");
+  const [chatBody, setChatBody] = useState("");
+  const [postTitle, setPostTitle] = useState("");
+  const [postContent, setPostContent] = useState("");
+  const [bugTitle, setBugTitle] = useState("");
+  const [bugDesc, setBugDesc] = useState("");
+  const [bugSev, setBugSev] = useState("normal");
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+  const [expandedPostId, setExpandedPostId] = useState(null);
+  const [commentsByPost, setCommentsByPost] = useState({});
+  const [commentDraft, setCommentDraft] = useState({});
+
+  async function loadPosts() {
+    try {
+      const data = await unwrap(api.get("/api/community/posts"));
+      setPosts(data.posts || []);
+    } catch {
+      setPosts([]);
+    }
+  }
+
+  async function loadChats() {
+    try {
+      const data = await unwrap(api.get(`/api/community/chats?channel=${encodeURIComponent(channel)}`));
+      setChats(data.chats || []);
+    } catch {
+      setChats([]);
+    }
+  }
+
+  async function loadComments(postId) {
+    try {
+      const data = await unwrap(api.get(`/api/community/posts/${postId}/comments`));
+      setCommentsByPost((prev) => ({ ...prev, [postId]: data.comments || [] }));
+    } catch {
+      setCommentsByPost((prev) => ({ ...prev, [postId]: [] }));
+    }
+  }
+
+  useEffect(() => {
+    loadPosts();
+  }, []);
+
+  useEffect(() => {
+    loadChats();
+  }, [channel]);
+
+  useEffect(() => {
+    if (expandedPostId) loadComments(expandedPostId);
+  }, [expandedPostId]);
+
+  async function submitPost(e) {
+    e.preventDefault();
+    setErr(null);
+    setMsg(null);
+    if (!user) {
+      setErr("Sign in to post.");
+      return;
+    }
+    try {
+      const data = await unwrap(
+        api.post("/api/community/posts", {
+          authorUserId: user.id,
+          authorDisplayName: user.displayName,
+          title: postTitle.trim(),
+          content: postContent.trim(),
+        })
+      );
+      setPostTitle("");
+      setPostContent("");
+      setMsg("Post published.");
+      loadPosts();
+      trackEvent("community_post", { postId: data.id }).catch(() => {});
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  async function submitChat(e) {
+    e.preventDefault();
+    setErr(null);
+    setMsg(null);
+    if (!user) {
+      setErr("Sign in to chat.");
+      return;
+    }
+    try {
+      await unwrap(
+        api.post("/api/community/chats", {
+          authorUserId: user.id,
+          authorDisplayName: user.displayName,
+          channel,
+          message: chatBody.trim(),
+        })
+      );
+      setChatBody("");
+      setMsg("Message sent.");
+      loadChats();
+      trackEvent("community_chat", { channel }).catch(() => {});
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  async function submitBug(e) {
+    e.preventDefault();
+    setErr(null);
+    setMsg(null);
+    try {
+      const data = await unwrap(
+        api.post("/api/community/bugs", {
+          reporterUserId: user?.id,
+          reporterDisplayName: user?.displayName,
+          title: bugTitle.trim(),
+          description: bugDesc.trim(),
+          path: window.location.pathname,
+          severity: bugSev,
+        })
+      );
+      setBugTitle("");
+      setBugDesc("");
+      setMsg(`Thanks — tracked as ${data.id}.`);
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  async function submitComment(postId, e) {
+    e.preventDefault();
+    setErr(null);
+    if (!user) {
+      setErr("Sign in to comment.");
+      return;
+    }
+    const body = (commentDraft[postId] || "").trim();
+    if (!body) return;
+    try {
+      await unwrap(
+        api.post(`/api/community/posts/${postId}/comments`, {
+          authorUserId: user.id,
+          authorDisplayName: user.displayName,
+          body,
+        })
+      );
+      setCommentDraft((d) => ({ ...d, [postId]: "" }));
+      loadComments(postId);
+      loadPosts();
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
   return (
     <section>
       <header className="page-header">
+        <span className="pill">COMMUNITY</span>
         <h1 className="section-title">Community</h1>
-        <p className="muted">Connect, collaborate, and grow with learners.</p>
+        <p className="muted">
+          Posts, comments, and chat use the live API (in-memory on the server until a database is connected).
+        </p>
       </header>
+
+      {err && <p style={{ color: "#ff6b6b", marginBottom: "0.75rem" }}>{err}</p>}
+      {msg && <p className="muted" style={{ marginBottom: "0.75rem" }}>{msg}</p>}
+
       <div className="card-grid">
         <article className="panel">
-          <h3>General Discussion</h3>
-          <p className="muted">8,400 members · 2.1K posts</p>
+          <h3>Channels</h3>
+          <p className="muted">Pick a channel for the live chat below.</p>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
+            {["general", "crypto", "builders"].map((c) => (
+              <button
+                key={c}
+                type="button"
+                className={`btn btn-outline${channel === c ? " btn-primary" : ""}`}
+                style={{ fontSize: "0.85rem", padding: "0.45rem 0.7rem" }}
+                onClick={() => setChannel(c)}
+              >
+                #{c}
+              </button>
+            ))}
+          </div>
         </article>
         <article className="panel">
-          <h3>Crypto Trading</h3>
-          <p className="muted">5,200 members · 3.4K posts</p>
-        </article>
-        <article className="panel">
-          <h3>AI Projects</h3>
-          <p className="muted">3,100 members · 890 posts</p>
-        </article>
-        <article className="panel">
-          <h3>Study Groups</h3>
-          <p className="muted">2,800 members · 1.2K posts</p>
+          <h3>Report a bug</h3>
+          <p className="muted">Helps us prioritize fixes during early access.</p>
+          <form onSubmit={submitBug} style={{ marginTop: "0.75rem" }}>
+            <div className="auth-row">
+              <label htmlFor="bug-title">Title</label>
+              <input id="bug-title" value={bugTitle} onChange={(e) => setBugTitle(e.target.value)} required />
+            </div>
+            <div className="auth-row">
+              <label htmlFor="bug-sev">Severity</label>
+              <select id="bug-sev" value={bugSev} onChange={(e) => setBugSev(e.target.value)}>
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div className="auth-row">
+              <label htmlFor="bug-desc">What happened?</label>
+              <textarea
+                id="bug-desc"
+                rows={4}
+                value={bugDesc}
+                onChange={(e) => setBugDesc(e.target.value)}
+                required
+              />
+            </div>
+            <button type="submit" className="btn btn-primary">
+              Submit report
+            </button>
+          </form>
         </article>
       </div>
+
+      <div className="card-grid" style={{ marginTop: "1rem" }}>
+        <article className="panel community-chat-panel">
+          <h3>Live chat · #{channel}</h3>
+          <div className="community-chat-scroll">
+            {chats.length === 0 ? (
+              <p className="muted">No messages yet. Say hello.</p>
+            ) : (
+              chats
+                .slice()
+                .reverse()
+                .map((c) => (
+                  <div key={c.id} className="community-chat-row">
+                    <strong>{c.authorDisplayName}</strong>
+                    <span className="muted" style={{ marginLeft: "0.35rem", fontSize: "0.8rem" }}>
+                      {new Date(c.createdAt).toLocaleString()}
+                    </span>
+                    <p style={{ margin: "0.25rem 0 0" }}>{c.message}</p>
+                  </div>
+                ))
+            )}
+          </div>
+          <form onSubmit={submitChat} style={{ marginTop: "0.75rem" }}>
+            <div className="auth-row">
+              <label htmlFor="chat-msg">Message</label>
+              <input
+                id="chat-msg"
+                value={chatBody}
+                onChange={(e) => setChatBody(e.target.value)}
+                placeholder={user ? "Write a message…" : "Sign in to chat"}
+                disabled={!user}
+              />
+            </div>
+            <button type="submit" className="btn btn-outline" disabled={!user}>
+              Send
+            </button>
+          </form>
+        </article>
+
+        <article className="panel">
+          <h3>New post</h3>
+          {!user ? <p className="muted">Sign in to create a post.</p> : null}
+          <form onSubmit={submitPost} style={{ marginTop: "0.5rem" }}>
+            <div className="auth-row">
+              <label htmlFor="post-title">Title</label>
+              <input
+                id="post-title"
+                value={postTitle}
+                onChange={(e) => setPostTitle(e.target.value)}
+                disabled={!user}
+                required
+              />
+            </div>
+            <div className="auth-row">
+              <label htmlFor="post-body">Body</label>
+              <textarea
+                id="post-body"
+                rows={4}
+                value={postContent}
+                onChange={(e) => setPostContent(e.target.value)}
+                disabled={!user}
+                required
+              />
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={!user}>
+              Publish
+            </button>
+          </form>
+        </article>
+      </div>
+
+      <section className="panel" style={{ marginTop: "1rem" }}>
+        <h3>Posts &amp; comments</h3>
+        {posts.length === 0 ? (
+          <p className="muted">No posts yet.</p>
+        ) : (
+          <ul className="list" style={{ marginTop: "0.5rem" }}>
+            {posts.slice(0, 12).map((p) => (
+              <li key={p.id} style={{ marginBottom: "1rem" }}>
+                <strong>{p.title}</strong> · <span className="muted">{p.authorDisplayName}</span>
+                {typeof p.commentCount === "number" ? (
+                  <span className="muted" style={{ marginLeft: "0.35rem" }}>
+                    · {p.commentCount} comment{p.commentCount === 1 ? "" : "s"}
+                  </span>
+                ) : null}
+                <p className="muted" style={{ margin: "0.25rem 0 0", fontSize: "0.9rem" }}>
+                  {p.content.slice(0, 220)}
+                  {p.content.length > 220 ? "…" : ""}
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{ marginTop: "0.4rem", fontSize: "0.8rem", padding: "0.35rem 0.6rem" }}
+                  onClick={() => setExpandedPostId((id) => (id === p.id ? null : p.id))}
+                >
+                  {expandedPostId === p.id ? "Hide thread" : "View / comment"}
+                </button>
+                {expandedPostId === p.id ? (
+                  <div style={{ marginTop: "0.6rem", paddingLeft: "0.5rem", borderLeft: "2px solid rgba(117,160,214,0.25)" }}>
+                    <ul className="list" style={{ fontSize: "0.88rem" }}>
+                      {(commentsByPost[p.id] || []).map((cm) => (
+                        <li key={cm.id} style={{ marginBottom: "0.35rem" }}>
+                          <strong>{cm.authorDisplayName}</strong>
+                          <span className="muted" style={{ marginLeft: "0.35rem", fontSize: "0.75rem" }}>
+                            {new Date(cm.createdAt).toLocaleString()}
+                          </span>
+                          <p className="muted" style={{ margin: "0.15rem 0 0" }}>
+                            {cm.body}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                    {user ? (
+                      <form onSubmit={(ev) => submitComment(p.id, ev)} style={{ marginTop: "0.5rem" }}>
+                        <textarea
+                          rows={2}
+                          value={commentDraft[p.id] || ""}
+                          onChange={(e) => setCommentDraft((d) => ({ ...d, [p.id]: e.target.value }))}
+                          placeholder="Write a comment…"
+                          style={{ width: "100%", marginBottom: "0.35rem" }}
+                        />
+                        <button type="submit" className="btn btn-primary btn-sm">
+                          Post comment
+                        </button>
+                      </form>
+                    ) : (
+                      <p className="muted" style={{ marginTop: "0.35rem", fontSize: "0.85rem" }}>
+                        Sign in to comment.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </section>
   );
 }
@@ -1320,35 +1892,31 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const login = useAuthStore((s) => s.login);
+  const register = useAuthStore((s) => s.register);
 
   async function submit() {
     setError(null);
     setLoading(true);
     try {
       if (mode === "signup") {
-        const reg = await fetch("/api/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, displayName: displayName.trim() || undefined }),
-        });
-        const regData = await reg.json();
-        if (!reg.ok) throw new Error(regData.error || "Registration failed");
+        await register({ email, password, displayName });
       }
-      const loginRes = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await loginRes.json();
-      if (!loginRes.ok) throw new Error(data.error || "Authentication failed");
-      if (data.needsTwoFactor) {
-        throw new Error("This account has 2FA enabled. Use the full login flow with an authenticator code (coming in UI).");
+      const result = await login(email, password);
+      if (result?.needsTwoFactor) {
+        navigate("/login/2fa", { replace: true });
+        return;
       }
-      const access = data.accessToken || data.token;
-      setSession(access, data.user, data.refreshToken);
-      setUser(data.user);
-      navigate("/dashboard");
+      setUser(result.user);
+      try {
+        if (!localStorage.getItem(WELCOME_KEY)) {
+          navigate("/welcome");
+        } else {
+          navigate("/dashboard");
+        }
+      } catch {
+        navigate("/dashboard");
+      }
     } catch (e) {
       setError(e.message);
     } finally {
@@ -1449,6 +2017,36 @@ function ContactPage() {
 
 function DashboardPage() {
   const { user } = useOutletContext();
+  const [dash, setDash] = useState(null);
+  const [agents, setAgents] = useState(null);
+  const [growth, setGrowth] = useState(null);
+  const [rooms, setRooms] = useState(null);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    if (!user) return;
+    let c = true;
+    Promise.all([
+      unwrap(api.get("/api/dapp/dashboard")),
+      unwrap(api.get("/api/build/agents")),
+      unwrap(api.get("/api/growth/overview")),
+      unwrap(api.get("/api/streaming/rooms")),
+    ])
+      .then(([d, a, g, r]) => {
+        if (!c) return;
+        setDash(d);
+        setAgents(a);
+        setGrowth(g);
+        setRooms(r);
+      })
+      .catch((e) => {
+        if (c) setErr(e.message);
+      });
+    return () => {
+      c = false;
+    };
+  }, [user]);
+
   if (!user) {
     return (
       <section>
@@ -1463,66 +2061,83 @@ function DashboardPage() {
     );
   }
 
+  const ov = dash?.overview;
+  const agentCount = agents?.count ?? 0;
+
   return (
-    <section>
+    <section className="space-y-6">
       <header className="page-header">
         <h1 className="section-title">Dashboard</h1>
         <p className="muted">
-          Welcome back, <strong>{user.displayName}</strong>. Here&apos;s your learning overview (prototype data).
+          Welcome back, <strong>{user.displayName}</strong>. Data below is loaded from the live API (
+          <code className="text-xs">/api/dapp/dashboard</code>, <code className="text-xs">/api/build/agents</code>,{" "}
+          <code className="text-xs">/api/growth/overview</code>, <code className="text-xs">/api/streaming/rooms</code>
+          ).
         </p>
       </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>Plan</h3>
-          <p>Free Plan</p>
-          <p className="muted">Upgrade now</p>
-        </article>
-        <article className="panel">
-          <h3>Courses Enrolled</h3>
-          <p>5</p>
-          <p className="muted">+1 this month</p>
-        </article>
-        <article className="panel">
-          <h3>Tokens Earned</h3>
-          <p>1,250</p>
-          <p className="muted">+180 this week</p>
-        </article>
-        <article className="panel">
-          <h3>Referrals</h3>
-          <p>12</p>
-          <p className="muted">+3 this month</p>
-        </article>
-        <article className="panel">
-          <h3>Affiliate Revenue</h3>
-          <p>$340</p>
-          <p className="muted">+$85 this week</p>
-        </article>
+      {err ? <p className="text-sm text-red-400">{err}</p> : null}
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <GlassCard padding="p-4">
+          <h3 className="text-sm font-semibold text-ccweb-muted">DApp deployments</h3>
+          <p className="mt-2 text-2xl font-bold text-ccweb-sky-200">{ov?.totalDeployments ?? "—"}</p>
+          <p className="text-xs text-ccweb-muted">Active: {ov?.activeDeployments ?? 0}</p>
+        </GlassCard>
+        <GlassCard padding="p-4">
+          <h3 className="text-sm font-semibold text-ccweb-muted">Spend (DApp)</h3>
+          <p className="mt-2 text-2xl font-bold text-ccweb-sky-200">${ov?.totalSpentUsd ?? 0}</p>
+          <p className="text-xs text-ccweb-muted">Tx count: {ov?.totalTransactions ?? 0}</p>
+        </GlassCard>
+        <GlassCard padding="p-4">
+          <h3 className="text-sm font-semibold text-ccweb-muted">AI agents (catalog)</h3>
+          <p className="mt-2 text-2xl font-bold text-ccweb-sky-200">{agentCount}</p>
+          <p className="text-xs text-ccweb-muted">From /api/build/agents</p>
+        </GlassCard>
+        <GlassCard padding="p-4">
+          <h3 className="text-sm font-semibold text-ccweb-muted">Growth hub</h3>
+          <p className="mt-2 text-2xl font-bold text-ccweb-sky-200">{growth?.listingsCount ?? 0}</p>
+          <p className="text-xs text-ccweb-muted">Open orders: {growth?.openOrders ?? 0}</p>
+        </GlassCard>
       </div>
-      <section className="panel" style={{ marginTop: "1rem" }}>
-        <h3>Continue Learning</h3>
-        <p className="muted">Blockchain Fundamentals · 9/12 lessons · 75%</p>
-        <p className="muted">AI Basics · 4/10 lessons · 40%</p>
-      </section>
-      <section className="panel" style={{ marginTop: "1rem" }}>
-        <h3>Pillars quick links</h3>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
-          <Link to="/courses" className="btn btn-outline">
+
+      <GlassCard>
+        <h3 className="text-lg font-semibold text-ccweb-text">Live rooms</h3>
+        <p className="mt-1 text-sm text-ccweb-muted">
+          {rooms?.rooms?.length ? `${rooms.rooms.length} room(s) from /api/streaming/rooms` : "No rooms yet — create one from AI streaming."}
+        </p>
+        <ul className="mt-3 space-y-2 text-sm">
+          {(rooms?.rooms || []).slice(0, 5).map((room) => (
+            <li key={room.id} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+              <strong>{room.roomName}</strong>{" "}
+              <span className="text-ccweb-muted">· {room.status || "active"}</span>
+            </li>
+          ))}
+        </ul>
+      </GlassCard>
+
+      <GlassCard>
+        <h3 className="text-lg font-semibold text-ccweb-text">Quick actions</h3>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link to="/learn" className="btn btn-outline">
             Learn
           </Link>
           <Link to="/find" className="btn btn-outline">
             Find
           </Link>
-          <Link to="/dapp-builder" className="btn btn-outline">
+          <Link to="/build" className="btn btn-outline">
             Build
           </Link>
           <Link to="/earn" className="btn btn-outline">
             Earn
           </Link>
-          <Link to="/ai-streaming" className="btn btn-outline">
+          <Link to="/ai-streaming" className="btn btn-primary">
             AI Streaming
           </Link>
+          <Link to="/marketplace" className="btn btn-outline">
+            Marketplace
+          </Link>
         </div>
-      </section>
+      </GlassCard>
     </section>
   );
 }
@@ -1550,22 +2165,15 @@ function ProfilePage() {
     setMsg(null);
     const token = getSessionToken();
     try {
-      const res = await fetch("/api/users", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
+      const data = await unwrap(
+        api.post("/api/users", {
           userId: user.id,
           displayName: displayName.trim(),
           pushEnabled,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Save failed");
+        })
+      );
       setUser(data);
-      setSession(token, data, undefined);
+      setSession(token, data, getRefreshToken());
       setMsg("Profile saved.");
     } catch (e) {
       setErr(e.message);
@@ -1573,11 +2181,22 @@ function ProfilePage() {
   }
 
   return (
-    <section>
+    <section className="space-y-6">
       <header className="page-header">
         <h1 className="section-title">Profile</h1>
         <p className="muted">Signed in as {user.email || user.id}</p>
+        <div style={{ marginTop: "0.6rem" }} className="flex flex-wrap gap-2">
+          <Link to="/dashboard" className="btn btn-outline btn-sm">
+            Dashboard
+          </Link>
+          <Link to="/setup-2fa" className="btn btn-outline btn-sm">
+            Set up 2FA
+          </Link>
+        </div>
       </header>
+
+      <WalletConnectPanel />
+
       <article className="panel" style={{ maxWidth: 480 }}>
         <div className="auth-row">
           <label htmlFor="p-name">Display name</label>
@@ -1642,10 +2261,10 @@ function TermsPage() {
   );
 }
 
-function FindPage({ initialTab = "scanner" }) {
+function FindPage({ initialTab = "hub" }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get("tab");
-  const validTabs = ["scanner", "signals", "trending", "wallets", "alerts"];
+  const validTabs = ["hub", "scanner", "signals", "trending", "wallets", "alerts"];
   const initial = tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : initialTab;
   const [tab, setTab] = useState(initial);
 
@@ -1673,7 +2292,7 @@ function FindPage({ initialTab = "scanner" }) {
 
   function goTab(next) {
     setTab(next);
-    setSearchParams(next === "scanner" ? {} : { tab: next });
+    setSearchParams(next === "scanner" || next === "hub" ? {} : { tab: next });
   }
 
   async function doScan() {
@@ -1808,6 +2427,7 @@ function FindPage({ initialTab = "scanner" }) {
 
       <div className="dash-tabs find-hub-tabs">
         {[
+          ["hub", "Hub"],
           ["scanner", "Token Scanner"],
           ["signals", "Early Signals"],
           ["trending", "Trending & Discovery"],
@@ -1824,6 +2444,31 @@ function FindPage({ initialTab = "scanner" }) {
           </button>
         ))}
       </div>
+
+      {tab === "hub" && (
+        <div className="card-grid" style={{ marginTop: "1rem" }}>
+          <Link to="/crypto-scanner" className="panel find-hub-card">
+            <h3>Token scanner</h3>
+            <p className="muted">Safety heuristics, contract context, and risk/opportunity framing.</p>
+            <span className="pillar-link">Open scanner →</span>
+          </Link>
+          <Link to="/early-signals" className="panel find-hub-card">
+            <h3>Early Signals dashboard</h3>
+            <p className="muted">Aggregated feed with narrative and momentum cues (signals, not guarantees).</p>
+            <span className="pillar-link">View dashboard →</span>
+          </Link>
+          <Link to="/find?tab=signals" className="panel find-hub-card">
+            <h3>Hub: Early signals</h3>
+            <p className="muted">In-app signal list tied to the same scoring model as the scanner.</p>
+            <span className="pillar-link">Browse signals →</span>
+          </Link>
+          <Link to="/find?tab=wallets" className="panel find-hub-card">
+            <h3>Smart money &amp; wallets</h3>
+            <p className="muted">Track large-wallet behavior and register alerts for follow-up.</p>
+            <span className="pillar-link">Track wallets →</span>
+          </Link>
+        </div>
+      )}
 
       {tab === "scanner" && (
         <div className="find-scanner find-scanner-wide">

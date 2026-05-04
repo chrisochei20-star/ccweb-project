@@ -38,6 +38,12 @@ The Vite config proxies `/api`, `/v1`, and `/auth` to `http://127.0.0.1:3000`. S
 - `POST /api/auth/logout` — Revoke refresh
 - `POST /api/auth/wallet/nonce` + `POST /api/auth/wallet/connect` — Wallet sign-in (see [docs/AUTH_API.md](./docs/AUTH_API.md))
 - `GET /api/growth/overview` — Growth hub KPIs, fees, policy text ([docs/GROWTH_HUB.md](./docs/GROWTH_HUB.md))
+- `POST /api/telemetry/event` — In-memory usage event (name, path, sessionId, metadata)
+- `POST /api/telemetry/client-error` — Client-reported error line (prototype)
+- `GET /api/admin/telemetry/summary` — Requires `X-CCWEB-Admin` matching `CCWEB_ADMIN_KEY`
+- `GET /api/admin/users` — Same as `GET /api/users` but admin-gated
+- `POST /api/community/bugs` + `GET /api/community/bugs` — Bug reports; `GET /api/admin/community/bugs` is admin-gated
+- `GET /api/community/posts/:id/comments` + `POST /api/community/posts/:id/comments` — Post comments; `GET /api/community/posts/:id` — Post + comments
 - **Developer onboarding:** `/developers/onboarding` (guided ~5 min) · **Quick start:** [docs/DEVELOPER_QUICKSTART.md](https://github.com/chrisochei20-star/ccweb-project/blob/main/docs/DEVELOPER_QUICKSTART.md) and static `/docs/DEVELOPER_QUICKSTART.md` when served
 
 - **Security architecture:** [docs/BACKEND_SECURITY_ARCHITECTURE.md](./docs/BACKEND_SECURITY_ARCHITECTURE.md) (gateway, services, checklist)
@@ -45,6 +51,6 @@ The Vite config proxies `/api`, `/v1`, and `/auth` to `http://127.0.0.1:3000`. S
 ### Gotchas
 - The `GET /api/streaming/curriculum` endpoint documented in the README returns 404; the curriculum data is embedded in the room creation response instead.
 - The backend serves both API routes and static files from `/public`. In production mode (`npm start`), it serves the built `dist/` folder.
-- The in-memory data resets on every server restart.
+- The in-memory data resets on every server restart (including telemetry events and bug reports).
 - Without `MONGODB_URI`, auth users and refresh bindings fall back to **in-memory** (lost on restart). Set `AUTH_JWT_SECRET` (32+ chars) in production.
 - Without `MONGODB_URI`, tracked wallets and tracked tokens are not persisted for intelligence features (API may still return sample market data).

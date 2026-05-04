@@ -34,6 +34,7 @@ The Vite config proxies `/api` requests to `http://127.0.0.1:3000`. Start the AP
 - `POST /api/auth/login` — Login; returns Bearer token + user
 - `GET /api/auth/me` — Current user (requires `Authorization: Bearer <token>`)
 - `POST /api/auth/logout` — Invalidate session token
+- **Developer ecosystem:** `GET/POST /v1/*` (requires `CCWEB-API-Key` or `Authorization: Bearer` with a key from `POST /api/developer/keys`). Console (no key, prototype): `GET /api/developer/docs`, `GET /api/developer/openapi.json`, `POST /api/developer/sandbox/echo`
 
 ### Gotchas
 - The `GET /api/streaming/curriculum` endpoint documented in the README returns 404; the curriculum data is embedded in the room creation response instead.

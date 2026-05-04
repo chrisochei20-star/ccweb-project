@@ -265,7 +265,9 @@ function overview() {
     organicPolicy:
       "No unsolicited bulk messaging. Use double opt-in where required. Agent outputs are suggestions — human approval before publish.",
     listingsCount: listings.size,
-    openOrders: [...orders.values()].filter((o) => o.status.startsWith("escrow") || o.status === "delivered_pending_confirm").length,
+    openOrders: [...orders.values()].filter(
+      (o) => o.status === "escrow_funded" || o.status === "delivered_pending_confirm"
+    ).length,
   };
 }
 

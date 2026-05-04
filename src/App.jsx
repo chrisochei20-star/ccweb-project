@@ -11,15 +11,42 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { EarlySignalsDashboard } from "./EarlySignalsDashboard";
-import { DeveloperOnboardingPage } from "./DeveloperOnboardingPage";
-import { DeveloperPlatformPage } from "./DeveloperPlatformPage";
-import { VisualDappBuilderPage } from "./VisualDappBuilderPage";
-import { GrowthHubPage } from "./GrowthHubPage";
-import { fetchMe, getSessionToken, getStoredUser, getRefreshToken, logoutApi, setSession } from "./session";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { getSessionToken, getRefreshToken, setSession } from "./session";
 import { reportClientError, trackEvent } from "./telemetry";
-import { AppBottomNav, AppHeader, DesktopNav, GlassCard, MobileMenuDrawer, PrimaryButtonLink } from "./ui";
+import { AppBottomNav, AppHeader, AppShellSidebar, GlassCard, MobileMenuDrawer, PrimaryButtonLink } from "./ui";
+import { useAuthStore } from "./store/authStore";
+import { api, unwrap } from "./lib/api";
+import { TwoFactorLoginPage } from "./pages/TwoFactorLoginPage";
+import { Setup2FaPage } from "./pages/Setup2FaPage";
+import { WalletConnectPanel } from "./pages/WalletConnectPanel";
+import { MarketplacePage, MarketplaceDetailPage } from "./pages/MarketplacePage";
+
+const EarlySignalsDashboard = lazy(() =>
+  import("./EarlySignalsDashboard").then((m) => ({ default: m.EarlySignalsDashboard }))
+);
+const DeveloperOnboardingPage = lazy(() =>
+  import("./DeveloperOnboardingPage").then((m) => ({ default: m.DeveloperOnboardingPage }))
+);
+const DeveloperPlatformPage = lazy(() =>
+  import("./DeveloperPlatformPage").then((m) => ({ default: m.DeveloperPlatformPage }))
+);
+const VisualDappBuilderPage = lazy(() =>
+  import("./VisualDappBuilderPage").then((m) => ({ default: m.VisualDappBuilderPage }))
+);
+const GrowthHubPage = lazy(() => import("./GrowthHubPage").then((m) => ({ default: m.GrowthHubPage })));
+
+function LazyBoundary({ children }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[200px] items-center justify-center text-sm text-ccweb-muted">Loading…</div>
+      }
+    >
+      {children}
+    </Suspense>
+  );
+}
 
 const WELCOME_KEY = "ccweb_welcome_done";
 
@@ -80,24 +107,63 @@ function App() {
           <Route path="crypto/trending" element={<FindPage initialTab="trending" />} />
           <Route path="crypto/early-signals" element={<FindPage initialTab="signals" />} />
           <Route path="crypto/wallets" element={<FindPage initialTab="wallets" />} />
-          <Route path="early-signals" element={<EarlySignalsDashboard />} />
+          <Route
+            path="early-signals"
+            element={
+              <LazyBoundary>
+                <EarlySignalsDashboard />
+              </LazyBoundary>
+            }
+          />
           <Route path="token/:slug" element={<TokenDetailPage />} />
-          <Route path="developers" element={<DeveloperPlatformPage />} />
-          <Route path="developers/onboarding" element={<DeveloperOnboardingPage />} />
-          <Route path="dapp-builder" element={<VisualDappBuilderPage />} />
+          <Route
+            path="developers"
+            element={
+              <LazyBoundary>
+                <DeveloperPlatformPage />
+              </LazyBoundary>
+            }
+          />
+          <Route
+            path="developers/onboarding"
+            element={
+              <LazyBoundary>
+                <DeveloperOnboardingPage />
+              </LazyBoundary>
+            }
+          />
+          <Route
+            path="dapp-builder"
+            element={
+              <LazyBoundary>
+                <VisualDappBuilderPage />
+              </LazyBoundary>
+            }
+          />
           <Route path="dapp-dashboard" element={<DappDashboardPage />} />
           <Route path="ai-agents" element={<AiAgentsPage />} />
-          <Route path="growth-hub" element={<GrowthHubPage />} />
+          <Route
+            path="growth-hub"
+            element={
+              <LazyBoundary>
+                <GrowthHubPage />
+              </LazyBoundary>
+            }
+          />
           <Route path="earn" element={<EarnPage />} />
           <Route path="pricing" element={<PricingPage />} />
           <Route path="tokens" element={<Navigate to="/earn" replace />} />
           <Route path="affiliates" element={<Navigate to="/earn" replace />} />
           <Route path="community" element={<CommunityPage />} />
+          <Route path="marketplace" element={<MarketplacePage />} />
+          <Route path="marketplace/:id" element={<MarketplaceDetailPage />} />
           <Route path="blog" element={<BlogPage />} />
           <Route path="about" element={<AboutPage />} />
           <Route path="faq" element={<FaqPage />} />
           <Route path="login" element={<LoginPage />} />
+          <Route path="login/2fa" element={<TwoFactorLoginPage />} />
           <Route path="signup" element={<SignupPage />} />
+          <Route path="setup-2fa" element={<Setup2FaPage />} />
           <Route path="contact" element={<ContactPage />} />
           <Route path="privacy" element={<PrivacyPage />} />
           <Route path="terms" element={<TermsPage />} />
@@ -112,21 +178,17 @@ function App() {
 }
 
 function Layout() {
-  const [user, setUser] = useState(() => getStoredUser());
+  const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
+  const hydrate = useAuthStore((s) => s.hydrate);
+  const logoutStore = useAuthStore((s) => s.logout);
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const u = await fetchMe();
-      if (!cancelled) setUser(u);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    hydrate();
+  }, [hydrate]);
 
   useEffect(() => {
     trackEvent("page_view", { title: document.title }).catch(() => {});
@@ -149,13 +211,14 @@ function Layout() {
   }, []);
 
   async function handleLogout() {
-    await logoutApi();
+    await logoutStore();
     setUser(null);
     navigate("/");
   }
 
   const hideChrome =
     location.pathname === "/login" ||
+    location.pathname === "/login/2fa" ||
     location.pathname === "/signup" ||
     location.pathname === "/welcome";
 
@@ -185,10 +248,10 @@ function Layout() {
         className={
           hideChrome
             ? "main-content main-content--flush"
-            : "mx-auto w-full max-w-[min(70rem,92vw)] px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:pt-5 md:flex md:gap-6 md:pt-6"
+            : "mx-auto w-full max-w-[min(70rem,92vw)] px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:pt-5 lg:flex lg:gap-6 lg:pb-8 lg:pt-6"
         }
       >
-        {!hideChrome && <DesktopNav />}
+        {!hideChrome && <AppShellSidebar />}
         <div className="min-w-0 flex-1">
           <Outlet context={{ user, setUser }} />
         </div>
@@ -197,7 +260,7 @@ function Layout() {
       {!hideChrome && <AppBottomNav pathname={location.pathname} />}
 
       {!hideChrome && (
-        <footer className="ccweb-footer mx-auto mb-[calc(4.25rem+env(safe-area-inset-bottom))] mt-6 max-w-[min(70rem,92vw)] border-t border-white/[0.08] px-4 py-6 text-center text-xs text-ccweb-muted sm:px-5">
+        <footer className="ccweb-footer mx-auto mb-[calc(4.25rem+env(safe-area-inset-bottom))] mt-6 max-w-[min(70rem,92vw)] border-t border-white/[0.08] px-4 py-6 text-center text-xs text-ccweb-muted sm:px-5 lg:mb-6">
           © {new Date().getFullYear()} Chrisccwebfoundation · <Link to="/contact">Contact</Link> ·{" "}
           <Link to="/dashboard">Dashboard</Link> · <Link to="/privacy">Privacy</Link> · <Link to="/terms">Terms</Link>
           {user ? (
@@ -1257,24 +1320,34 @@ function CommunityPage() {
   const [bugSev, setBugSev] = useState("normal");
   const [msg, setMsg] = useState(null);
   const [err, setErr] = useState(null);
+  const [expandedPostId, setExpandedPostId] = useState(null);
+  const [commentsByPost, setCommentsByPost] = useState({});
+  const [commentDraft, setCommentDraft] = useState({});
 
   async function loadPosts() {
     try {
-      const res = await fetch("/api/community/posts");
-      const data = await res.json();
+      const data = await unwrap(api.get("/api/community/posts"));
       setPosts(data.posts || []);
     } catch {
-      /* ignore */
+      setPosts([]);
     }
   }
 
   async function loadChats() {
     try {
-      const res = await fetch(`/api/community/chats?channel=${encodeURIComponent(channel)}`);
-      const data = await res.json();
+      const data = await unwrap(api.get(`/api/community/chats?channel=${encodeURIComponent(channel)}`));
       setChats(data.chats || []);
     } catch {
-      /* ignore */
+      setChats([]);
+    }
+  }
+
+  async function loadComments(postId) {
+    try {
+      const data = await unwrap(api.get(`/api/community/posts/${postId}/comments`));
+      setCommentsByPost((prev) => ({ ...prev, [postId]: data.comments || [] }));
+    } catch {
+      setCommentsByPost((prev) => ({ ...prev, [postId]: [] }));
     }
   }
 
@@ -1286,6 +1359,10 @@ function CommunityPage() {
     loadChats();
   }, [channel]);
 
+  useEffect(() => {
+    if (expandedPostId) loadComments(expandedPostId);
+  }, [expandedPostId]);
+
   async function submitPost(e) {
     e.preventDefault();
     setErr(null);
@@ -1295,18 +1372,14 @@ function CommunityPage() {
       return;
     }
     try {
-      const res = await fetch("/api/community/posts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = await unwrap(
+        api.post("/api/community/posts", {
           authorUserId: user.id,
           authorDisplayName: user.displayName,
           title: postTitle.trim(),
           content: postContent.trim(),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Post failed");
+        })
+      );
       setPostTitle("");
       setPostContent("");
       setMsg("Post published.");
@@ -1326,18 +1399,14 @@ function CommunityPage() {
       return;
     }
     try {
-      const res = await fetch("/api/community/chats", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await unwrap(
+        api.post("/api/community/chats", {
           authorUserId: user.id,
           authorDisplayName: user.displayName,
           channel,
           message: chatBody.trim(),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Message failed");
+        })
+      );
       setChatBody("");
       setMsg("Message sent.");
       loadChats();
@@ -1352,23 +1421,44 @@ function CommunityPage() {
     setErr(null);
     setMsg(null);
     try {
-      const res = await fetch("/api/community/bugs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = await unwrap(
+        api.post("/api/community/bugs", {
           reporterUserId: user?.id,
           reporterDisplayName: user?.displayName,
           title: bugTitle.trim(),
           description: bugDesc.trim(),
           path: window.location.pathname,
           severity: bugSev,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Report failed");
+        })
+      );
       setBugTitle("");
       setBugDesc("");
       setMsg(`Thanks — tracked as ${data.id}.`);
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  async function submitComment(postId, e) {
+    e.preventDefault();
+    setErr(null);
+    if (!user) {
+      setErr("Sign in to comment.");
+      return;
+    }
+    const body = (commentDraft[postId] || "").trim();
+    if (!body) return;
+    try {
+      await unwrap(
+        api.post(`/api/community/posts/${postId}/comments`, {
+          authorUserId: user.id,
+          authorDisplayName: user.displayName,
+          body,
+        })
+      );
+      setCommentDraft((d) => ({ ...d, [postId]: "" }));
+      loadComments(postId);
+      loadPosts();
     } catch (e) {
       setErr(e.message);
     }
@@ -1380,8 +1470,7 @@ function CommunityPage() {
         <span className="pill">COMMUNITY</span>
         <h1 className="section-title">Community</h1>
         <p className="muted">
-          Lightweight prototype: posts and chat are stored in memory on the API server. Bug reports are logged for
-          early-user testing.
+          Posts, comments, and chat use the live API (in-memory on the server until a database is connected).
         </p>
       </header>
 
@@ -1510,18 +1599,66 @@ function CommunityPage() {
       </div>
 
       <section className="panel" style={{ marginTop: "1rem" }}>
-        <h3>Recent posts</h3>
+        <h3>Posts &amp; comments</h3>
         {posts.length === 0 ? (
           <p className="muted">No posts yet.</p>
         ) : (
           <ul className="list" style={{ marginTop: "0.5rem" }}>
             {posts.slice(0, 12).map((p) => (
-              <li key={p.id}>
+              <li key={p.id} style={{ marginBottom: "1rem" }}>
                 <strong>{p.title}</strong> · <span className="muted">{p.authorDisplayName}</span>
+                {typeof p.commentCount === "number" ? (
+                  <span className="muted" style={{ marginLeft: "0.35rem" }}>
+                    · {p.commentCount} comment{p.commentCount === 1 ? "" : "s"}
+                  </span>
+                ) : null}
                 <p className="muted" style={{ margin: "0.25rem 0 0", fontSize: "0.9rem" }}>
-                  {p.content.slice(0, 180)}
-                  {p.content.length > 180 ? "…" : ""}
+                  {p.content.slice(0, 220)}
+                  {p.content.length > 220 ? "…" : ""}
                 </p>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{ marginTop: "0.4rem", fontSize: "0.8rem", padding: "0.35rem 0.6rem" }}
+                  onClick={() => setExpandedPostId((id) => (id === p.id ? null : p.id))}
+                >
+                  {expandedPostId === p.id ? "Hide thread" : "View / comment"}
+                </button>
+                {expandedPostId === p.id ? (
+                  <div style={{ marginTop: "0.6rem", paddingLeft: "0.5rem", borderLeft: "2px solid rgba(117,160,214,0.25)" }}>
+                    <ul className="list" style={{ fontSize: "0.88rem" }}>
+                      {(commentsByPost[p.id] || []).map((cm) => (
+                        <li key={cm.id} style={{ marginBottom: "0.35rem" }}>
+                          <strong>{cm.authorDisplayName}</strong>
+                          <span className="muted" style={{ marginLeft: "0.35rem", fontSize: "0.75rem" }}>
+                            {new Date(cm.createdAt).toLocaleString()}
+                          </span>
+                          <p className="muted" style={{ margin: "0.15rem 0 0" }}>
+                            {cm.body}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                    {user ? (
+                      <form onSubmit={(ev) => submitComment(p.id, ev)} style={{ marginTop: "0.5rem" }}>
+                        <textarea
+                          rows={2}
+                          value={commentDraft[p.id] || ""}
+                          onChange={(e) => setCommentDraft((d) => ({ ...d, [p.id]: e.target.value }))}
+                          placeholder="Write a comment…"
+                          style={{ width: "100%", marginBottom: "0.35rem" }}
+                        />
+                        <button type="submit" className="btn btn-primary btn-sm">
+                          Post comment
+                        </button>
+                      </form>
+                    ) : (
+                      <p className="muted" style={{ marginTop: "0.35rem", fontSize: "0.85rem" }}>
+                        Sign in to comment.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -1755,34 +1892,22 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const login = useAuthStore((s) => s.login);
+  const register = useAuthStore((s) => s.register);
 
   async function submit() {
     setError(null);
     setLoading(true);
     try {
       if (mode === "signup") {
-        const reg = await fetch("/api/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, displayName: displayName.trim() || undefined }),
-        });
-        const regData = await reg.json();
-        if (!reg.ok) throw new Error(regData.error || "Registration failed");
+        await register({ email, password, displayName });
       }
-      const loginRes = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await loginRes.json();
-      if (!loginRes.ok) throw new Error(data.error || "Authentication failed");
-      if (data.needsTwoFactor) {
-        throw new Error("This account has 2FA enabled. Use the full login flow with an authenticator code (coming in UI).");
+      const result = await login(email, password);
+      if (result?.needsTwoFactor) {
+        navigate("/login/2fa", { replace: true });
+        return;
       }
-      const access = data.accessToken || data.token;
-      setSession(access, data.user, data.refreshToken);
-      setUser(data.user);
+      setUser(result.user);
       try {
         if (!localStorage.getItem(WELCOME_KEY)) {
           navigate("/welcome");
@@ -1892,6 +2017,36 @@ function ContactPage() {
 
 function DashboardPage() {
   const { user } = useOutletContext();
+  const [dash, setDash] = useState(null);
+  const [agents, setAgents] = useState(null);
+  const [growth, setGrowth] = useState(null);
+  const [rooms, setRooms] = useState(null);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    if (!user) return;
+    let c = true;
+    Promise.all([
+      unwrap(api.get("/api/dapp/dashboard")),
+      unwrap(api.get("/api/build/agents")),
+      unwrap(api.get("/api/growth/overview")),
+      unwrap(api.get("/api/streaming/rooms")),
+    ])
+      .then(([d, a, g, r]) => {
+        if (!c) return;
+        setDash(d);
+        setAgents(a);
+        setGrowth(g);
+        setRooms(r);
+      })
+      .catch((e) => {
+        if (c) setErr(e.message);
+      });
+    return () => {
+      c = false;
+    };
+  }, [user]);
+
   if (!user) {
     return (
       <section>
@@ -1906,49 +2061,63 @@ function DashboardPage() {
     );
   }
 
+  const ov = dash?.overview;
+  const agentCount = agents?.count ?? 0;
+
   return (
-    <section>
+    <section className="space-y-6">
       <header className="page-header">
         <h1 className="section-title">Dashboard</h1>
         <p className="muted">
-          Welcome back, <strong>{user.displayName}</strong>. Here&apos;s your learning overview (prototype data).
+          Welcome back, <strong>{user.displayName}</strong>. Data below is loaded from the live API (
+          <code className="text-xs">/api/dapp/dashboard</code>, <code className="text-xs">/api/build/agents</code>,{" "}
+          <code className="text-xs">/api/growth/overview</code>, <code className="text-xs">/api/streaming/rooms</code>
+          ).
         </p>
       </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>Plan</h3>
-          <p>Free Plan</p>
-          <p className="muted">Upgrade now</p>
-        </article>
-        <article className="panel">
-          <h3>Courses Enrolled</h3>
-          <p>5</p>
-          <p className="muted">+1 this month</p>
-        </article>
-        <article className="panel">
-          <h3>Tokens Earned</h3>
-          <p>1,250</p>
-          <p className="muted">+180 this week</p>
-        </article>
-        <article className="panel">
-          <h3>Referrals</h3>
-          <p>12</p>
-          <p className="muted">+3 this month</p>
-        </article>
-        <article className="panel">
-          <h3>Affiliate Revenue</h3>
-          <p>$340</p>
-          <p className="muted">+$85 this week</p>
-        </article>
+      {err ? <p className="text-sm text-red-400">{err}</p> : null}
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <GlassCard padding="p-4">
+          <h3 className="text-sm font-semibold text-ccweb-muted">DApp deployments</h3>
+          <p className="mt-2 text-2xl font-bold text-ccweb-sky-200">{ov?.totalDeployments ?? "—"}</p>
+          <p className="text-xs text-ccweb-muted">Active: {ov?.activeDeployments ?? 0}</p>
+        </GlassCard>
+        <GlassCard padding="p-4">
+          <h3 className="text-sm font-semibold text-ccweb-muted">Spend (DApp)</h3>
+          <p className="mt-2 text-2xl font-bold text-ccweb-sky-200">${ov?.totalSpentUsd ?? 0}</p>
+          <p className="text-xs text-ccweb-muted">Tx count: {ov?.totalTransactions ?? 0}</p>
+        </GlassCard>
+        <GlassCard padding="p-4">
+          <h3 className="text-sm font-semibold text-ccweb-muted">AI agents (catalog)</h3>
+          <p className="mt-2 text-2xl font-bold text-ccweb-sky-200">{agentCount}</p>
+          <p className="text-xs text-ccweb-muted">From /api/build/agents</p>
+        </GlassCard>
+        <GlassCard padding="p-4">
+          <h3 className="text-sm font-semibold text-ccweb-muted">Growth hub</h3>
+          <p className="mt-2 text-2xl font-bold text-ccweb-sky-200">{growth?.listingsCount ?? 0}</p>
+          <p className="text-xs text-ccweb-muted">Open orders: {growth?.openOrders ?? 0}</p>
+        </GlassCard>
       </div>
-      <section className="panel" style={{ marginTop: "1rem" }}>
-        <h3>Continue Learning</h3>
-        <p className="muted">Blockchain Fundamentals · 9/12 lessons · 75%</p>
-        <p className="muted">AI Basics · 4/10 lessons · 40%</p>
-      </section>
-      <section className="panel" style={{ marginTop: "1rem" }}>
-        <h3>Pillars quick links</h3>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
+
+      <GlassCard>
+        <h3 className="text-lg font-semibold text-ccweb-text">Live rooms</h3>
+        <p className="mt-1 text-sm text-ccweb-muted">
+          {rooms?.rooms?.length ? `${rooms.rooms.length} room(s) from /api/streaming/rooms` : "No rooms yet — create one from AI streaming."}
+        </p>
+        <ul className="mt-3 space-y-2 text-sm">
+          {(rooms?.rooms || []).slice(0, 5).map((room) => (
+            <li key={room.id} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+              <strong>{room.roomName}</strong>{" "}
+              <span className="text-ccweb-muted">· {room.status || "active"}</span>
+            </li>
+          ))}
+        </ul>
+      </GlassCard>
+
+      <GlassCard>
+        <h3 className="text-lg font-semibold text-ccweb-text">Quick actions</h3>
+        <div className="mt-4 flex flex-wrap gap-2">
           <Link to="/learn" className="btn btn-outline">
             Learn
           </Link>
@@ -1961,11 +2130,14 @@ function DashboardPage() {
           <Link to="/earn" className="btn btn-outline">
             Earn
           </Link>
-          <Link to="/ai-streaming" className="btn btn-outline">
+          <Link to="/ai-streaming" className="btn btn-primary">
             AI Streaming
           </Link>
+          <Link to="/marketplace" className="btn btn-outline">
+            Marketplace
+          </Link>
         </div>
-      </section>
+      </GlassCard>
     </section>
   );
 }
@@ -1993,20 +2165,13 @@ function ProfilePage() {
     setMsg(null);
     const token = getSessionToken();
     try {
-      const res = await fetch("/api/users", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
+      const data = await unwrap(
+        api.post("/api/users", {
           userId: user.id,
           displayName: displayName.trim(),
           pushEnabled,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Save failed");
+        })
+      );
       setUser(data);
       setSession(token, data, getRefreshToken());
       setMsg("Profile saved.");
@@ -2016,16 +2181,22 @@ function ProfilePage() {
   }
 
   return (
-    <section>
+    <section className="space-y-6">
       <header className="page-header">
         <h1 className="section-title">Profile</h1>
         <p className="muted">Signed in as {user.email || user.id}</p>
-        <div style={{ marginTop: "0.6rem" }}>
+        <div style={{ marginTop: "0.6rem" }} className="flex flex-wrap gap-2">
           <Link to="/dashboard" className="btn btn-outline btn-sm">
             Dashboard
           </Link>
+          <Link to="/setup-2fa" className="btn btn-outline btn-sm">
+            Set up 2FA
+          </Link>
         </div>
       </header>
+
+      <WalletConnectPanel />
+
       <article className="panel" style={{ maxWidth: 480 }}>
         <div className="auth-row">
           <label htmlFor="p-name">Display name</label>

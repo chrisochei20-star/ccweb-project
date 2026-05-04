@@ -16,6 +16,12 @@ All notable changes to this repository are documented here. This project is a **
 - **App shell:** Bottom navigation (Learn / Find / Build / Earn / Community / Profile), compact top nav, pillar **hub** routes (`/learn`, `/build`), Find **Hub** tab, first-time **welcome** flow after signup/login, and [docs/EARLY_USERS.md](./docs/EARLY_USERS.md) (staging, telemetry, admin).
 - **Telemetry (prototype):** in-memory `telemetryHub.js` with `POST /api/telemetry/event`, `POST /api/telemetry/client-error`, and admin `GET /api/admin/telemetry/summary` when `CCWEB_ADMIN_KEY` is set.
 - **Community testing:** bug report API `POST /api/community/bugs`, admin list `GET /api/admin/community/bugs`, and Community UI for chat, posts, and bug reports.
+- **Frontend integration:** Axios client (`src/lib/api.js`) with 401 refresh retry, Zustand auth store, `/login/2fa` and `/setup-2fa` UIs, MetaMask + WalletConnect on Profile, marketplace routes (`/marketplace`, `/marketplace/:id`), dashboard wired to live DApp / agents / growth / streaming APIs, lazy-loaded heavy pages. See [docs/FRONTEND_INTEGRATION.md](./docs/FRONTEND_INTEGRATION.md).
+- **Community comments API:** `GET/POST /api/community/posts/:postId/comments`, `GET /api/community/posts/:postId` with post list `commentCount`.
+
+### Fixed
+
+- **Growth hub:** `overview.openOrders` count now filters by explicit order statuses (avoid invalid `startsWith` on non-string).
 
 ### Changed
 

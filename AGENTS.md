@@ -43,6 +43,7 @@ The Vite config proxies `/api`, `/v1`, and `/auth` to `http://127.0.0.1:3000`. S
 - `GET /api/admin/telemetry/summary` — Requires `X-CCWEB-Admin` matching `CCWEB_ADMIN_KEY`
 - `GET /api/admin/users` — Same as `GET /api/users` but admin-gated
 - `POST /api/community/bugs` + `GET /api/community/bugs` — Bug reports; `GET /api/admin/community/bugs` is admin-gated
+- `GET /api/community/posts/:id/comments` + `POST /api/community/posts/:id/comments` — Post comments; `GET /api/community/posts/:id` — Post + comments
 - **Developer onboarding:** `/developers/onboarding` (guided ~5 min) · **Quick start:** [docs/DEVELOPER_QUICKSTART.md](https://github.com/chrisochei20-star/ccweb-project/blob/main/docs/DEVELOPER_QUICKSTART.md) and static `/docs/DEVELOPER_QUICKSTART.md` when served
 
 - **Security architecture:** [docs/BACKEND_SECURITY_ARCHITECTURE.md](./docs/BACKEND_SECURITY_ARCHITECTURE.md) (gateway, services, checklist)

@@ -3,10 +3,13 @@ import { X } from "lucide-react";
 import { GlassCard } from "./GlassCard";
 
 const links = [
+  { to: "/dashboard", label: "Home", sub: "Stats & quick actions" },
   { to: "/learn", label: "Learn", sub: "Courses, tutor, streaming" },
   { to: "/find", label: "Find", sub: "Scanner & signals" },
   { to: "/build", label: "Build", sub: "DApps & agents" },
   { to: "/earn", label: "Earn", sub: "Revenue streams" },
+  { to: "/community", label: "Community", sub: "Posts & chat" },
+  { to: "/marketplace", label: "Marketplace", sub: "Listings & escrow" },
   { to: "/about", label: "About", sub: "Foundation" },
   { to: "/faq", label: "FAQ", sub: "Help" },
   { to: "/contact", label: "Contact", sub: "Reach us" },

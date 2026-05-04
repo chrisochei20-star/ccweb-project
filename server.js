@@ -32,6 +32,7 @@ const communityPosts = new Map();
 const communityChats = new Map();
 const communityReactions = new Map();
 const communityBugReports = new Map();
+const communityComments = new Map();
 const aiBlogs = new Map();
 const dappDeployments = new Map();
 const dappPayments = new Map();
@@ -47,6 +48,7 @@ let nextCommunityPostId = 1;
 let nextCommunityChatId = 1;
 let nextCommunityReactionId = 1;
 let nextCommunityBugReportId = 1;
+let nextCommunityCommentId = 1;
 let nextAiBlogId = 1;
 let nextDappDeploymentId = 1;
 let nextDappPaymentId = 1;
@@ -711,7 +713,13 @@ async function handleMarkNotificationsRead(req, res) {
 }
 
 function handleListCommunityPosts(res) {
-  const posts = Array.from(communityPosts.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const counts = new Map();
+  for (const c of communityComments.values()) {
+    counts.set(c.postId, (counts.get(c.postId) || 0) + 1);
+  }
+  const posts = Array.from(communityPosts.values())
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .map((p) => ({ ...p, commentCount: counts.get(p.id) || 0 }));
   sendJson(res, 200, { count: posts.length, posts });
 }
 
@@ -754,6 +762,69 @@ async function handleCreateCommunityPost(req, res) {
   });
 
   sendJson(res, 201, post);
+}
+
+function handleGetCommunityPost(postId, res) {
+  const post = communityPosts.get(postId);
+  if (!post) {
+    sendJson(res, 404, { error: "Post not found." });
+    return;
+  }
+  const comments = Array.from(communityComments.values())
+    .filter((c) => c.postId === postId)
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  sendJson(res, 200, { post, comments });
+}
+
+function handleListPostComments(postId, res) {
+  if (!communityPosts.has(postId)) {
+    sendJson(res, 404, { error: "Post not found." });
+    return;
+  }
+  const comments = Array.from(communityComments.values())
+    .filter((c) => c.postId === postId)
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  sendJson(res, 200, { postId, count: comments.length, comments });
+}
+
+async function handleCreatePostComment(req, res, postId) {
+  if (!communityPosts.has(postId)) {
+    sendJson(res, 404, { error: "Post not found." });
+    return;
+  }
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+  const authorUserId = (body.authorUserId || "").toString().trim();
+  const text = (body.body || body.content || "").toString().trim();
+  if (!authorUserId || !text) {
+    sendJson(res, 400, { error: "authorUserId and body (or content) are required." });
+    return;
+  }
+  const author = ensureUser(authorUserId, { displayName: body.authorDisplayName });
+  const id = `cmt-${String(nextCommunityCommentId++).padStart(5, "0")}`;
+  const row = {
+    id,
+    postId,
+    authorUserId: author.id,
+    authorDisplayName: author.displayName,
+    body: text.slice(0, 2000),
+    createdAt: new Date().toISOString(),
+  };
+  communityComments.set(id, row);
+  const post = communityPosts.get(postId);
+  createNotification({
+    type: "community_post_comment",
+    title: "New comment on your post",
+    message: `${author.displayName} commented on: ${post.title}`,
+    targetUserIds: [post.authorUserId].filter((uid) => uid && uid !== author.id),
+    metadata: { postId, commentId: id },
+  });
+  sendJson(res, 201, row);
 }
 
 function handleListCommunityChats(requestUrl, res) {
@@ -3244,6 +3315,25 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === "/api/community/posts" && req.method === "POST") {
     await handleCreateCommunityPost(req, res);
+    return;
+  }
+
+  const postCommentsMatch = pathname.match(/^\/api\/community\/posts\/([^/]+)\/comments$/);
+  if (postCommentsMatch) {
+    const postId = postCommentsMatch[1];
+    if (req.method === "GET") {
+      handleListPostComments(postId, res);
+      return;
+    }
+    if (req.method === "POST") {
+      await handleCreatePostComment(req, res, postId);
+      return;
+    }
+  }
+
+  const singlePostMatch = pathname.match(/^\/api\/community\/posts\/([^/]+)$/);
+  if (singlePostMatch && req.method === "GET") {
+    handleGetCommunityPost(singlePostMatch[1], res);
     return;
   }
 

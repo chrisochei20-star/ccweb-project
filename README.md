@@ -61,10 +61,15 @@ Requires `@capacitor/cli` (devDependency). Add iOS with `npx cap add ios` on mac
 | [docs/AUTH_API.md](./docs/AUTH_API.md) | JWT, 2FA, wallet sign-in, curl examples |
 | [docs/EARLY_USERS.md](./docs/EARLY_USERS.md) | Staging notes, telemetry, admin key, feature status |
 | [docs/DESIGN_SYSTEM.md](./docs/DESIGN_SYSTEM.md) | UI shell, Tailwind tokens, glass components, layout |
+| [docs/FRONTEND_INTEGRATION.md](./docs/FRONTEND_INTEGRATION.md) | Axios, Zustand, auth/2FA/wallet, marketplace API, deployment |
 
 ## Auth
 
 Email + password with **bcrypt**, **JWT** access + rotating **refresh** (httpOnly cookie; use `AUTH_REFRESH_IN_BODY=1` for Vite dev), optional **TOTP** 2FA, and **wallet** sign-in (EVM / Solana). Configure **`AUTH_JWT_SECRET`** (32+ chars) and **`MONGODB_URI`** for production persistence. See [docs/AUTH_API.md](./docs/AUTH_API.md).
+
+## Frontend (API integration)
+
+Vite + React client uses **Axios** + **Zustand** for auth, `/login/2fa`, `/setup-2fa`, WalletConnect/MetaMask on Profile, marketplace pages, and lazy-loaded heavy routes. See [docs/FRONTEND_INTEGRATION.md](./docs/FRONTEND_INTEGRATION.md).
 
 ## Early users & staging
 

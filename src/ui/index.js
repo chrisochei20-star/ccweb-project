@@ -5,4 +5,4 @@ export { GhostInput } from "./GhostInput";
 export { MobileMenuDrawer } from "./MobileMenuDrawer";
 export { AppHeader } from "./AppHeader";
 export { AppBottomNav } from "./AppBottomNav";
-export { DesktopNav } from "./DesktopNav";
+export { AppShellSidebar } from "./AppShellSidebar";

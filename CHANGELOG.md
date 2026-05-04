@@ -10,6 +10,10 @@ All notable changes to this repository are documented here. This project is a **
 - **Backend security architecture:** [docs/BACKEND_SECURITY_ARCHITECTURE.md](./docs/BACKEND_SECURITY_ARCHITECTURE.md) — gateway layers, service boundaries, scaling path, production checklist.
 - **Express hardening:** `helmet` + **CORS allowlist** (`CCWEB_ALLOWED_ORIGINS`) on auth, developer, and intelligence Express apps via `security/expressHardDefaults.js`; optional `TRUST_PROXY=1`.
 
+### Added
+
+- **Growth Hub:** Global marketing agent workspace (organic-first content suggestions), marketplace, simulated escrow, lead scoring, CCWEB fee metrics. API `/api/growth/*`, UI `/growth-hub`. [docs/GROWTH_HUB.md](./docs/GROWTH_HUB.md).
+
 ### Changed
 
 - Registration no longer auto-issues tokens; client registers then logs in.

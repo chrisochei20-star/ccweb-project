@@ -10,7 +10,7 @@ Two processes are needed for development:
 1. **API server** (port 3000): `npm run dev:api`
 2. **Vite dev server** (port 5173): `npm run dev`
 
-The Vite config proxies `/api` requests to `http://127.0.0.1:3000`. Start the API server first, then Vite.
+The Vite config proxies `/api` and `/v1` requests to `http://127.0.0.1:3000`. Start the API server first, then Vite.
 
 ### Build
 `npm run build` — outputs to `dist/`. Styling uses **Tailwind CSS v4** (`@tailwindcss/vite`) plus legacy `src/styles.css`.

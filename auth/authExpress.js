@@ -3,6 +3,7 @@
  */
 
 const express = require("express");
+const { applyExpressSecurity } = require("../security/expressHardDefaults");
 const authEngine = require("./authEngine");
 const rateLimit = require("./rateLimit");
 const authStore = require("./authStore");
@@ -250,25 +251,9 @@ function mountAt(app, basePath) {
 
 function createAuthApp(deps) {
   const app = express();
+  applyExpressSecurity(app);
   app.locals.ccwebAuth = deps;
   app.use(express.json({ limit: "256kb" }));
-
-  app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (origin) {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Access-Control-Allow-Credentials", "true");
-    } else {
-      res.setHeader("Access-Control-Allow-Origin", "*");
-    }
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Cookie");
-    if (req.method === "OPTIONS") {
-      res.status(204).end();
-      return;
-    }
-    next();
-  });
 
   const cookieParser = require("cookie-parser");
   app.use(cookieParser());

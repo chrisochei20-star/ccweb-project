@@ -19,7 +19,7 @@ npm install
 1. **API** (port **3000**): `npm run dev:api`
 2. **Vite** (port **5173**): `npm run dev`
 
-Open **http://localhost:5173**. The Vite dev server proxies `/api` to `http://127.0.0.1:3000`.
+Open **http://localhost:5173**. The Vite dev server proxies `/api` and `/v1` to `http://127.0.0.1:3000`.
 
 ## Production-style run
 
@@ -56,6 +56,7 @@ Requires `@capacitor/cli` (devDependency). Add iOS with `npx cap add ios` on mac
 | [docs/STORE_RELEASE.md](./docs/STORE_RELEASE.md) | Play / App Store checklist |
 | [docs/DEMO_VIDEO_SCRIPT.md](./docs/DEMO_VIDEO_SCRIPT.md) | 2-minute demo shot list |
 | [docs/CODE_INVENTORY.md](./docs/CODE_INVENTORY.md) | Refined / changed / outdated snapshot |
+| [docs/REPOSITORY_LAYOUT.md](./docs/REPOSITORY_LAYOUT.md) | Where frontend, backend, API, and SDK live in this repo |
 
 ## Auth (prototype)
 

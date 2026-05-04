@@ -3,6 +3,7 @@
  */
 
 const express = require("express");
+const { applyExpressSecurity } = require("./security/expressHardDefaults");
 const earlySignalsEngine = require("./earlySignalsEngine");
 const intelligenceDb = require("./intelligenceDb");
 const { buildTokenDetail } = require("./tokenDetail");
@@ -196,6 +197,7 @@ function attachSse(router) {
 
 function createIntelligenceApp() {
   const app = express();
+  applyExpressSecurity(app);
   const router = createIntelligenceRouter();
   attachSse(router);
   app.use(router);

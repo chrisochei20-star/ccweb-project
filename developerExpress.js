@@ -4,6 +4,7 @@
  */
 
 const express = require("express");
+const { applyExpressSecurity } = require("./security/expressHardDefaults");
 const crypto = require("crypto");
 const dp = require("./developerPlatform");
 const cryptoSafety = require("./cryptoSafety");
@@ -93,6 +94,7 @@ function createDeveloperApp(opts) {
   } = opts;
 
   const app = express();
+  applyExpressSecurity(app);
   app.use(express.json({ limit: "512kb" }));
 
   const sandbox = express.Router();

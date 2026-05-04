@@ -7,6 +7,8 @@ All notable changes to this repository are documented here. This project is a **
 ### Security
 
 - **Auth overhaul:** `auth/` module with **bcrypt** passwords, **JWT** access + rotating refresh (httpOnly cookie + optional `AUTH_REFRESH_IN_BODY`), **TOTP** 2FA with backup codes, **wallet** sign-in (EVM + Solana). **MongoDB** auth persistence when `MONGODB_URI` is set. Rate limits on login and wallet. See [docs/AUTH_API.md](./docs/AUTH_API.md).
+- **Backend security architecture:** [docs/BACKEND_SECURITY_ARCHITECTURE.md](./docs/BACKEND_SECURITY_ARCHITECTURE.md) — gateway layers, service boundaries, scaling path, production checklist.
+- **Express hardening:** `helmet` + **CORS allowlist** (`CCWEB_ALLOWED_ORIGINS`) on auth, developer, and intelligence Express apps via `security/expressHardDefaults.js`; optional `TRUST_PROXY=1`.
 
 ### Changed
 

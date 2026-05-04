@@ -374,6 +374,94 @@ async function walletVerify(ccwebUsers, buildUserProfile, body) {
   return await issueTokenPair(row, user);
 }
 
+/**
+ * Google / Apple Sign in with ID token (OIDC). Creates or links user; email marked verified from IdP.
+ */
+async function oauthSignIn(ccwebUsers, buildUserProfile, { provider, email, oauthSub, displayName, appleSub }) {
+  const prov = (provider || "").toLowerCase();
+  if (prov !== "google" && prov !== "apple") return { error: "Unsupported OAuth provider." };
+  const sub = String(oauthSub || "").trim();
+  if (!sub) return { error: "Missing OAuth subject." };
+
+  let row =
+    prov === "apple" && appleSub
+      ? await authStore.findByAppleSub(appleSub)
+      : await authStore.findByOAuth(prov, sub);
+
+  const em = email ? authStore.normalizeEmail(email) : null;
+
+  if (!row) {
+    if (em) row = await authStore.findByEmail(em);
+  }
+
+  if (row) {
+    const finalEmail = em || row.email;
+    if (!finalEmail) return { error: "Account has no email on file; sign in with email once or re-authorize with email scope." };
+    row.email = authStore.normalizeEmail(finalEmail);
+    row.emailVerified = true;
+    row.oauthProvider = prov;
+    row.oauthSub = sub;
+    if (appleSub) row.appleSub = appleSub;
+    await authStore.saveUser(row);
+  } else {
+    if (!em || !em.includes("@")) return { error: "Valid email is required for new OAuth accounts (enable email scope)." };
+    const userId = `usr-${crypto.randomUUID().slice(0, 12)}`;
+    await authStore.createUser({
+      id: userId,
+      email: em,
+      emailVerified: true,
+      passwordHash: null,
+      walletEvm: null,
+      walletSol: null,
+      totpSecretEnc: null,
+      totpEnabled: false,
+      backupCodesHashed: [],
+      refreshFamilyId: null,
+      refreshTokenHash: null,
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+      emailVerifyToken: null,
+      emailVerifyExpires: null,
+      passwordResetToken: null,
+      passwordResetExpires: null,
+      oauthProvider: prov,
+      oauthSub: sub,
+      appleSub: appleSub || null,
+    });
+    row = await authStore.findById(userId);
+    const profile = buildUserProfile(
+      {
+        userId,
+        displayName: (displayName || em.split("@")[0] || "Member").toString().trim(),
+        email: em,
+        roles: ["member"],
+      },
+      null
+    );
+    ccwebUsers.set(userId, profile);
+  }
+
+  const emailForProfile = row.email || em;
+  let user = ccwebUsers.get(row.id);
+  if (!user) {
+    user = buildUserProfile(
+      {
+        userId: row.id,
+        displayName: displayName || emailForProfile?.split("@")[0] || "Member",
+        email: emailForProfile,
+        roles: ["member"],
+      },
+      null
+    );
+    ccwebUsers.set(row.id, user);
+  } else if (displayName) {
+    user = { ...user, displayName: displayName.trim() };
+    ccwebUsers.set(row.id, user);
+  }
+
+  return await issueTokenPair(row, user);
+}
+
 module.exports = {
   registerUser,
   loginPasswordStep,
@@ -388,5 +476,6 @@ module.exports = {
   verifyEmailWithToken,
   walletNonce,
   walletVerify,
+  oauthSignIn,
   hashRefreshToken,
 };

@@ -11,6 +11,22 @@ const { isValidEvmAddress } = require("./developerWeb3");
 const authEngine = require("./auth/authEngine");
 const { createAuthApp } = require("./auth/authExpress");
 const { createGrowthApp } = require("./growthExpress");
+const telemetryHub = require("./telemetryHub");
+const communityPg = require("./db/persistenceCommunity");
+const { getPool } = require("./db/pool");
+const pgGrowth = require("./db/persistenceGrowth");
+const { migrate } = require("./db/migrate");
+const { logger } = require("./logging/logger");
+const { checkApiRateLimit } = require("./security/apiRateLimit");
+const { createSocialApp } = require("./social/socialRouter");
+const { handleStripeWebhook } = require("./payments/stripeWebhook");
+const { handleStripeCheckoutEscrow } = require("./payments/stripeCheckout");
+
+function useCommunityPg() {
+  return Boolean(getPool());
+}
+
+const socialApp = createSocialApp();
 
 const PORT = Number(process.env.PORT || 3000);
 const intelligenceApp = createIntelligenceApp();
@@ -27,8 +43,10 @@ const ccwebUsers = new Map();
 const notifications = new Map();
 const notificationInbox = new Map();
 const communityPosts = new Map();
+const communityComments = new Map();
 const communityChats = new Map();
 const communityReactions = new Map();
+const communityBugReports = new Map();
 const aiBlogs = new Map();
 const dappDeployments = new Map();
 const dappPayments = new Map();
@@ -41,8 +59,10 @@ let nextStreamPayoutId = 1;
 let nextStreamDistributionId = 1;
 let nextNotificationId = 1;
 let nextCommunityPostId = 1;
+let nextCommunityCommentId = 1;
 let nextCommunityChatId = 1;
 let nextCommunityReactionId = 1;
+let nextCommunityBugReportId = 1;
 let nextAiBlogId = 1;
 let nextDappDeploymentId = 1;
 let nextDappPaymentId = 1;
@@ -702,7 +722,20 @@ async function handleMarkNotificationsRead(req, res) {
 }
 
 function handleListCommunityPosts(res) {
-  const posts = Array.from(communityPosts.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  if (useCommunityPg()) {
+    communityPg
+      .listPosts()
+      .then((posts) => sendJson(res, 200, { count: posts.length, posts }))
+      .catch((e) => sendJson(res, 500, { error: e.message }));
+    return;
+  }
+  const counts = new Map();
+  for (const c of communityComments.values()) {
+    counts.set(c.postId, (counts.get(c.postId) || 0) + 1);
+  }
+  const posts = Array.from(communityPosts.values())
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .map((p) => ({ ...p, commentCount: counts.get(p.id) || 0 }));
   sendJson(res, 200, { count: posts.length, posts });
 }
 
@@ -724,6 +757,30 @@ async function handleCreateCommunityPost(req, res) {
   }
 
   const author = ensureUser(authorUserId, { displayName: body.authorDisplayName });
+
+  if (useCommunityPg()) {
+    try {
+      const post = await communityPg.createPost({
+        authorUserId: author.id,
+        authorDisplayName: author.displayName,
+        title,
+        content,
+        tags: Array.isArray(body.tags) ? body.tags.map((tag) => tag.toString()) : [],
+      });
+      createNotification({
+        type: "community_post_created",
+        title: "New community post",
+        message: `${author.displayName} posted: ${title}`,
+        broadcast: true,
+        metadata: { postId: post.id, authorUserId: author.id },
+      });
+      sendJson(res, 201, post);
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+    return;
+  }
+
   const id = `post-${String(nextCommunityPostId++).padStart(4, "0")}`;
   const post = {
     id,
@@ -747,8 +804,127 @@ async function handleCreateCommunityPost(req, res) {
   sendJson(res, 201, post);
 }
 
-function handleListCommunityChats(requestUrl, res) {
+function handleGetCommunityPost(postId, res) {
+  if (useCommunityPg()) {
+    communityPg
+      .getPostWithComments(postId)
+      .then((data) => {
+        if (!data) {
+          sendJson(res, 404, { error: "Post not found." });
+          return;
+        }
+        sendJson(res, 200, data);
+      })
+      .catch((e) => sendJson(res, 500, { error: e.message }));
+    return;
+  }
+  const post = communityPosts.get(postId);
+  if (!post) {
+    sendJson(res, 404, { error: "Post not found." });
+    return;
+  }
+  const comments = Array.from(communityComments.values())
+    .filter((c) => c.postId === postId)
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  sendJson(res, 200, { post, comments });
+}
+
+function handleListPostComments(postId, res) {
+  if (useCommunityPg()) {
+    communityPg
+      .getPostWithComments(postId)
+      .then((data) => {
+        if (!data) sendJson(res, 404, { error: "Post not found." });
+        else sendJson(res, 200, { postId, count: data.comments.length, comments: data.comments });
+      })
+      .catch((e) => sendJson(res, 500, { error: e.message }));
+    return;
+  }
+  if (!communityPosts.has(postId)) {
+    sendJson(res, 404, { error: "Post not found." });
+    return;
+  }
+  const comments = Array.from(communityComments.values())
+    .filter((c) => c.postId === postId)
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  sendJson(res, 200, { postId, count: comments.length, comments });
+}
+
+async function handleCreatePostComment(req, res, postId) {
+  if (useCommunityPg()) {
+    const exists = await communityPg.getPostWithComments(postId);
+    if (!exists) {
+      sendJson(res, 404, { error: "Post not found." });
+      return;
+    }
+  } else if (!communityPosts.has(postId)) {
+    sendJson(res, 404, { error: "Post not found." });
+    return;
+  }
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+  const authorUserId = (body.authorUserId || "").toString().trim();
+  const text = (body.body || body.content || "").toString().trim();
+  if (!authorUserId || !text) {
+    sendJson(res, 400, { error: "authorUserId and body (or content) are required." });
+    return;
+  }
+  const author = ensureUser(authorUserId, { displayName: body.authorDisplayName });
+
+  if (useCommunityPg()) {
+    try {
+      const row = await communityPg.createComment(postId, {
+        authorUserId: author.id,
+        authorDisplayName: author.displayName,
+        body: text.slice(0, 2000),
+      });
+      const post = (await communityPg.getPostWithComments(postId)).post;
+      createNotification({
+        type: "community_post_comment",
+        title: "New comment on your post",
+        message: `${author.displayName} commented on: ${post.title}`,
+        targetUserIds: [post.authorUserId].filter((uid) => uid && uid !== author.id),
+        metadata: { postId, commentId: row.id },
+      });
+      sendJson(res, 201, row);
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+    return;
+  }
+
+  const id = `cmt-${String(nextCommunityCommentId++).padStart(5, "0")}`;
+  const row = {
+    id,
+    postId,
+    authorUserId: author.id,
+    authorDisplayName: author.displayName,
+    body: text.slice(0, 2000),
+    createdAt: new Date().toISOString(),
+  };
+  communityComments.set(id, row);
+  const post = communityPosts.get(postId);
+  createNotification({
+    type: "community_post_comment",
+    title: "New comment on your post",
+    message: `${author.displayName} commented on: ${post.title}`,
+    targetUserIds: [post.authorUserId].filter((uid) => uid && uid !== author.id),
+    metadata: { postId, commentId: id },
+  });
+  sendJson(res, 201, row);
   const channelFilter = (requestUrl.searchParams.get("channel") || "").trim();
+  if (useCommunityPg()) {
+    communityPg
+      .listChats(channelFilter)
+      .then((chats) => sendJson(res, 200, { count: chats.length, chats }))
+      .catch((e) => sendJson(res, 500, { error: e.message }));
+    return;
+  }
   const chats = Array.from(communityChats.values())
     .filter((chat) => (channelFilter ? chat.channel === channelFilter : true))
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
@@ -773,6 +949,29 @@ async function handleCreateCommunityChat(req, res) {
   }
 
   const author = ensureUser(authorUserId, { displayName: body.authorDisplayName });
+
+  if (useCommunityPg()) {
+    try {
+      const chat = await communityPg.createChat({
+        channel,
+        authorUserId: author.id,
+        authorDisplayName: author.displayName,
+        message,
+      });
+      createNotification({
+        type: "community_chat_message",
+        title: `Chat update in #${channel}`,
+        message: `${author.displayName}: ${message.slice(0, 120)}`,
+        broadcast: true,
+        metadata: { chatId: chat.id, channel, authorUserId: author.id },
+      });
+      sendJson(res, 201, chat);
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+    return;
+  }
+
   const id = `chat-${String(nextCommunityChatId++).padStart(5, "0")}`;
   const chat = {
     id,
@@ -798,6 +997,13 @@ async function handleCreateCommunityChat(req, res) {
 function handleListCommunityReactions(requestUrl, res) {
   const targetType = (requestUrl.searchParams.get("targetType") || "").trim();
   const targetId = (requestUrl.searchParams.get("targetId") || "").trim();
+  if (useCommunityPg()) {
+    communityPg
+      .listReactions(targetType, targetId)
+      .then((reactions) => sendJson(res, 200, { count: reactions.length, reactions }))
+      .catch((e) => sendJson(res, 500, { error: e.message }));
+    return;
+  }
   const reactions = Array.from(communityReactions.values()).filter((reaction) => {
     if (targetType && reaction.targetType !== targetType) {
       return false;
@@ -829,6 +1035,33 @@ async function handleCreateCommunityReaction(req, res) {
   }
 
   const actor = ensureUser(authorUserId, { displayName: body.authorDisplayName });
+
+  if (useCommunityPg()) {
+    try {
+      const record = await communityPg.createReaction({
+        authorUserId: actor.id,
+        authorDisplayName: actor.displayName,
+        targetType,
+        targetId,
+        reaction,
+      });
+      const ownerId = resolveNotificationTargetOwner(targetType, targetId);
+      if (ownerId && ownerId !== actor.id) {
+        createNotification({
+          type: "community_reaction_received",
+          title: "New reaction on your CCWEB content",
+          message: `${actor.displayName} reacted with ${reaction}.`,
+          targetUserIds: [ownerId],
+          metadata: { reactionId: record.id, targetType, targetId, fromUserId: actor.id },
+        });
+      }
+      sendJson(res, 201, record);
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+    return;
+  }
+
   const id = `react-${String(nextCommunityReactionId++).padStart(5, "0")}`;
   const record = {
     id,
@@ -855,7 +1088,78 @@ async function handleCreateCommunityReaction(req, res) {
   sendJson(res, 201, record);
 }
 
-function handleListAiBlogs(res) {
+function handleListBugReports(res) {
+  if (useCommunityPg()) {
+    communityPg
+      .listBugs()
+      .then((reports) => sendJson(res, 200, { count: reports.length, reports }))
+      .catch((e) => sendJson(res, 500, { error: e.message }));
+    return;
+  }
+  const reports = Array.from(communityBugReports.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  sendJson(res, 200, { count: reports.length, reports });
+}
+
+async function handleCreateBugReport(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+
+  const reporterUserId = (body.reporterUserId || "").toString().trim();
+  const title = (body.title || "").toString().trim();
+  const description = (body.description || "").toString().trim();
+  const pathStr = (body.path || "").toString().trim();
+  if (!title || !description) {
+    sendJson(res, 400, { error: "title and description are required." });
+    return;
+  }
+
+  const reporter = reporterUserId ? ensureUser(reporterUserId, { displayName: body.reporterDisplayName }) : null;
+
+  if (useCommunityPg()) {
+    try {
+      const record = await communityPg.createBug({
+        reporterUserId: reporter?.id || null,
+        reporterDisplayName: reporter?.displayName || null,
+        title: title.slice(0, 160),
+        description: description.slice(0, 4000),
+        path: pathStr.slice(0, 400),
+        severity: (body.severity || "normal").toString().trim().slice(0, 32),
+      });
+      telemetryHub.recordEvent({
+        name: "bug_report_submitted",
+        path: record.path || "/",
+        metadata: { bugId: record.id, severity: record.severity },
+      });
+      sendJson(res, 201, record);
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+    return;
+  }
+
+  const id = `bug-${String(nextCommunityBugReportId++).padStart(5, "0")}`;
+  const record = {
+    id,
+    reporterUserId: reporter?.id || null,
+    reporterDisplayName: reporter?.displayName || null,
+    title: title.slice(0, 160),
+    description: description.slice(0, 4000),
+    path: pathStr.slice(0, 400),
+    severity: (body.severity || "normal").toString().trim().slice(0, 32),
+    createdAt: new Date().toISOString(),
+  };
+  communityBugReports.set(id, record);
+  telemetryHub.recordEvent({
+    name: "bug_report_submitted",
+    path: record.path || "/",
+    metadata: { bugId: id, severity: record.severity },
+  });
+  sendJson(res, 201, record);
   const blogs = Array.from(aiBlogs.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   sendJson(res, 200, { count: blogs.length, blogs });
 }
@@ -2981,6 +3285,16 @@ function delegateGrowth(req, res) {
   });
 }
 
+function delegateSocial(req, res) {
+  const origUrl = req.url || "/";
+  const stripped = origUrl.startsWith("/api/social") ? origUrl.slice("/api/social".length) || "/" : origUrl;
+  req.url = stripped;
+  socialApp(req, res, () => {
+    req.url = origUrl;
+    sendJson(res, 404, { error: "Social route not found." });
+  });
+}
+
 const developerApp = createDeveloperApp({
   streamRoomsGetter: () => Array.from(streamRooms.values()).map(buildStreamRoomResponse),
   createStreamingSession: createStreamingSessionForDeveloperApi,
@@ -2997,6 +3311,17 @@ function delegateDeveloper(req, res) {
 }
 
 const server = http.createServer(async (req, res) => {
+  const reqStart = Date.now();
+  res.on("finish", () => {
+    logger.info({
+      msg: "http_request",
+      method: req.method,
+      path: (req.url || "").split("?")[0],
+      status: res.statusCode,
+      durationMs: Date.now() - reqStart,
+    });
+  });
+
   if (!req.url) {
     sendJson(res, 400, { error: "Invalid request URL." });
     return;
@@ -3004,6 +3329,28 @@ const server = http.createServer(async (req, res) => {
 
   const requestUrl = new URL(req.url, `http://localhost:${PORT}`);
   const { pathname } = requestUrl;
+
+  if (
+    (pathname.startsWith("/api") || pathname.startsWith("/v1")) &&
+    pathname !== "/api/payments/stripe/webhook"
+  ) {
+    const rl = checkApiRateLimit(req);
+    if (!rl.ok) {
+      res.setHeader("Retry-After", String(rl.retryAfterSec));
+      sendJson(res, 429, { error: "Too many requests", retryAfterSec: rl.retryAfterSec });
+      return;
+    }
+  }
+
+  if (pathname === "/api/payments/stripe/webhook" && req.method === "POST") {
+    await handleStripeWebhook(req, res);
+    return;
+  }
+
+  if (pathname === "/api/payments/stripe/checkout/escrow" && req.method === "POST") {
+    await handleStripeCheckoutEscrow(req, res, readJsonBody, sendJson);
+    return;
+  }
 
   if (pathname.startsWith("/api/intelligence") && ["GET", "POST", "DELETE", "OPTIONS"].includes(req.method || "GET")) {
     if (req.method === "OPTIONS") {
@@ -3030,6 +3377,20 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     delegateGrowth(req, res);
+    return;
+  }
+
+  if (pathname.startsWith("/api/social") && ["GET", "POST", "OPTIONS"].includes(req.method || "GET")) {
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      });
+      res.end();
+      return;
+    }
+    delegateSocial(req, res);
     return;
   }
 
@@ -3379,4 +3740,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`ccweb-project app running on http://localhost:${PORT}`);
+  if (getPool() && process.env.CCWEB_SKIP_MIGRATIONS !== "1") {
+    migrate().catch((e) => logger.error({ msg: "migrate_failed", err: e.message }));
+  }
 });

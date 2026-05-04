@@ -3,7 +3,14 @@
 ## Cursor Cloud specific instructions
 
 ### Overview
-This is a React 19 + Vite 7 frontend with a Node.js backend (`server.js`). Core app state remains in-memory. **Optional:** MongoDB for persisted tracked wallets (`MONGODB_URI`), and explorer API keys for live contract checks (`ETHERSCAN_API_KEY`).
+This is a React 19 + Vite 7 frontend with a Node.js backend (`server.js`). **Optional PostgreSQL** (`DATABASE_URL`): when set, the server runs `db/schema.sql` migrations on boot (skip with `CCWEB_SKIP_MIGRATIONS=1`) and persists auth users, growth hub (marketplace/escrow), and community data. Without it, those areas fall back to in-memory (or MongoDB for auth when `MONGODB_URI` is set). Explorer API keys (`ETHERSCAN_API_KEY`, etc.) power live contract checks.
+
+### Production-oriented backend
+- **Logging:** `pino` via `logging/logger.js` (set `LOG_LEVEL`).
+- **Rate limiting:** sliding window on `/api/*` and `/v1/*` except the Stripe webhook (`security/apiRateLimit.js`, tune with `API_RATE_LIMIT_MAX`).
+- **Stripe:** `POST /api/payments/stripe/checkout/escrow` (JSON body: `listingId`, optional `buyerId`, `buyerName`, `successUrl`, `cancelUrl`) and `POST /api/payments/stripe/webhook` (raw body; requires `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`). Escrow orders in Postgres use `pending_payment` until checkout completes.
+- **Social posting:** `POST /api/social/publish` — requires `approved: true`, optional `dryRun: true`. X posting needs `TWITTER_ACCESS_TOKEN` (user OAuth2 with `tweet.write`); app-only `TWITTER_BEARER_TOKEN` alone cannot create tweets. Facebook: `FACEBOOK_PAGE_ACCESS_TOKEN`, optional `FACEBOOK_PAGE_ID` (default `me`). LinkedIn: `LINKEDIN_ACCESS_TOKEN`, `LINKEDIN_AUTHOR_URN`.
+- **OAuth sign-in:** `POST /api/auth/oauth/google` and `POST /api/auth/oauth/apple` (ID tokens); configure `GOOGLE_CLIENT_ID`, `APPLE_CLIENT_ID` (see `.env.example`).
 
 ### Running the development environment
 Two processes are needed for development:
@@ -45,6 +52,6 @@ The Vite config proxies `/api`, `/v1`, and `/auth` to `http://127.0.0.1:3000`. S
 ### Gotchas
 - The `GET /api/streaming/curriculum` endpoint documented in the README returns 404; the curriculum data is embedded in the room creation response instead.
 - The backend serves both API routes and static files from `/public`. In production mode (`npm start`), it serves the built `dist/` folder.
-- The in-memory data resets on every server restart.
-- Without `MONGODB_URI`, auth users and refresh bindings fall back to **in-memory** (lost on restart). Set `AUTH_JWT_SECRET` (32+ chars) in production.
+- The in-memory data resets on every server restart (including telemetry events and bug reports when not using Postgres).
+- Without `DATABASE_URL` and without `MONGODB_URI`, auth users and refresh bindings fall back to **in-memory** (lost on restart). Set `AUTH_JWT_SECRET` (32+ chars) in production.
 - Without `MONGODB_URI`, tracked wallets and tracked tokens are not persisted for intelligence features (API may still return sample market data).

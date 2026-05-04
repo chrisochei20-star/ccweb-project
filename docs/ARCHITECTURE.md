@@ -20,7 +20,7 @@
 
 ## Extension points
 
-1. **Auth:** Swap `authService.js` + `/api/auth/*` for OAuth / JWT from your IdP; keep `session.js` aligned with token storage (prefer httpOnly cookies for native apps via backend BFF).
+1. **Auth:** JWT access + refresh (`auth/`), bcrypt, TOTP 2FA, wallet SIWE-style; see [docs/AUTH_API.md](./AUTH_API.md). Use `MONGODB_URI` for durable auth store.
 2. **Intelligence:** Add real indexers in `earlySignalsEngine.js` / `tokenDetail.js`; keep response shape stable for the React dashboards.
 3. **Modular routes:** New features can add Express routers mounted from `server.js` (same pattern as `intelligenceExpress.js`).
 

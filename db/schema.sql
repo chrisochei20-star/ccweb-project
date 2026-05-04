@@ -179,3 +179,90 @@ CREATE TABLE IF NOT EXISTS api_request_logs (
 );
 
 CREATE INDEX IF NOT EXISTS api_request_logs_created ON api_request_logs (created_at DESC);
+
+-- AI Streaming / Tutor monetization (Stripe-backed when configured)
+CREATE TABLE IF NOT EXISTS learning_sessions (
+  id TEXT PRIMARY KEY,
+  stream_room_id TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  topic TEXT NOT NULL DEFAULT '',
+  created_by TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'live',
+  hourly_rate_usd NUMERIC(12,2) NOT NULL DEFAULT 4.99,
+  platform_fee_percent NUMERIC(6,2) NOT NULL DEFAULT 25,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ended_at TIMESTAMPTZ,
+  total_gross_usd NUMERIC(14,2) NOT NULL DEFAULT 0,
+  total_platform_usd NUMERIC(14,2) NOT NULL DEFAULT 0,
+  total_creator_usd NUMERIC(14,2) NOT NULL DEFAULT 0,
+  revenue_closed BOOLEAN NOT NULL DEFAULT FALSE,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS learning_access (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES learning_sessions(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  hours_purchased NUMERIC(10,4) NOT NULL DEFAULT 1,
+  hours_consumed NUMERIC(10,4) NOT NULL DEFAULT 0,
+  amount_usd NUMERIC(14,2) NOT NULL,
+  platform_fee_usd NUMERIC(14,2) NOT NULL,
+  creator_share_usd NUMERIC(14,2) NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending_payment',
+  stripe_checkout_session_id TEXT UNIQUE,
+  stripe_payment_intent_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS learning_access_session_user ON learning_access (session_id, user_id);
+
+CREATE TABLE IF NOT EXISTS learning_participation (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES learning_sessions(id) ON DELETE CASCADE,
+  stream_room_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  watch_minutes INT NOT NULL DEFAULT 0,
+  interaction_score INT NOT NULL DEFAULT 0,
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (session_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS learning_revenue_ledger (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES learning_sessions(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  watch_minutes INT NOT NULL DEFAULT 0,
+  gross_usd NUMERIC(14,2) NOT NULL,
+  platform_usd NUMERIC(14,2) NOT NULL,
+  creator_usd NUMERIC(14,2) NOT NULL,
+  source TEXT NOT NULL DEFAULT 'session_close',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS learning_user_wallet (
+  user_id TEXT PRIMARY KEY,
+  credits_cents INT NOT NULL DEFAULT 0,
+  xp INT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS learning_subscriptions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL UNIQUE,
+  tier TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'inactive',
+  stripe_customer_id TEXT,
+  stripe_subscription_id TEXT,
+  current_period_end TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS learning_tutor_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

@@ -1,0 +1,9 @@
+{
+  "name": "@ccweb/sdk",
+  "version": "0.1.0",
+  "description": "CCWEB Public API client (JavaScript)",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": { ".": "./index.mjs" },
+  "license": "MIT"
+}

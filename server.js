@@ -5,6 +5,9 @@ const path = require("path");
 const { URL } = require("url");
 const cryptoSafety = require("./cryptoSafety");
 const { createIntelligenceApp } = require("./intelligenceExpress");
+const { createDeveloperApp } = require("./developerExpress");
+const developerPlatform = require("./developerPlatform");
+const { isValidEvmAddress } = require("./developerWeb3");
 const authService = require("./authService");
 
 const PORT = Number(process.env.PORT || 3000);
@@ -1118,6 +1121,101 @@ async function handleFinishStreamRoom(pathname, req, res) {
   });
 }
 
+/** For Public API /v1 — returns { error, status } or { room } without writing HTTP. */
+async function createStreamingSessionForDeveloperApi(body) {
+  const result = createRoomFromPayload(body || {});
+  if (result.error) {
+    return { error: result.error, status: result.status || 400 };
+  }
+  const room = result.room;
+  const owner = ensureUser(room.createdBy, { displayName: (body || {}).createdByDisplayName });
+  if (!streamAttendances.has(room.id)) {
+    streamAttendances.set(room.id, new Map());
+  }
+  updateRoomMetricsFromAttendance(room);
+  streamRooms.set(room.id, room);
+  if (owner) {
+    createNotification({
+      type: "ai_streaming_room_created",
+      title: "AI live stream activated",
+      message: `${room.roomName} is now live with topic: ${room.topic}.`,
+      targetUserIds: [owner.id],
+      metadata: {
+        roomId: room.id,
+        roomName: room.roomName,
+        topic: room.topic,
+        platformRevenueSharePercent: room.platformRevenueSharePercent,
+        expectedSessionMinutes: room.tutoringSchedule.expectedSessionMinutes,
+        tutoringIntervalMinutes: room.tutoringSchedule.tutoringIntervalMinutes,
+        estimatedEndAt: room.tutoringSchedule.estimatedEndAt,
+      },
+    });
+  }
+  createNotification({
+    type: "ai_streaming_live_alert",
+    title: "New CCWEB AI live stream",
+    message: `${room.roomName} started: ${room.topic}.`,
+    broadcast: true,
+    metadata: {
+      roomId: room.id,
+      roomName: room.roomName,
+      topic: room.topic,
+      createdBy: room.createdBy,
+      expectedSessionMinutes: room.tutoringSchedule.expectedSessionMinutes,
+      tutoringIntervalMinutes: room.tutoringSchedule.tutoringIntervalMinutes,
+      estimatedEndAt: room.tutoringSchedule.estimatedEndAt,
+    },
+  });
+  return { room: buildStreamRoomResponse(room) };
+}
+
+/** For Public API /v1 — finish by room id. */
+async function finishStreamingSessionForDeveloperApi(roomId, body) {
+  const room = streamRooms.get(roomId);
+  if (!room) {
+    return { error: "Streaming room not found.", status: 404 };
+  }
+  const b = body || {};
+  if (isRoomFinished(room)) {
+    return {
+      room: buildStreamRoomResponse(room),
+      closedAttendances: 0,
+      message: "Room already finished.",
+    };
+  }
+  const finishedBy = (b.finishedBy || room.createdBy || "system").toString().trim();
+  const now = new Date().toISOString();
+  room.status = "finished";
+  room.finishedAt = now;
+  room.updatedAt = now;
+  room.tutoringSchedule = {
+    ...room.tutoringSchedule,
+    actualEndedAt: now,
+  };
+  const closed = closeRoomAttendances(roomId, "room_finished");
+  updateRoomMetricsFromAttendance(room);
+  streamRooms.set(roomId, room);
+  const recipientSet = new Set([room.createdBy, ...closed.map((entry) => entry.userId)]);
+  createNotification({
+    type: "ai_streaming_room_finished",
+    title: "AI live stream finished",
+    message: `${room.roomName} has finished. You can now join another stream.`,
+    targetUserIds: Array.from(recipientSet).filter(Boolean),
+    metadata: {
+      roomId: room.id,
+      roomName: room.roomName,
+      finishedAt: room.finishedAt,
+      finishedBy,
+      closedAttendances: closed.length,
+    },
+  });
+  return {
+    room: buildStreamRoomResponse(room),
+    closedAttendances: closed.length,
+    finishedBy,
+  };
+}
+
 function handleListStreamDistributions(requestUrl, res) {
   const roomId = (requestUrl.searchParams.get("roomId") || "").trim();
   const payoutId = (requestUrl.searchParams.get("payoutId") || "").trim();
@@ -2032,52 +2130,12 @@ async function handleCreateStreamRoom(req, res) {
     return;
   }
 
-  const result = createRoomFromPayload(body);
-  if (result.error) {
-    sendJson(res, result.status || 400, { error: result.error });
+  const out = await createStreamingSessionForDeveloperApi(body);
+  if (out.error) {
+    sendJson(res, out.status || 400, { error: out.error });
     return;
   }
-  const room = result.room;
-  const owner = ensureUser(room.createdBy, { displayName: body.createdByDisplayName });
-  if (!streamAttendances.has(room.id)) {
-    streamAttendances.set(room.id, new Map());
-  }
-  updateRoomMetricsFromAttendance(room);
-  streamRooms.set(room.id, room);
-
-  if (owner) {
-    createNotification({
-      type: "ai_streaming_room_created",
-      title: "AI live stream activated",
-      message: `${room.roomName} is now live with topic: ${room.topic}.`,
-      targetUserIds: [owner.id],
-      metadata: {
-        roomId: room.id,
-        roomName: room.roomName,
-        topic: room.topic,
-        platformRevenueSharePercent: room.platformRevenueSharePercent,
-        expectedSessionMinutes: room.tutoringSchedule.expectedSessionMinutes,
-        tutoringIntervalMinutes: room.tutoringSchedule.tutoringIntervalMinutes,
-        estimatedEndAt: room.tutoringSchedule.estimatedEndAt,
-      },
-    });
-  }
-  createNotification({
-    type: "ai_streaming_live_alert",
-    title: "New CCWEB AI live stream",
-    message: `${room.roomName} started: ${room.topic}.`,
-    broadcast: true,
-    metadata: {
-      roomId: room.id,
-      roomName: room.roomName,
-      topic: room.topic,
-      createdBy: room.createdBy,
-      expectedSessionMinutes: room.tutoringSchedule.expectedSessionMinutes,
-      tutoringIntervalMinutes: room.tutoringSchedule.tutoringIntervalMinutes,
-      estimatedEndAt: room.tutoringSchedule.estimatedEndAt,
-    },
-  });
-  sendJson(res, 201, buildStreamRoomResponse(room));
+  sendJson(res, 201, out.room);
 }
 
 function handleListStreamRooms(res) {
@@ -2332,6 +2390,7 @@ function seedUsers() {
 
 seedUsers();
 seedApplicants();
+developerPlatform.ensureDefaultProject();
 
 const DAPP_TEMPLATES = [
   {
@@ -2439,6 +2498,135 @@ function recordTransaction(type, data) {
   return tx;
 }
 
+/**
+ * Shared DApp deployment (HTTP + Public API). Returns deployment object.
+ * @param {object} body
+ * @param {string} [ccwebProjectId]
+ */
+async function runDappDeployCore(body, ccwebProjectId) {
+  const {
+    templateId,
+    network,
+    paymentToken,
+    contractName,
+    contractSymbol,
+    walletAddress,
+    parameters,
+    idempotencyKey,
+  } = body || {};
+
+  if (idempotencyKey) {
+    const existing = processedIdempotencyKeys.get(idempotencyKey);
+    if (existing) {
+      return { ...existing, _idempotent: true };
+    }
+  }
+
+  if (!templateId) throw Object.assign(new Error("templateId is required."), { status: 400 });
+  if (!network) throw Object.assign(new Error("network is required."), { status: 400 });
+  if (!paymentToken) throw Object.assign(new Error("paymentToken is required."), { status: 400 });
+  if (!walletAddress) throw Object.assign(new Error("walletAddress is required."), { status: 400 });
+  if (network === "solana") {
+    const s = walletAddress.trim();
+    if (s.startsWith("0x")) {
+      throw Object.assign(new Error("Use a Solana-style address for Solana deployments, not an EVM 0x address."), {
+        status: 400,
+      });
+    }
+    if (s.length < 8) {
+      throw Object.assign(new Error("walletAddress is too short for Solana."), { status: 400 });
+    }
+  } else if (!isValidEvmAddress(walletAddress)) {
+    throw Object.assign(new Error("walletAddress must be a valid EVM address (0x…) for this network."), { status: 400 });
+  }
+
+  const template = DAPP_TEMPLATES.find((t) => t.id === templateId);
+  if (!template) throw Object.assign(new Error(`Template '${templateId}' not found.`), { status: 404 });
+  if (!template.networks.includes(network)) {
+    throw Object.assign(new Error(`Template '${templateId}' does not support network '${network}'.`), { status: 400 });
+  }
+
+  const tokenUpper = paymentToken.toUpperCase();
+  if (!TOKEN_PRICES[tokenUpper]) {
+    throw Object.assign(new Error(`Unsupported payment token '${paymentToken}'.`), { status: 400 });
+  }
+
+  const price = TOKEN_PRICES[tokenUpper];
+  const feeUsd = template.baseFeeUsd;
+  const feeInToken = formatMoney(feeUsd / price.usd);
+
+  const deploymentId = `deploy-${String(nextDappDeploymentId++).padStart(4, "0")}`;
+  const paymentId = `pay-${String(nextDappPaymentId++).padStart(4, "0")}`;
+  const txHash = `0x${crypto.randomBytes(32).toString("hex")}`;
+  const contractAddress = `0x${crypto.randomBytes(20).toString("hex")}`;
+  const now = new Date().toISOString();
+
+  const payment = {
+    id: paymentId,
+    deploymentId,
+    token: tokenUpper,
+    network: price.network,
+    amountToken: feeInToken,
+    amountUsd: feeUsd,
+    priceAtTime: price.usd,
+    walletAddress,
+    txHash,
+    status: "confirmed",
+    confirmedAt: now,
+  };
+  dappPayments.set(paymentId, payment);
+
+  const deployment = {
+    id: deploymentId,
+    ccwebProjectId: ccwebProjectId || null,
+    templateId,
+    templateName: template.name,
+    category: template.category,
+    network,
+    contractName: contractName || template.name,
+    contractSymbol: contractSymbol || templateId.toUpperCase(),
+    contractAddress,
+    walletAddress,
+    parameters: parameters || {},
+    payment,
+    status: "deployed",
+    deployedAt: now,
+    explorerUrl: `${SUPPORTED_NETWORKS.find((n) => n.id === network)?.explorer || ""}/address/${contractAddress}`,
+    features: template.features,
+    estimatedGas: template.estimatedGas,
+  };
+  dappDeployments.set(deploymentId, deployment);
+
+  recordTransaction("payment", {
+    deploymentId,
+    paymentId,
+    token: tokenUpper,
+    amountToken: feeInToken,
+    amountUsd: feeUsd,
+    walletAddress,
+    txHash,
+    network,
+    status: "confirmed",
+    description: `Payment for ${template.name} deployment`,
+  });
+  recordTransaction("deployment", {
+    deploymentId,
+    templateId,
+    templateName: template.name,
+    contractAddress,
+    network,
+    walletAddress,
+    status: "deployed",
+    description: `Deployed ${contractName || template.name} to ${network}`,
+  });
+
+  if (idempotencyKey) {
+    processedIdempotencyKeys.set(idempotencyKey, deployment);
+  }
+
+  return deployment;
+}
+
 function handleDappTemplates(res) {
   sendJson(res, 200, { count: DAPP_TEMPLATES.length, templates: DAPP_TEMPLATES });
 }
@@ -2474,81 +2662,14 @@ async function handleDappDeploy(req, res) {
     return;
   }
 
-  const { templateId, network, paymentToken, contractName, contractSymbol, walletAddress, parameters, idempotencyKey } = body;
-
-  if (idempotencyKey) {
-    const existing = processedIdempotencyKeys.get(idempotencyKey);
-    if (existing) {
-      sendJson(res, 200, { ...existing, _idempotent: true });
-      return;
-    }
+  try {
+    const deployment = await runDappDeployCore(body);
+    const code = deployment._idempotent ? 200 : 201;
+    sendJson(res, code, deployment);
+  } catch (e) {
+    const code = e.status || 400;
+    sendJson(res, code, { error: e.message || "Deploy failed." });
   }
-
-  if (!templateId) { sendJson(res, 400, { error: "templateId is required." }); return; }
-  if (!network) { sendJson(res, 400, { error: "network is required." }); return; }
-  if (!paymentToken) { sendJson(res, 400, { error: "paymentToken is required." }); return; }
-  if (!walletAddress) { sendJson(res, 400, { error: "walletAddress is required." }); return; }
-
-  const template = DAPP_TEMPLATES.find((t) => t.id === templateId);
-  if (!template) { sendJson(res, 404, { error: `Template '${templateId}' not found.` }); return; }
-  if (!template.networks.includes(network)) { sendJson(res, 400, { error: `Template '${templateId}' does not support network '${network}'.` }); return; }
-
-  const tokenUpper = paymentToken.toUpperCase();
-  if (!TOKEN_PRICES[tokenUpper]) { sendJson(res, 400, { error: `Unsupported payment token '${paymentToken}'.` }); return; }
-
-  const price = TOKEN_PRICES[tokenUpper];
-  const feeUsd = template.baseFeeUsd;
-  const feeInToken = formatMoney(feeUsd / price.usd);
-
-  const deploymentId = `deploy-${String(nextDappDeploymentId++).padStart(4, "0")}`;
-  const paymentId = `pay-${String(nextDappPaymentId++).padStart(4, "0")}`;
-  const txHash = `0x${crypto.randomBytes(32).toString("hex")}`;
-  const contractAddress = `0x${crypto.randomBytes(20).toString("hex")}`;
-  const now = new Date().toISOString();
-
-  const payment = {
-    id: paymentId,
-    deploymentId,
-    token: tokenUpper,
-    network: price.network,
-    amountToken: feeInToken,
-    amountUsd: feeUsd,
-    priceAtTime: price.usd,
-    walletAddress,
-    txHash,
-    status: "confirmed",
-    confirmedAt: now,
-  };
-  dappPayments.set(paymentId, payment);
-
-  const deployment = {
-    id: deploymentId,
-    templateId,
-    templateName: template.name,
-    category: template.category,
-    network,
-    contractName: contractName || template.name,
-    contractSymbol: contractSymbol || templateId.toUpperCase(),
-    contractAddress,
-    walletAddress,
-    parameters: parameters || {},
-    payment,
-    status: "deployed",
-    deployedAt: now,
-    explorerUrl: `${SUPPORTED_NETWORKS.find((n) => n.id === network)?.explorer || ""}/address/${contractAddress}`,
-    features: template.features,
-    estimatedGas: template.estimatedGas,
-  };
-  dappDeployments.set(deploymentId, deployment);
-
-  recordTransaction("payment", { deploymentId, paymentId, token: tokenUpper, amountToken: feeInToken, amountUsd: feeUsd, walletAddress, txHash, network, status: "confirmed", description: `Payment for ${template.name} deployment` });
-  recordTransaction("deployment", { deploymentId, templateId, templateName: template.name, contractAddress, network, walletAddress, status: "deployed", description: `Deployed ${contractName || template.name} to ${network}` });
-
-  if (idempotencyKey) {
-    processedIdempotencyKeys.set(idempotencyKey, deployment);
-  }
-
-  sendJson(res, 201, deployment);
 }
 
 function handleDappDeployments(requestUrl, res) {
@@ -2939,6 +3060,21 @@ function delegateIntelligence(req, res) {
   });
 }
 
+const developerApp = createDeveloperApp({
+  streamRoomsGetter: () => Array.from(streamRooms.values()).map(buildStreamRoomResponse),
+  createStreamingSession: createStreamingSessionForDeveloperApi,
+  finishStreamingSession: finishStreamingSessionForDeveloperApi,
+  dappTemplatesGetter: () => ({ count: DAPP_TEMPLATES.length, templates: DAPP_TEMPLATES }),
+  dappDeployHandler: (body, projectId) => runDappDeployCore(body, projectId),
+  listUsersForAdmin: () => Array.from(ccwebUsers.values()).map(sanitizeUser),
+});
+
+function delegateDeveloper(req, res) {
+  developerApp(req, res, () => {
+    sendJson(res, 404, { error: "Developer route not found." });
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   if (!req.url) {
     sendJson(res, 400, { error: "Invalid request URL." });
@@ -2959,6 +3095,23 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     delegateIntelligence(req, res);
+    return;
+  }
+
+  if (
+    (pathname.startsWith("/v1") || pathname.startsWith("/api/developer")) &&
+    ["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"].includes(req.method || "GET")
+  ) {
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, DELETE, PUT, PATCH, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, CCWEB-API-Key",
+      });
+      res.end();
+      return;
+    }
+    delegateDeveloper(req, res);
     return;
   }
 

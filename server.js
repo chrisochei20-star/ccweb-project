@@ -15,12 +15,14 @@ const telemetryHub = require("./telemetryHub");
 const communityPg = require("./db/persistenceCommunity");
 const { getPool } = require("./db/pool");
 const pgGrowth = require("./db/persistenceGrowth");
+const learningPg = require("./db/persistenceLearning");
 const { migrate } = require("./db/migrate");
 const { logger } = require("./logging/logger");
 const { checkApiRateLimit } = require("./security/apiRateLimit");
 const { createSocialApp } = require("./social/socialRouter");
 const { handleStripeWebhook } = require("./payments/stripeWebhook");
 const { handleStripeCheckoutEscrow } = require("./payments/stripeCheckout");
+const { handleLearningStripeCheckout } = require("./payments/learningStripeCheckout");
 
 function useCommunityPg() {
   return Boolean(getPool());
@@ -28,7 +30,32 @@ function useCommunityPg() {
 
 const socialApp = createSocialApp();
 
+/** In-memory transcript for CCWEB SSE learning channel (per stream room). */
+const learningChannelMessages = new Map();
+const learningStreamSseClients = new Map();
+
+function learningBroadcast(roomId, event) {
+  const set = learningStreamSseClients.get(roomId);
+  if (!set || !set.size) return;
+  const payload = JSON.stringify({ ts: new Date().toISOString(), ...event });
+  for (const clientRes of set) {
+    try {
+      clientRes.write(`data: ${payload}\n\n`);
+    } catch {
+      /* ignore broken pipe */
+    }
+  }
+}
+
+function appendLearningChannelMessage(roomId, msg) {
+  const list = learningChannelMessages.get(roomId) || [];
+  list.push(msg);
+  while (list.length > 200) list.shift();
+  learningChannelMessages.set(roomId, list);
+}
+
 const PORT = Number(process.env.PORT || 3000);
+const CCWEB_ADMIN_KEY = (process.env.CCWEB_ADMIN_KEY || "").trim();
 const intelligenceApp = createIntelligenceApp();
 const growthApp = createGrowthApp();
 const PLATFORM_FEE_RATE = 0.08;
@@ -463,6 +490,236 @@ function closeRoomAttendances(roomId, reason = "room_finished") {
   });
   streamAttendances.set(roomId, attendeesMap);
   return changed;
+}
+
+async function finalizeLearningRevenueForRoom(roomId) {
+  if (!learningPg.usePostgres()) return;
+  const sess = await learningPg.getSessionByStreamRoomId(roomId);
+  if (!sess || sess.revenue_closed) return;
+  const attendeesMap = streamAttendances.get(roomId) || new Map();
+  const all = Array.from(attendeesMap.values());
+  await learningPg.finalizeSessionRevenue(roomId, all);
+  for (const a of all) {
+    const sub = await learningPg.getActiveSubscription(a.userId);
+    if (!sub) {
+      await learningPg.consumeAccessHours(sess.id, a.userId, (Number(a.watchMinutes) || 0) / 60);
+    }
+  }
+  await learningPg.markSessionRevenueClosed(roomId);
+}
+
+function checkLearningAdmin(req) {
+  const key = (req.headers["x-ccweb-admin"] || "").toString().trim();
+  return Boolean(CCWEB_ADMIN_KEY && key && key === CCWEB_ADMIN_KEY);
+}
+
+function generateTutorReply(userText) {
+  const t = userText.toLowerCase();
+  if (t.includes("web3")) {
+    return "Web3 is the read–write–own web: users control assets and identity via wallets and open protocols. Want a concrete example (DeFi, NFTs, or identity)?";
+  }
+  if (t.includes("defi") || t.includes("yield")) {
+    return "DeFi uses smart contracts for lending, trading, and liquidity. Always verify contract risk, audits, and liquidity before interacting with real funds.";
+  }
+  if (t.includes("blockchain") || t.includes("chain")) {
+    return "A blockchain is a replicated ledger secured by consensus. Transactions are grouped into blocks and linked cryptographically.";
+  }
+  return "Here is a concise answer based on your message. For deeper dives, pick a track (AI, Blockchain, Web3, Crypto, Business) and I will structure a mini-lesson with checkpoints.";
+}
+
+async function handleLearningAccessQuote(requestUrl, res) {
+  const streamRoomId = (requestUrl.searchParams.get("streamRoomId") || "").trim();
+  const hours = Math.max(0.25, Math.min(24, Number(requestUrl.searchParams.get("hours") || 1)));
+  if (!streamRoomId) {
+    sendJson(res, 400, { error: "streamRoomId required." });
+    return;
+  }
+  const room = streamRooms.get(streamRoomId);
+  if (!room) {
+    sendJson(res, 404, { error: "Stream room not found." });
+    return;
+  }
+  if (!learningPg.usePostgres()) {
+    const hourly = Number(process.env.CCWEB_LEARNING_HOURLY_USD || 4.99);
+    const pct = Number(room.platformRevenueSharePercent || 25);
+    const gross = +(hours * hourly).toFixed(2);
+    const platform = +((gross * pct) / 100).toFixed(2);
+    sendJson(res, 200, {
+      postgres: false,
+      streamRoomId,
+      hours,
+      hourlyRateUsd: hourly,
+      platformFeePercent: pct,
+      estimatedTotalUsd: gross,
+      estimatedPlatformUsd: platform,
+      estimatedCreatorUsd: +(gross - platform).toFixed(2),
+      note: "Set DATABASE_URL for Stripe paywall and revenue ledger.",
+    });
+    return;
+  }
+  const sess = await learningPg.getSessionByStreamRoomId(streamRoomId);
+  if (!sess) {
+    sendJson(res, 404, { error: "Learning session not synced yet. Open the room once after creation." });
+    return;
+  }
+  const hourly = learningPg.money(sess.hourly_rate_usd);
+  const platformPct = learningPg.money(sess.platform_fee_percent);
+  const gross = learningPg.money(hours * hourly);
+  const platform = learningPg.money((gross * platformPct) / 100);
+  const creator = learningPg.money(gross - platform);
+  sendJson(res, 200, {
+    postgres: true,
+    streamRoomId,
+    sessionId: sess.id,
+    hours,
+    hourlyRateUsd: hourly,
+    platformFeePercent: platformPct,
+    estimatedTotalUsd: gross,
+    estimatedPlatformUsd: platform,
+    estimatedCreatorUsd: creator,
+  });
+}
+
+async function handleLearningMe(requestUrl, res) {
+  const userId = (requestUrl.searchParams.get("userId") || "").trim();
+  if (!userId) {
+    sendJson(res, 400, { error: "userId required." });
+    return;
+  }
+  if (!learningPg.usePostgres()) {
+    sendJson(res, 200, { postgres: false, profile: null });
+    return;
+  }
+  const profile = await learningPg.userLearningProfile(userId);
+  sendJson(res, 200, { postgres: true, profile });
+}
+
+async function handleLearningAdminAnalytics(req, res) {
+  if (!checkLearningAdmin(req)) {
+    sendJson(res, 403, { error: "Admin key required (X-CCWEB-Admin)." });
+    return;
+  }
+  if (!learningPg.usePostgres()) {
+    sendJson(res, 503, { error: "PostgreSQL required for learning analytics." });
+    return;
+  }
+  const summary = await learningPg.analyticsSummary();
+  const live = await learningPg.listLiveSessionsWithStreamIds();
+  const recentLedger = await learningPg.listRecentLedger(40);
+  sendJson(res, 200, { summary, liveSessions: live, recentLedger });
+}
+
+async function handleLearningSessionDetail(streamRoomId, res) {
+  if (!learningPg.usePostgres()) {
+    sendJson(res, 503, { error: "PostgreSQL required." });
+    return;
+  }
+  const detail = await learningPg.getLearningSessionDetail(streamRoomId);
+  if (!detail) {
+    sendJson(res, 404, { error: "Learning session not found." });
+    return;
+  }
+  sendJson(res, 200, detail);
+}
+
+async function handleLearningChannelPost(req, res, streamRoomId) {
+  if (!streamRooms.has(streamRoomId)) {
+    sendJson(res, 404, { error: "Stream room not found." });
+    return;
+  }
+  let body = {};
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+  const text = (body.message || "").toString().trim().slice(0, 2000);
+  const userId = (body.userId || "").toString().trim();
+  const displayName = (body.displayName || "").toString().trim() || userId;
+  if (!text || !userId) {
+    sendJson(res, 400, { error: "userId and message required." });
+    return;
+  }
+  const msg = {
+    id: `lch_${crypto.randomBytes(6).toString("hex")}`,
+    streamRoomId,
+    userId,
+    displayName,
+    message: text,
+    type: (body.type || "chat").toString().slice(0, 32),
+    at: new Date().toISOString(),
+  };
+  appendLearningChannelMessage(streamRoomId, msg);
+  learningBroadcast(streamRoomId, { type: "channel_message", message: msg });
+  sendJson(res, 201, msg);
+}
+
+function handleLearningChannelGet(streamRoomId, res) {
+  if (!streamRooms.has(streamRoomId)) {
+    sendJson(res, 404, { error: "Stream room not found." });
+    return;
+  }
+  sendJson(res, 200, { messages: learningChannelMessages.get(streamRoomId) || [] });
+}
+
+function handleLearningSse(req, res, streamRoomId) {
+  if (!streamRooms.has(streamRoomId)) {
+    sendJson(res, 404, { error: "Stream room not found." });
+    return;
+  }
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "Access-Control-Allow-Origin": "*",
+  });
+  res.write(": ccweb-learning-sse\n\n");
+  let set = learningStreamSseClients.get(streamRoomId);
+  if (!set) {
+    set = new Set();
+    learningStreamSseClients.set(streamRoomId, set);
+  }
+  set.add(res);
+  const ping = setInterval(() => {
+    try {
+      res.write(": ping\n\n");
+    } catch {
+      clearInterval(ping);
+    }
+  }, 25000);
+  req.on("close", () => {
+    clearInterval(ping);
+    set.delete(res);
+    if (!set.size) learningStreamSseClients.delete(streamRoomId);
+  });
+}
+
+async function handleLearningTutorMessage(req, res) {
+  let body = {};
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+  const userId = (body.userId || "").toString().trim();
+  const text = (body.message || "").toString().trim().slice(0, 4000);
+  if (!userId || !text) {
+    sendJson(res, 400, { error: "userId and message required." });
+    return;
+  }
+  let xpGained = 0;
+  if (learningPg.usePostgres()) {
+    await learningPg.recordTutorEvent(userId, text.length, 3);
+    xpGained = 3;
+  }
+  const replyText = generateTutorReply(text);
+  sendJson(res, 200, {
+    user: { role: "user", text, at: new Date().toISOString() },
+    assistant: { role: "assistant", text: replyText, at: new Date().toISOString() },
+    xpGained,
+  });
 }
 
 function buildDistributionResponse(distribution) {
@@ -1311,6 +1568,38 @@ async function handleUpsertStreamAttendance(pathname, req, res) {
     }
   }
 
+  if (learningPg.usePostgres() && requestedActive && !isRoomFinished(room)) {
+    const sess = await learningPg.getSessionByStreamRoomId(roomId);
+    if (sess) {
+      const gate = await learningPg.userHasActiveAccess(sess.id, user.id);
+      if (!gate.ok) {
+        sendJson(res, 402, {
+          error: "Payment or subscription required to join this paid session.",
+          code: "LEARNING_PAYWALL",
+          streamRoomId: roomId,
+        });
+        return;
+      }
+      if (gate.via === "credits") {
+        const prevMin = Number(existing?.watchMinutes || 0);
+        const nextMin = Math.max(0, safeNumber(body.watchMinutes, prevMin));
+        const delta = nextMin - prevMin;
+        if (delta > 0) {
+          const debit = await learningPg.debitCreditsForMinutes(user.id, delta, Number(sess.hourly_rate_usd));
+          if (!debit.ok) {
+            sendJson(res, 402, {
+              error: "Insufficient learning credits for additional watch time.",
+              code: "LEARNING_CREDITS",
+              neededCents: debit.neededCents,
+              balanceCents: debit.balanceCents,
+            });
+            return;
+          }
+        }
+      }
+    }
+  }
+
   const watchMinutes = Math.max(0, safeNumber(body.watchMinutes, existing?.watchMinutes || 0));
   const interactionScore = Math.max(
     0,
@@ -1342,6 +1631,19 @@ async function handleUpsertStreamAttendance(pathname, req, res) {
   streamAttendances.set(roomId, attendeesMap);
   updateRoomMetricsFromAttendance(room);
   streamRooms.set(roomId, room);
+
+  if (learningPg.usePostgres()) {
+    const sess = await learningPg.getSessionByStreamRoomId(roomId);
+    if (sess) {
+      await learningPg.upsertParticipation(sess.id, roomId, user.id, watchMinutes, interactionScore);
+    }
+  }
+
+  learningBroadcast(roomId, {
+    type: "attendance",
+    attendance: entry,
+    metrics: room.metrics,
+  });
 
   const ownerId = (room.createdBy || "").toString().trim();
   if (ownerId) {
@@ -1404,6 +1706,7 @@ async function handleFinishStreamRoom(pathname, req, res) {
   const closed = closeRoomAttendances(roomId, "room_finished");
   updateRoomMetricsFromAttendance(room);
   streamRooms.set(roomId, room);
+  await finalizeLearningRevenueForRoom(roomId);
 
   const recipientSet = new Set([
     room.createdBy,
@@ -1443,6 +1746,11 @@ async function createStreamingSessionForDeveloperApi(body) {
   }
   updateRoomMetricsFromAttendance(room);
   streamRooms.set(room.id, room);
+  try {
+    await learningPg.upsertSessionFromStreamRoom(room);
+  } catch (e) {
+    logger.warn({ msg: "learning_session_upsert_fail", err: e.message });
+  }
   if (owner) {
     createNotification({
       type: "ai_streaming_room_created",
@@ -1504,6 +1812,7 @@ async function finishStreamingSessionForDeveloperApi(roomId, body) {
   const closed = closeRoomAttendances(roomId, "room_finished");
   updateRoomMetricsFromAttendance(room);
   streamRooms.set(roomId, room);
+  await finalizeLearningRevenueForRoom(roomId);
   const recipientSet = new Set([room.createdBy, ...closed.map((entry) => entry.userId)]);
   createNotification({
     type: "ai_streaming_room_finished",
@@ -2305,6 +2614,8 @@ function buildStreamingAiHost(hostName, tracks) {
 }
 
 function buildStreamRoomResponse(room) {
+  const lkUrl = (process.env.LIVEKIT_URL || process.env.LIVEKIT_WS_URL || "").toString().trim();
+  const streamingMode = lkUrl ? "livekit-webstream" : "ccweb_sse";
   return {
     id: room.id,
     roomName: room.roomName,
@@ -2313,12 +2624,17 @@ function buildStreamRoomResponse(room) {
     topic: room.topic,
     createdBy: room.createdBy,
     status: room.status,
-    streamingMode: "livekit-webstream",
-    livekit: {
-      wsUrl: room.livekitWsUrl,
-      token: room.livekitToken,
-      roomSidHint: room.roomSidHint,
-    },
+    streamingMode,
+    learningChannelUrl: `/api/learning/sessions/${room.id}/channel`,
+    learningEventsUrl: `/api/learning/sessions/${room.id}/events`,
+    hourlyParticipationUsd: room.hourlyParticipationUsd != null ? Number(room.hourlyParticipationUsd) : undefined,
+    livekit: lkUrl
+      ? {
+          wsUrl: lkUrl,
+          token: room.livekitToken,
+          roomSidHint: room.roomSidHint,
+        }
+      : null,
     aiHost: room.aiHost,
     tutoringSchedule: room.tutoringSchedule,
     finishedAt: room.finishedAt || null,
@@ -2375,6 +2691,8 @@ function createRoomFromPayload(body) {
 
   const id = `stream-${String(nextStreamRoomId++).padStart(4, "0")}`;
   const livekitToken = generateLivekitToken();
+  const lkUrl = (process.env.LIVEKIT_URL || process.env.LIVEKIT_WS_URL || "").toString().trim();
+  const hourlyParticipationUsd = Math.max(0, safeNumber(body.hourlyParticipationUsd, Number(process.env.CCWEB_LEARNING_HOURLY_USD || 4.99)));
   const room = {
     id,
     roomName,
@@ -2384,9 +2702,10 @@ function createRoomFromPayload(body) {
     createdBy,
     status: "live",
     finishedAt: null,
-    livekitWsUrl: "wss://livekit.ccweb-stream.example",
+    livekitWsUrl: lkUrl || null,
     livekitToken,
     roomSidHint: `${id}-lk`,
+    hourlyParticipationUsd,
     aiHost: buildStreamingAiHost((body.aiHostName || "").toString().trim(), tracks),
     autoPlan,
     tutoringSchedule: {
@@ -2402,8 +2721,8 @@ function createRoomFromPayload(body) {
     creatorRevenueSharePercent,
     metrics: {
       concurrentViewers: autoPlan.projectedActiveAttenders,
-      avgWatchMinutes: Math.round(12 + Math.random() * 18),
-      engagementRatePercent: Math.round(52 + Math.random() * 35),
+      avgWatchMinutes: 0,
+      engagementRatePercent: 0,
       estimatedOrganicRevenueUsd: autoPlan.estimatedGrossRevenueUsd,
     },
     createdAt: now,
@@ -3349,6 +3668,53 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === "/api/payments/stripe/checkout/escrow" && req.method === "POST") {
     await handleStripeCheckoutEscrow(req, res, readJsonBody, sendJson);
+    return;
+  }
+
+  if (pathname === "/api/payments/stripe/checkout/learning" && req.method === "POST") {
+    await handleLearningStripeCheckout(req, res, readJsonBody, sendJson);
+    return;
+  }
+
+  if (pathname === "/api/learning/access/quote" && req.method === "GET") {
+    handleLearningAccessQuote(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/learning/me" && req.method === "GET") {
+    await handleLearningMe(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/learning/admin/analytics" && req.method === "GET") {
+    await handleLearningAdminAnalytics(req, res);
+    return;
+  }
+
+  if (pathname === "/api/learning/tutor/message" && req.method === "POST") {
+    await handleLearningTutorMessage(req, res);
+    return;
+  }
+
+  const learnSseMatch = pathname.match(/^\/api\/learning\/sessions\/([^/]+)\/events$/);
+  if (learnSseMatch && req.method === "GET") {
+    handleLearningSse(req, res, learnSseMatch[1]);
+    return;
+  }
+
+  const learnChMatch = pathname.match(/^\/api\/learning\/sessions\/([^/]+)\/channel$/);
+  if (learnChMatch && req.method === "GET") {
+    handleLearningChannelGet(learnChMatch[1], res);
+    return;
+  }
+  if (learnChMatch && req.method === "POST") {
+    await handleLearningChannelPost(req, res, learnChMatch[1]);
+    return;
+  }
+
+  const learnDetailMatch = pathname.match(/^\/api\/learning\/sessions\/([^/]+)\/detail$/);
+  if (learnDetailMatch && req.method === "GET") {
+    await handleLearningSessionDetail(learnDetailMatch[1], res);
     return;
   }
 

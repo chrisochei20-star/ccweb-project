@@ -1,5 +1,6 @@
 const { logger } = require("../logging/logger");
 const pgGrowth = require("../db/persistenceGrowth");
+const learningPg = require("../db/persistenceLearning");
 
 async function readRawBody(req) {
   const chunks = [];
@@ -39,11 +40,67 @@ async function handleStripeWebhook(req, res) {
     const session = event.data.object;
     const orderId = session.metadata?.orderId;
     const pi = session.payment_intent;
+    const piId = typeof pi === "string" ? pi : pi?.id;
     if (orderId && pgGrowth.usePostgres()) {
       try {
-        await pgGrowth.attachStripeToOrder(orderId, session.id, typeof pi === "string" ? pi : pi?.id);
+        await pgGrowth.attachStripeToOrder(orderId, session.id, piId);
       } catch (e) {
         logger.error({ msg: "stripe_attach_order_fail", orderId, err: e.message });
+      }
+    }
+    const kind = session.metadata?.kind;
+    if (learningPg.usePostgres()) {
+      if (kind === "learning_session_access") {
+        try {
+          await learningPg.activateAccessByCheckoutSession(session.id, piId);
+        } catch (e) {
+          logger.error({ msg: "learning_access_activate_fail", err: e.message });
+        }
+      } else if (kind === "learning_credits") {
+        const userId = (session.metadata?.userId || "").toString().trim();
+        const cents = Number(session.metadata?.cents || 0);
+        if (userId && cents > 0) {
+          try {
+            await learningPg.addCredits(userId, cents, session.id);
+          } catch (e) {
+            logger.error({ msg: "learning_credits_fail", err: e.message });
+          }
+        }
+      } else if (kind === "learning_subscription_checkout") {
+        const userId = (session.metadata?.userId || "").toString().trim();
+        const tier = (session.metadata?.tier || "standard").toString();
+        const subRef = session.subscription;
+        const subId = typeof subRef === "string" ? subRef : subRef?.id;
+        if (userId && subId) {
+          try {
+            const fullSub = await stripe.subscriptions.retrieve(subId);
+            const cust =
+              typeof session.customer === "string" ? session.customer : session.customer?.id || fullSub.customer;
+            const end = new Date(fullSub.current_period_end * 1000).toISOString();
+            await learningPg.setSubscriptionActive(userId, tier, cust, subId, end);
+          } catch (e) {
+            logger.error({ msg: "learning_subscription_activate_fail", err: e.message });
+          }
+        }
+      }
+    }
+  } else if (event.type === "invoice.payment_succeeded" && learningPg.usePostgres()) {
+    const invoice = event.data.object;
+    const subRef = invoice.subscription;
+    const subId = typeof subRef === "string" ? subRef : subRef?.id;
+    if (subId) {
+      try {
+        const fullSub = await stripe.subscriptions.retrieve(subId);
+        const meta = fullSub.metadata || {};
+        const userId = (meta.userId || "").toString().trim();
+        const tier = (meta.tier || "standard").toString();
+        if (userId) {
+          const cust = typeof fullSub.customer === "string" ? fullSub.customer : fullSub.customer?.id;
+          const end = new Date(fullSub.current_period_end * 1000).toISOString();
+          await learningPg.setSubscriptionActive(userId, tier, cust, subId, end);
+        }
+      } catch (e) {
+        logger.warn({ msg: "invoice_sub_sync_skip", err: e.message });
       }
     }
   }

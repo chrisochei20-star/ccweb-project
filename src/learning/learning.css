@@ -1,0 +1,79 @@
+.learning-glass {
+  background: linear-gradient(145deg, rgba(15, 28, 52, 0.72), rgba(8, 16, 36, 0.55));
+  border: 1px solid rgba(120, 170, 255, 0.14);
+  border-radius: 20px;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+}
+
+.learning-grid {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@media (min-width: 900px) {
+  .learning-grid--2 {
+    grid-template-columns: 1.1fr 0.9fr;
+  }
+}
+
+.learning-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  background: rgba(17, 212, 255, 0.12);
+  border: 1px solid rgba(17, 212, 255, 0.25);
+  color: var(--brand-cyan);
+}
+
+.learning-chat-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding-right: 0.25rem;
+}
+
+.learning-msg {
+  padding: 0.65rem 0.85rem;
+  border-radius: 14px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.learning-msg--user {
+  align-self: flex-end;
+  background: rgba(79, 123, 255, 0.22);
+  border: 1px solid rgba(79, 123, 255, 0.35);
+}
+
+.learning-msg--ai {
+  align-self: flex-start;
+  background: rgba(17, 212, 255, 0.08);
+  border: 1px solid rgba(17, 212, 255, 0.2);
+}
+
+.learning-timer {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.learning-shimmer {
+  animation: learningPulse 2.2s ease-in-out infinite;
+}
+
+@keyframes learningPulse {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}

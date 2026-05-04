@@ -18,10 +18,15 @@ import { DeveloperPlatformPage } from "./DeveloperPlatformPage";
 import { VisualDappBuilderPage } from "./VisualDappBuilderPage";
 import { GrowthHubPage } from "./GrowthHubPage";
 import { fetchMe, getSessionToken, getStoredUser, logoutApi, setSession } from "./session";
+import { LearningAdminPage } from "./learning/LearningAdminPage";
+import { LearningHubPage } from "./learning/LearningHubPage";
+import { LearningSessionPage } from "./learning/LearningSessionPage";
+import { TokenDetailPage } from "./TokenDetailPage";
 
 const navItems = [
   { label: "Home", to: "/" },
-  { label: "Learn", to: "/courses" },
+  { label: "Learn", to: "/learn" },
+  { label: "Courses", to: "/courses" },
   { label: "AI Streaming", to: "/ai-streaming" },
   { label: "Find", to: "/find" },
   { label: "Early Signals", to: "/early-signals" },
@@ -80,6 +85,9 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
+          <Route path="learn" element={<LearningHubPage />} />
+          <Route path="learn/session/:roomId" element={<LearningSessionPage />} />
+          <Route path="learn/admin" element={<LearningAdminPage />} />
           <Route path="courses" element={<CoursesPage />} />
           <Route path="courses/:id" element={<CourseNotFoundPage />} />
           <Route path="ai-tutor" element={<AiTutorPage />} />
@@ -366,6 +374,9 @@ function AiTutorPage() {
           <p className="muted">
             Sign in to save your chat history and learning progress.
           </p>
+          <Link to="/learn" className="btn btn-primary" style={{ marginRight: "0.5rem" }}>
+            Live learning hub
+          </Link>
           <Link to="/login" className="btn btn-outline">
             Sign In
           </Link>

@@ -10,9 +10,11 @@ const developerPlatform = require("./developerPlatform");
 const { isValidEvmAddress } = require("./developerWeb3");
 const authEngine = require("./auth/authEngine");
 const { createAuthApp } = require("./auth/authExpress");
+const { createGrowthApp } = require("./growthExpress");
 
 const PORT = Number(process.env.PORT || 3000);
 const intelligenceApp = createIntelligenceApp();
+const growthApp = createGrowthApp();
 const PLATFORM_FEE_RATE = 0.08;
 
 const deals = new Map();
@@ -2969,6 +2971,16 @@ function delegateIntelligence(req, res) {
   });
 }
 
+function delegateGrowth(req, res) {
+  const origUrl = req.url || "/";
+  const stripped = origUrl.startsWith("/api/growth") ? origUrl.slice("/api/growth".length) || "/" : origUrl;
+  req.url = stripped;
+  growthApp(req, res, () => {
+    req.url = origUrl;
+    sendJson(res, 404, { error: "Growth hub route not found." });
+  });
+}
+
 const developerApp = createDeveloperApp({
   streamRoomsGetter: () => Array.from(streamRooms.values()).map(buildStreamRoomResponse),
   createStreamingSession: createStreamingSessionForDeveloperApi,
@@ -3004,6 +3016,20 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     delegateIntelligence(req, res);
+    return;
+  }
+
+  if (pathname.startsWith("/api/growth") && ["GET", "POST", "OPTIONS"].includes(req.method || "GET")) {
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      });
+      res.end();
+      return;
+    }
+    delegateGrowth(req, res);
     return;
   }
 

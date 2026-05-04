@@ -16,6 +16,7 @@ import { EarlySignalsDashboard } from "./EarlySignalsDashboard";
 import { DeveloperOnboardingPage } from "./DeveloperOnboardingPage";
 import { DeveloperPlatformPage } from "./DeveloperPlatformPage";
 import { VisualDappBuilderPage } from "./VisualDappBuilderPage";
+import { GrowthHubPage } from "./GrowthHubPage";
 import { fetchMe, getSessionToken, getStoredUser, logoutApi, setSession } from "./session";
 
 const navItems = [
@@ -28,6 +29,7 @@ const navItems = [
   { label: "Developers", to: "/developers" },
   { label: "Dev onboarding", to: "/developers/onboarding" },
   { label: "AI Agents", to: "/ai-agents" },
+  { label: "Growth Hub", to: "/growth-hub" },
   { label: "Earn", to: "/earn" },
   { label: "Community", to: "/community" },
   { label: "About", to: "/about" },
@@ -94,6 +96,7 @@ function App() {
           <Route path="dapp-builder" element={<VisualDappBuilderPage />} />
           <Route path="dapp-dashboard" element={<DappDashboardPage />} />
           <Route path="ai-agents" element={<AiAgentsPage />} />
+          <Route path="growth-hub" element={<GrowthHubPage />} />
           <Route path="earn" element={<EarnPage />} />
           <Route path="pricing" element={<PricingPage />} />
           <Route path="tokens" element={<Navigate to="/earn" replace />} />
@@ -257,6 +260,12 @@ function HomePage() {
           <h3>BUILD</h3>
           <p>DApp Builder, AI Agents, Business Automation Hub, and workflow operator system.</p>
           <span className="pillar-link">Start Building →</span>
+        </Link>
+        <Link to="/growth-hub" className="pillar-card pillar-build" style={{ borderStyle: "dashed", opacity: 0.95 }}>
+          <div className="pillar-icon">🌍</div>
+          <h3>GROWTH HUB</h3>
+          <p>Global marketing agent, marketplace, escrow monetization, and lead engine — organic-first.</p>
+          <span className="pillar-link">Open Growth Hub →</span>
         </Link>
         <Link to="/earn" className="pillar-card pillar-earn">
           <div className="pillar-icon">💰</div>
@@ -2377,6 +2386,9 @@ function EarnPage() {
             <li>Secure escrow payments</li>
             <li>Performance-based bonuses</li>
           </ul>
+          <Link to="/growth-hub" className="btn btn-primary" style={{ marginTop: "0.6rem" }}>
+            Open Growth Hub
+          </Link>
         </article>
         <article className="panel">
           <h3>🤖 Agent Rewards</h3>

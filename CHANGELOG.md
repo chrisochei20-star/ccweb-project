@@ -2,16 +2,31 @@
 
 All notable changes to this repository are documented here. This project is a **prototype**; breaking changes may occur until a 1.0 production freeze.
 
+## [Unreleased]
+
+### Security
+
+- **Auth overhaul:** `auth/` module with **bcrypt** passwords, **JWT** access + rotating refresh (httpOnly cookie + optional `AUTH_REFRESH_IN_BODY`), **TOTP** 2FA with backup codes, **wallet** sign-in (EVM + Solana). **MongoDB** auth persistence when `MONGODB_URI` is set. Rate limits on login and wallet. See [docs/AUTH_API.md](./docs/AUTH_API.md).
+
+### Changed
+
+- Registration no longer auto-issues tokens; client registers then logs in.
+- Frontend login uses JWT access token + optional refresh in sessionStorage when `AUTH_REFRESH_IN_BODY=1`.
+
+### Removed
+
+- Legacy `authService.js` (scrypt + opaque sessions).
+
 ## [1.1.0] — 2026-05-03
 
 ### Added
 
-- **Auth API (prototype):** `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, password reset request/reset endpoints. Sessions use Bearer tokens; credentials hashed with **scrypt** (in-memory store — not production-grade).
+- **Auth API:** JWT access + refresh, bcrypt passwords, TOTP 2FA, wallet connect, email verification token; see `docs/AUTH_API.md`. MongoDB-backed auth users when `MONGODB_URI` is set.
 - **Frontend auth:** Wired login and signup to the API; session in `sessionStorage`; navbar shows user / logout; **Profile** page for display name and push toggle; **Forgot password** prototype flow.
 - **Dashboard:** Pillar quick links; gated when not signed in.
 - **Legal placeholders:** `/privacy` and `/terms` draft pages (replace before store submission).
 - **Capacitor:** `capacitor.config.json` and `mobile:sync` script for wrapping the Vite `dist/` build.
-- **Tests:** Vitest smoke test for `authService`.
+- **Tests:** Vitest for `auth/authEngine` (bcrypt, JWT, wallet verify).
 - **Documentation:** `docs/ARCHITECTURE.md`, `docs/STORE_RELEASE.md`, `docs/DEMO_VIDEO_SCRIPT.md`, `docs/CODE_INVENTORY.md`.
 
 ### Changed
@@ -25,7 +40,7 @@ All notable changes to this repository are documented here. This project is a **
 
 ### Security notes
 
-- Replace in-memory sessions and passwords with a managed identity provider (Auth0, Clerk, Cognito, Firebase Auth) and HTTPS-only cookies before public app store release.
+- **Security:** Set `AUTH_JWT_SECRET` (32+ chars) and HTTPS in production; configure SMTP for email verification links.
 
 ## [1.0.0] — prior work (summary)
 

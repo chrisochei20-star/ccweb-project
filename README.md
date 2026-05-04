@@ -57,17 +57,18 @@ Requires `@capacitor/cli` (devDependency). Add iOS with `npx cap add ios` on mac
 | [docs/DEMO_VIDEO_SCRIPT.md](./docs/DEMO_VIDEO_SCRIPT.md) | 2-minute demo shot list |
 | [docs/CODE_INVENTORY.md](./docs/CODE_INVENTORY.md) | Refined / changed / outdated snapshot |
 | [docs/REPOSITORY_LAYOUT.md](./docs/REPOSITORY_LAYOUT.md) | Where frontend, backend, API, and SDK live in this repo |
+| [docs/AUTH_API.md](./docs/AUTH_API.md) | JWT, 2FA, wallet sign-in, curl examples |
 
-## Auth (prototype)
+## Auth
 
-Email + password register/login against the API. Sessions use **Bearer** tokens stored in `sessionStorage` on the client and **in-memory** on the server — **data resets when the API restarts**. Replace with a managed identity provider before production.
+Email + password with **bcrypt**, **JWT** access + rotating **refresh** (httpOnly cookie; use `AUTH_REFRESH_IN_BODY=1` for Vite dev), optional **TOTP** 2FA, and **wallet** sign-in (EVM / Solana). Configure **`AUTH_JWT_SECRET`** (32+ chars) and **`MONGODB_URI`** for production persistence. See [docs/AUTH_API.md](./docs/AUTH_API.md).
 
 ## Key API areas
 
 - **Applicants & deals:** `GET/POST /api/applicants`, `POST /api/deals`, etc.
 - **Streaming:** `GET/POST /api/streaming/rooms`, payouts, attendance
 - **Intelligence:** `/api/intelligence/*` (dashboard, token detail, tracked wallets/tokens)
-- **Auth:** `/api/auth/register`, `/api/auth/login`, `/api/auth/me`, password reset stubs
+- **Auth:** `/api/auth/*` and `/auth/*` — JWT, 2FA, wallet, refresh (see `docs/AUTH_API.md`)
 
 ## Gotchas
 

@@ -1316,19 +1316,28 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
     setError(null);
     setLoading(true);
     try {
-      const path = mode === "signup" ? "/api/auth/register" : "/api/auth/login";
-      const body =
-        mode === "signup"
-          ? { email, password, displayName: displayName.trim() || undefined }
-          : { email, password };
-      const res = await fetch(path, {
+      if (mode === "signup") {
+        const reg = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, displayName: displayName.trim() || undefined }),
+        });
+        const regData = await reg.json();
+        if (!reg.ok) throw new Error(regData.error || "Registration failed");
+      }
+      const loginRes = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Authentication failed");
-      setSession(data.token, data.user);
+      const data = await loginRes.json();
+      if (!loginRes.ok) throw new Error(data.error || "Authentication failed");
+      if (data.needsTwoFactor) {
+        throw new Error("This account has 2FA enabled. Use the full login flow with an authenticator code (coming in UI).");
+      }
+      const access = data.accessToken || data.token;
+      setSession(access, data.user, data.refreshToken);
       setUser(data.user);
       navigate("/dashboard");
     } catch (e) {
@@ -1393,8 +1402,9 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
         )}
       </p>
       <p className="muted" style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>
-        Sessions use an in-memory token store on the API server; data resets when the server restarts. Replace with
-        production auth before app store release.
+        JWT access tokens (bcrypt passwords, optional 2FA, wallet sign-in). Set <code>AUTH_JWT_SECRET</code> (32+ chars)
+        in production. Refresh token is httpOnly cookie when same-origin; for SPA dev from Vite use{" "}
+        <code>AUTH_REFRESH_IN_BODY=1</code>.
       </p>
     </section>
   );
@@ -1546,7 +1556,7 @@ function ProfilePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
       setUser(data);
-      setSession(token, data);
+      setSession(token, data, undefined);
       setMsg("Profile saved.");
     } catch (e) {
       setErr(e.message);

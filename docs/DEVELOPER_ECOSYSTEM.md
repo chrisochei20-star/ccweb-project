@@ -10,6 +10,8 @@
 | **Sandbox** | `POST /api/developer/sandbox/echo`, `POST /api/developer/sandbox/workflow` | No auth; safe echo + simulated workflow |
 | **Interactive docs** | `GET /api/developer/docs` | Swagger UI |
 | **OpenAPI** | `GET /api/developer/openapi.json` | Machine-readable spec |
+| **Onboarding UI** | `/developers/onboarding` (Vite app) | Five-step guided setup |
+| **Quick start doc** | [docs/DEVELOPER_QUICKSTART.md](./DEVELOPER_QUICKSTART.md) | Same flow in Markdown |
 
 ## Security (prototype → production)
 
@@ -44,7 +46,7 @@ Register `POST /api/developer/webhooks` with `{ url, events?, projectId? }`. Def
 ## SDK & CLI
 
 - **SDK:** `packages/ccweb-sdk` — `createClient({ apiKey, baseUrl })` with helpers for `sessions`, `workflows`, `dapp`, `graphql`, plus `createAgentHelpers(client)`.
-- **CLI:** `packages/ccweb-cli` — `ccweb init`, `ccweb sandbox`, `ccweb doctor`, `ccweb call <path>`, `ccweb deploy` (env-driven sample deploy).
+- **CLI:** `packages/ccweb-cli` — `ccweb init`, `ccweb test` (health + sandbox + optional analytics), `ccweb sandbox`, `ccweb doctor`, `ccweb call <path>`, `ccweb deploy` (env-driven sample deploy).
 
 ## Next steps (scale)
 

@@ -13,6 +13,7 @@ import {
 } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { EarlySignalsDashboard } from "./EarlySignalsDashboard";
+import { DeveloperOnboardingPage } from "./DeveloperOnboardingPage";
 import { DeveloperPlatformPage } from "./DeveloperPlatformPage";
 import { VisualDappBuilderPage } from "./VisualDappBuilderPage";
 import { fetchMe, getSessionToken, getStoredUser, logoutApi, setSession } from "./session";
@@ -25,6 +26,7 @@ const navItems = [
   { label: "Early Signals", to: "/early-signals" },
   { label: "Build", to: "/dapp-builder" },
   { label: "Developers", to: "/developers" },
+  { label: "Dev onboarding", to: "/developers/onboarding" },
   { label: "AI Agents", to: "/ai-agents" },
   { label: "Earn", to: "/earn" },
   { label: "Community", to: "/community" },
@@ -88,6 +90,7 @@ function App() {
           <Route path="early-signals" element={<EarlySignalsDashboard />} />
           <Route path="token/:slug" element={<TokenDetailPage />} />
           <Route path="developers" element={<DeveloperPlatformPage />} />
+          <Route path="developers/onboarding" element={<DeveloperOnboardingPage />} />
           <Route path="dapp-builder" element={<VisualDappBuilderPage />} />
           <Route path="dapp-dashboard" element={<DappDashboardPage />} />
           <Route path="ai-agents" element={<AiAgentsPage />} />

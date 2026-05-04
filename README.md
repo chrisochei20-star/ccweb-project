@@ -60,6 +60,7 @@ Requires `@capacitor/cli` (devDependency). Add iOS with `npx cap add ios` on mac
 | [docs/BACKEND_SECURITY_ARCHITECTURE.md](./docs/BACKEND_SECURITY_ARCHITECTURE.md) | Backend security layers, scaling, checklist |
 | [docs/AUTH_API.md](./docs/AUTH_API.md) | JWT, 2FA, wallet sign-in, curl examples |
 | [docs/EARLY_USERS.md](./docs/EARLY_USERS.md) | Staging notes, telemetry, admin key, feature status |
+| [docs/DESIGN_SYSTEM.md](./docs/DESIGN_SYSTEM.md) | UI shell, Tailwind tokens, glass components, layout |
 
 ## Auth
 

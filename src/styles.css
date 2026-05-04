@@ -19,10 +19,7 @@
 
 body {
   margin: 0;
-  background:
-    radial-gradient(circle at 15% 15%, #0b2145 0%, transparent 40%),
-    radial-gradient(circle at 90% 0%, #1d1242 0%, transparent 35%),
-    var(--bg);
+  background-color: #020617;
   color: var(--text);
 }
 

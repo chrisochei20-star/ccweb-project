@@ -1,7 +1,6 @@
 import {
   BrowserRouter,
   Link,
-  NavLink,
   Navigate,
   Outlet,
   Route,
@@ -20,76 +19,9 @@ import { VisualDappBuilderPage } from "./VisualDappBuilderPage";
 import { GrowthHubPage } from "./GrowthHubPage";
 import { fetchMe, getSessionToken, getStoredUser, getRefreshToken, logoutApi, setSession } from "./session";
 import { reportClientError, trackEvent } from "./telemetry";
+import { AppBottomNav, AppHeader, DesktopNav, GlassCard, MobileMenuDrawer, PrimaryButtonLink } from "./ui";
 
 const WELCOME_KEY = "ccweb_welcome_done";
-
-const topNavItems = [
-  { label: "Home", to: "/" },
-  { label: "Learn", to: "/learn" },
-  { label: "Find", to: "/find" },
-  { label: "Build", to: "/build" },
-  { label: "Earn", to: "/earn" },
-  { label: "Community", to: "/community" },
-  { label: "About", to: "/about" },
-];
-
-const bottomNavItems = [
-  { label: "Learn", to: "/learn", icon: "🧠", activeMatch: "learn" },
-  { label: "Find", to: "/find", icon: "🔍", activeMatch: "find" },
-  { label: "Build", to: "/build", icon: "🏗️", activeMatch: "build" },
-  { label: "Earn", to: "/earn", icon: "💰", activeMatch: "earn" },
-  { label: "Community", to: "/community", icon: "💬", activeMatch: "community" },
-  { label: "Profile", to: "/profile", icon: "👤", activeMatch: "profile" },
-];
-
-function bottomNavActive(match, pathname) {
-  if (match === "learn") {
-    return (
-      pathname === "/learn" ||
-      pathname.startsWith("/courses") ||
-      pathname.startsWith("/ai-tutor") ||
-      pathname.startsWith("/ai-streaming")
-    );
-  }
-  if (match === "find") {
-    return (
-      pathname === "/find" ||
-      pathname.startsWith("/crypto") ||
-      pathname.startsWith("/early-signals") ||
-      pathname.startsWith("/token/")
-    );
-  }
-  if (match === "build") {
-    return (
-      pathname === "/build" ||
-      pathname.startsWith("/dapp") ||
-      pathname.startsWith("/developers") ||
-      pathname.startsWith("/ai-agents") ||
-      pathname.startsWith("/growth-hub")
-    );
-  }
-  if (match === "earn") {
-    return pathname === "/earn" || pathname.startsWith("/pricing") || pathname === "/tokens" || pathname === "/affiliates";
-  }
-  if (match === "community") {
-    return pathname.startsWith("/community");
-  }
-  if (match === "profile") {
-    return pathname === "/profile" || pathname === "/dashboard";
-  }
-  return false;
-}
-
-function topNavActive(to, pathname) {
-  if (to === "/") return pathname === "/";
-  if (to === "/learn") return bottomNavActive("learn", pathname);
-  if (to === "/find") return bottomNavActive("find", pathname);
-  if (to === "/build") return bottomNavActive("build", pathname);
-  if (to === "/earn") return bottomNavActive("earn", pathname);
-  if (to === "/community") return bottomNavActive("community", pathname);
-  if (to === "/about") return pathname.startsWith("/about") || pathname.startsWith("/faq") || pathname.startsWith("/blog");
-  return pathname === to;
-}
 
 const courses = [
   {
@@ -181,6 +113,7 @@ function App() {
 
 function Layout() {
   const [user, setUser] = useState(() => getStoredUser());
+  const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -227,92 +160,58 @@ function Layout() {
     location.pathname === "/welcome";
 
   return (
-    <div className="site-shell">
+    <div className="site-shell relative min-h-dvh">
       {!hideChrome && (
-        <header className="navbar">
-          <div className="container navbar-content">
-            <Link to="/" className="brand">
-              <span className="brand-bolt">⚡</span>
-              CHRISCCWEB
-            </Link>
-            <nav className="nav-links nav-links-compact">
-              {topNavItems.map((item) => (
-                <NavLink
-                  key={item.label}
-                  to={item.to}
-                  className={() =>
-                    `nav-link${topNavActive(item.to, location.pathname) ? " active" : ""}`
-                  }
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-            </nav>
-            <div className="nav-cta">
-              {user ? (
-                <>
-                  <span className="nav-link nav-user-pill" style={{ cursor: "default", opacity: 0.9 }}>
-                    {user.displayName}
-                  </span>
-                  <NavLink to="/dashboard" className="nav-link nav-link-hide-sm">
-                    Dashboard
-                  </NavLink>
-                  <button type="button" className="btn btn-outline btn-sm-hide" onClick={handleLogout}>
-                    Log out
-                  </button>
-                </>
-              ) : (
-                <>
-                  <NavLink to="/login" className="nav-link">
-                    Login
-                  </NavLink>
-                  <Link to="/signup" className="btn btn-primary btn-compact">
-                    Get Started
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
-        </header>
+        <>
+          <div
+            className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(56,189,248,0.14),transparent_50%),radial-gradient(ellipse_80%_50%_at_100%_50%,rgba(99,102,241,0.1),transparent_45%),linear-gradient(180deg,#020617_0%,#071422_40%,#0c2744_100%)]"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none fixed inset-0 -z-10 opacity-[0.07]"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 5 Q45 20 30 35 Q15 20 30 5' fill='none' stroke='%23ffffff' stroke-width='0.5'/%3E%3C/svg%3E")`,
+              backgroundSize: "48px 48px",
+            }}
+            aria-hidden
+          />
+        </>
       )}
 
-      <main className={`main-content${hideChrome ? " main-content--flush" : ""}`}>
-        <div className="container">
+      {!hideChrome && <AppHeader user={user} onOpenMenu={() => setMenuOpen(true)} />}
+      {!hideChrome && <MobileMenuDrawer open={menuOpen} onClose={() => setMenuOpen(false)} />}
+
+      <main
+        className={
+          hideChrome
+            ? "main-content main-content--flush"
+            : "mx-auto w-full max-w-[min(70rem,92vw)] px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:pt-5 md:flex md:gap-6 md:pt-6"
+        }
+      >
+        {!hideChrome && <DesktopNav />}
+        <div className="min-w-0 flex-1">
           <Outlet context={{ user, setUser }} />
         </div>
       </main>
 
-      {!hideChrome && (
-        <nav className="bottom-nav" aria-label="Primary">
-          {bottomNavItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={() =>
-                `bottom-nav-item${
-                  bottomNavActive(item.activeMatch, location.pathname) ? " active" : ""
-                }`
-              }
-            >
-              <span className="bottom-nav-icon" aria-hidden>
-                {item.icon}
-              </span>
-              <span className="bottom-nav-label">{item.label}</span>
-            </NavLink>
-          ))}
-        </nav>
-      )}
+      {!hideChrome && <AppBottomNav pathname={location.pathname} />}
 
       {!hideChrome && (
-        <footer className="footer">
-          <div className="container">
-            © {new Date().getFullYear()} Chrisccwebfoundation ·{" "}
-            <Link to="/contact">Contact</Link> · <Link to="/dashboard">Dashboard</Link>
-            {" · "}
-            <Link to="/privacy">Privacy</Link>
-            {" · "}
-            <Link to="/terms">Terms</Link>
-          </div>
+        <footer className="ccweb-footer mx-auto mb-[calc(4.25rem+env(safe-area-inset-bottom))] mt-6 max-w-[min(70rem,92vw)] border-t border-white/[0.08] px-4 py-6 text-center text-xs text-ccweb-muted sm:px-5">
+          © {new Date().getFullYear()} Chrisccwebfoundation · <Link to="/contact">Contact</Link> ·{" "}
+          <Link to="/dashboard">Dashboard</Link> · <Link to="/privacy">Privacy</Link> · <Link to="/terms">Terms</Link>
+          {user ? (
+            <>
+              {" · "}
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="border-none bg-transparent p-0 text-inherit underline decoration-white/20 underline-offset-2 hover:text-ccweb-sky-200"
+              >
+                Log out
+              </button>
+            </>
+          ) : null}
         </footer>
       )}
     </div>
@@ -462,76 +361,106 @@ function BuildHubPage() {
 
 function HomePage() {
   return (
-    <section className="hero">
-      <span className="pill">AI-Powered Web3 Academy &amp; Business Engine</span>
-      <h1 className="hero-title">
-        <span className="accent-cyan">Learn.</span>{" "}
-        <span className="accent-violet">Find.</span>
-        <br />
-        <span className="accent-green">Build.</span>{" "}
-        <span className="accent-cyan">Earn.</span>
-      </h1>
-      <p className="hero-subtitle">
-        CCWEB combines AI-powered education, crypto intelligence, decentralized app
-        deployment, and real revenue streams — all in one platform.
-      </p>
-      <div className="hero-actions">
-        <Link to="/signup" className="btn btn-primary">
-          Get Started Free
-        </Link>
-        <Link to="/find" className="btn btn-outline">
-          Explore Intelligence
-        </Link>
-      </div>
-      <div className="stats-grid">
+    <div className="space-y-6 pb-8">
+      <GlassCard className="relative overflow-hidden">
+        <div
+          className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-gradient-to-br from-ccweb-cyan-400/25 to-ccweb-indigo-500/20 blur-3xl"
+          aria-hidden
+        />
+        <div className="relative">
+          <span className="inline-block rounded-full border border-white/15 bg-white/[0.06] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ccweb-sky-200 sm:text-[11px]">
+            Web3 + AI campus
+          </span>
+          <h1 className="mt-4 max-w-[18ch] text-3xl font-bold leading-tight tracking-tight text-ccweb-text sm:text-4xl md:text-5xl">
+            Learn smarter.{" "}
+            <span className="bg-gradient-to-r from-ccweb-sky-200 via-ccweb-cyan-300 to-ccweb-indigo-300 bg-clip-text text-transparent">
+              Ship faster.
+            </span>
+          </h1>
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-ccweb-muted sm:text-base">
+            One glass shell for courses, on-chain intelligence, builders, and revenue — signals over hype, built for
+            mobile-first teams.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <PrimaryButtonLink to="/signup">Get started free</PrimaryButtonLink>
+            <Link
+              to="/find"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-[14px] border border-white/15 bg-white/[0.04] px-5 py-2.5 text-sm font-semibold text-ccweb-sky-100 shadow-ccweb-glow backdrop-blur-sm transition hover:border-ccweb-sky-400/30 hover:bg-white/[0.08]"
+            >
+              Explore intelligence
+            </Link>
+          </div>
+        </div>
+      </GlassCard>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard value="50K+" label="Learners" />
-        <StatCard value="200+" label="AI Courses" />
-        <StatCard value="8" label="DApp Templates" />
-        <StatCard value="99.9%" label="Uptime" />
+        <StatCard value="200+" label="AI paths" />
+        <StatCard value="8" label="DApp templates" />
+        <StatCard value="99.9%" label="Target uptime" />
       </div>
 
-      <div className="pillars-grid">
-        <Link to="/learn" className="pillar-card pillar-learn">
-          <div className="pillar-icon">🧠</div>
-          <h3>LEARN</h3>
-          <p>AI-powered academy with live streaming sessions, adaptive tutoring, quizzes, and session memory.</p>
-          <span className="pillar-link">Open Learn hub →</span>
-        </Link>
-        <Link to="/find" className="pillar-card pillar-find">
-          <div className="pillar-icon">🔍</div>
-          <h3>FIND</h3>
-          <p>Crypto Safety Scanner, Early Signals Dashboard, Smart Money Tracking, and narrative detection.</p>
-          <span className="pillar-link">View Intelligence →</span>
-        </Link>
-        <Link to="/build" className="pillar-card pillar-build">
-          <div className="pillar-icon">🏗️</div>
-          <h3>BUILD</h3>
-          <p>DApp Builder, AI Agents, Business Automation Hub, and workflow operator system.</p>
-          <span className="pillar-link">Open Build hub →</span>
-        </Link>
-        <Link to="/growth-hub" className="pillar-card pillar-build" style={{ borderStyle: "dashed", opacity: 0.95 }}>
-          <div className="pillar-icon">🌍</div>
-          <h3>GROWTH HUB</h3>
-          <p>Global marketing agent, marketplace, escrow monetization, and lead engine — organic-first.</p>
-          <span className="pillar-link">Open Growth Hub →</span>
-        </Link>
-        <Link to="/earn" className="pillar-card pillar-earn">
-          <div className="pillar-icon">💰</div>
-          <h3>EARN</h3>
-          <p>Affiliate revenue, streaming income, referral commissions, and skill-based payouts.</p>
-          <span className="pillar-link">Start Earning →</span>
-        </Link>
+      <div>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-ccweb-muted">Pillars</h2>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <Link to="/learn" className="group block no-underline">
+            <GlassCard className="h-full transition group-hover:border-ccweb-cyan-400/25 group-hover:shadow-ccweb-glow">
+              <div className="text-2xl">🧠</div>
+              <h3 className="mt-2 text-lg font-bold text-ccweb-text">Learn</h3>
+              <p className="mt-1 text-sm text-ccweb-muted">
+                Streaming, tutor, and structured tracks — session memory included.
+              </p>
+              <span className="mt-3 inline-block text-sm font-semibold text-ccweb-sky-300">Open hub →</span>
+            </GlassCard>
+          </Link>
+          <Link to="/find" className="group block no-underline">
+            <GlassCard className="h-full transition group-hover:border-ccweb-cyan-400/25 group-hover:shadow-ccweb-glow">
+              <div className="text-2xl">🔍</div>
+              <h3 className="mt-2 text-lg font-bold text-ccweb-text">Find</h3>
+              <p className="mt-1 text-sm text-ccweb-muted">Scanner, early signals, and wallet context — probabilities, not promises.</p>
+              <span className="mt-3 inline-block text-sm font-semibold text-ccweb-sky-300">View hub →</span>
+            </GlassCard>
+          </Link>
+          <Link to="/build" className="group block no-underline">
+            <GlassCard className="h-full transition group-hover:border-ccweb-cyan-400/25 group-hover:shadow-ccweb-glow">
+              <div className="text-2xl">🏗️</div>
+              <h3 className="mt-2 text-lg font-bold text-ccweb-text">Build</h3>
+              <p className="mt-1 text-sm text-ccweb-muted">Visual DApp builder, agents, developer API, and growth workspace.</p>
+              <span className="mt-3 inline-block text-sm font-semibold text-ccweb-sky-300">Start building →</span>
+            </GlassCard>
+          </Link>
+          <Link to="/growth-hub" className="group block no-underline sm:col-span-2 xl:col-span-1">
+            <GlassCard className="h-full border-dashed border-white/20 transition group-hover:border-ccweb-indigo-400/35">
+              <div className="text-2xl">🌍</div>
+              <h3 className="mt-2 text-lg font-bold text-ccweb-text">Growth hub</h3>
+              <p className="mt-1 text-sm text-ccweb-muted">Marketplace + escrow prototype for organic-first GTM plays.</p>
+              <span className="mt-3 inline-block text-sm font-semibold text-ccweb-indigo-300">Open workspace →</span>
+            </GlassCard>
+          </Link>
+          <Link to="/earn" className="group block no-underline sm:col-span-2 xl:col-span-2">
+            <GlassCard className="h-full bg-gradient-to-br from-white/[0.06] to-transparent transition group-hover:border-ccweb-cyan-400/20">
+              <div className="text-2xl">💰</div>
+              <h3 className="mt-2 text-lg font-bold text-ccweb-text">Earn</h3>
+              <p className="mt-1 text-sm text-ccweb-muted max-w-prose">
+                Affiliates, streaming splits, and agent-linked outcomes — external settlement, no platform-token gimmicks.
+              </p>
+              <span className="mt-3 inline-block text-sm font-semibold text-ccweb-green-400">View earn hub →</span>
+            </GlassCard>
+          </Link>
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
 
 function StatCard({ value, label }) {
   return (
-    <article className="stat-card">
-      <div className="stat-value">{value}</div>
-      <div className="muted">{label}</div>
-    </article>
+    <GlassCard padding="p-4 sm:p-5" className="text-center sm:text-left">
+      <div className="bg-gradient-to-r from-ccweb-sky-200 to-ccweb-cyan-300 bg-clip-text text-2xl font-bold tracking-tight text-transparent sm:text-3xl">
+        {value}
+      </div>
+      <div className="mt-1 text-xs font-medium uppercase tracking-wide text-ccweb-muted">{label}</div>
+    </GlassCard>
   );
 }
 

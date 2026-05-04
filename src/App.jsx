@@ -6,6 +6,7 @@ import {
   Outlet,
   Route,
   Routes,
+  useLocation,
   useNavigate,
   useOutletContext,
   useParams,
@@ -17,23 +18,78 @@ import { DeveloperOnboardingPage } from "./DeveloperOnboardingPage";
 import { DeveloperPlatformPage } from "./DeveloperPlatformPage";
 import { VisualDappBuilderPage } from "./VisualDappBuilderPage";
 import { GrowthHubPage } from "./GrowthHubPage";
-import { fetchMe, getSessionToken, getStoredUser, logoutApi, setSession } from "./session";
+import { fetchMe, getSessionToken, getStoredUser, getRefreshToken, logoutApi, setSession } from "./session";
+import { reportClientError, trackEvent } from "./telemetry";
 
-const navItems = [
+const WELCOME_KEY = "ccweb_welcome_done";
+
+const topNavItems = [
   { label: "Home", to: "/" },
-  { label: "Learn", to: "/courses" },
-  { label: "AI Streaming", to: "/ai-streaming" },
+  { label: "Learn", to: "/learn" },
   { label: "Find", to: "/find" },
-  { label: "Early Signals", to: "/early-signals" },
-  { label: "Build", to: "/dapp-builder" },
-  { label: "Developers", to: "/developers" },
-  { label: "Dev onboarding", to: "/developers/onboarding" },
-  { label: "AI Agents", to: "/ai-agents" },
-  { label: "Growth Hub", to: "/growth-hub" },
+  { label: "Build", to: "/build" },
   { label: "Earn", to: "/earn" },
   { label: "Community", to: "/community" },
   { label: "About", to: "/about" },
 ];
+
+const bottomNavItems = [
+  { label: "Learn", to: "/learn", icon: "🧠", activeMatch: "learn" },
+  { label: "Find", to: "/find", icon: "🔍", activeMatch: "find" },
+  { label: "Build", to: "/build", icon: "🏗️", activeMatch: "build" },
+  { label: "Earn", to: "/earn", icon: "💰", activeMatch: "earn" },
+  { label: "Community", to: "/community", icon: "💬", activeMatch: "community" },
+  { label: "Profile", to: "/profile", icon: "👤", activeMatch: "profile" },
+];
+
+function bottomNavActive(match, pathname) {
+  if (match === "learn") {
+    return (
+      pathname === "/learn" ||
+      pathname.startsWith("/courses") ||
+      pathname.startsWith("/ai-tutor") ||
+      pathname.startsWith("/ai-streaming")
+    );
+  }
+  if (match === "find") {
+    return (
+      pathname === "/find" ||
+      pathname.startsWith("/crypto") ||
+      pathname.startsWith("/early-signals") ||
+      pathname.startsWith("/token/")
+    );
+  }
+  if (match === "build") {
+    return (
+      pathname === "/build" ||
+      pathname.startsWith("/dapp") ||
+      pathname.startsWith("/developers") ||
+      pathname.startsWith("/ai-agents") ||
+      pathname.startsWith("/growth-hub")
+    );
+  }
+  if (match === "earn") {
+    return pathname === "/earn" || pathname.startsWith("/pricing") || pathname === "/tokens" || pathname === "/affiliates";
+  }
+  if (match === "community") {
+    return pathname.startsWith("/community");
+  }
+  if (match === "profile") {
+    return pathname === "/profile" || pathname === "/dashboard";
+  }
+  return false;
+}
+
+function topNavActive(to, pathname) {
+  if (to === "/") return pathname === "/";
+  if (to === "/learn") return bottomNavActive("learn", pathname);
+  if (to === "/find") return bottomNavActive("find", pathname);
+  if (to === "/build") return bottomNavActive("build", pathname);
+  if (to === "/earn") return bottomNavActive("earn", pathname);
+  if (to === "/community") return bottomNavActive("community", pathname);
+  if (to === "/about") return pathname.startsWith("/about") || pathname.startsWith("/faq") || pathname.startsWith("/blog");
+  return pathname === to;
+}
 
 const courses = [
   {
@@ -80,11 +136,14 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
+          <Route path="welcome" element={<WelcomeOnboardingPage />} />
+          <Route path="learn" element={<LearnHubPage />} />
+          <Route path="build" element={<BuildHubPage />} />
           <Route path="courses" element={<CoursesPage />} />
           <Route path="courses/:id" element={<CourseNotFoundPage />} />
           <Route path="ai-tutor" element={<AiTutorPage />} />
           <Route path="ai-streaming" element={<AiStreamingPage />} />
-          <Route path="find" element={<FindPage />} />
+          <Route path="find" element={<FindPage initialTab="hub" />} />
           <Route path="crypto-scanner" element={<FindPage initialTab="scanner" />} />
           <Route path="crypto/trending" element={<FindPage initialTab="trending" />} />
           <Route path="crypto/early-signals" element={<FindPage initialTab="signals" />} />
@@ -123,6 +182,7 @@ function App() {
 function Layout() {
   const [user, setUser] = useState(() => getStoredUser());
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     let cancelled = false;
@@ -135,80 +195,268 @@ function Layout() {
     };
   }, []);
 
+  useEffect(() => {
+    trackEvent("page_view", { title: document.title }).catch(() => {});
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    function onErr(ev) {
+      const m = ev.error?.message || ev.message || "Unknown error";
+      reportClientError(m, { source: "error" });
+    }
+    function onRej(ev) {
+      reportClientError(String(ev.reason || "unhandledrejection"), { source: "rejection" });
+    }
+    window.addEventListener("error", onErr);
+    window.addEventListener("unhandledrejection", onRej);
+    return () => {
+      window.removeEventListener("error", onErr);
+      window.removeEventListener("unhandledrejection", onRej);
+    };
+  }, []);
+
   async function handleLogout() {
     await logoutApi();
     setUser(null);
     navigate("/");
   }
 
+  const hideChrome =
+    location.pathname === "/login" ||
+    location.pathname === "/signup" ||
+    location.pathname === "/welcome";
+
   return (
     <div className="site-shell">
-      <header className="navbar">
-        <div className="container navbar-content">
-          <Link to="/" className="brand">
-            <span className="brand-bolt">⚡</span>
-            CHRISCCWEB
-          </Link>
-          <nav className="nav-links">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.label}
-                to={item.to}
-                className={({ isActive }) =>
-                  `nav-link${isActive ? " active" : ""}`
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-          <div className="nav-cta">
-            {user ? (
-              <>
-                <span className="nav-link" style={{ cursor: "default", opacity: 0.9 }}>
-                  {user.displayName}
-                </span>
-                <NavLink to="/dashboard" className="nav-link">
-                  Dashboard
+      {!hideChrome && (
+        <header className="navbar">
+          <div className="container navbar-content">
+            <Link to="/" className="brand">
+              <span className="brand-bolt">⚡</span>
+              CHRISCCWEB
+            </Link>
+            <nav className="nav-links nav-links-compact">
+              {topNavItems.map((item) => (
+                <NavLink
+                  key={item.label}
+                  to={item.to}
+                  className={() =>
+                    `nav-link${topNavActive(item.to, location.pathname) ? " active" : ""}`
+                  }
+                >
+                  {item.label}
                 </NavLink>
-                <NavLink to="/profile" className="nav-link">
-                  Profile
-                </NavLink>
-                <button type="button" className="btn btn-outline" onClick={handleLogout}>
-                  Log out
-                </button>
-              </>
-            ) : (
-              <>
-                <NavLink to="/login" className="nav-link">
-                  Login
-                </NavLink>
-                <Link to="/signup" className="btn btn-primary">
-                  Get Started
-                </Link>
-              </>
-            )}
+              ))}
+            </nav>
+            <div className="nav-cta">
+              {user ? (
+                <>
+                  <span className="nav-link nav-user-pill" style={{ cursor: "default", opacity: 0.9 }}>
+                    {user.displayName}
+                  </span>
+                  <NavLink to="/dashboard" className="nav-link nav-link-hide-sm">
+                    Dashboard
+                  </NavLink>
+                  <button type="button" className="btn btn-outline btn-sm-hide" onClick={handleLogout}>
+                    Log out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <NavLink to="/login" className="nav-link">
+                    Login
+                  </NavLink>
+                  <Link to="/signup" className="btn btn-primary btn-compact">
+                    Get Started
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
-      <main className="main-content">
+      <main className={`main-content${hideChrome ? " main-content--flush" : ""}`}>
         <div className="container">
           <Outlet context={{ user, setUser }} />
         </div>
       </main>
 
-      <footer className="footer">
-        <div className="container">
-          © {new Date().getFullYear()} Chrisccwebfoundation ·{" "}
-          <Link to="/contact">Contact</Link> · <Link to="/dashboard">Dashboard</Link>
-          {" · "}
-          <Link to="/privacy">Privacy</Link>
-          {" · "}
-          <Link to="/terms">Terms</Link>
-        </div>
-      </footer>
+      {!hideChrome && (
+        <nav className="bottom-nav" aria-label="Primary">
+          {bottomNavItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={() =>
+                `bottom-nav-item${
+                  bottomNavActive(item.activeMatch, location.pathname) ? " active" : ""
+                }`
+              }
+            >
+              <span className="bottom-nav-icon" aria-hidden>
+                {item.icon}
+              </span>
+              <span className="bottom-nav-label">{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+      )}
+
+      {!hideChrome && (
+        <footer className="footer">
+          <div className="container">
+            © {new Date().getFullYear()} Chrisccwebfoundation ·{" "}
+            <Link to="/contact">Contact</Link> · <Link to="/dashboard">Dashboard</Link>
+            {" · "}
+            <Link to="/privacy">Privacy</Link>
+            {" · "}
+            <Link to="/terms">Terms</Link>
+          </div>
+        </footer>
+      )}
     </div>
+  );
+}
+
+function WelcomeOnboardingPage() {
+  const navigate = useNavigate();
+
+  function pick(path) {
+    try {
+      localStorage.setItem(WELCOME_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    trackEvent("welcome_interest", { path }).catch(() => {});
+    navigate(path);
+  }
+
+  function skip() {
+    try {
+      localStorage.setItem(WELCOME_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    navigate("/dashboard");
+  }
+
+  return (
+    <section className="welcome-onboarding">
+      <header className="page-header">
+        <span className="pill">First-time setup</span>
+        <h1 className="section-title">Welcome to CCWEB</h1>
+        <p className="muted">
+          Pick where you want to start. You can change your mind anytime from the bottom navigation.
+        </p>
+      </header>
+      <div className="welcome-grid">
+        <button type="button" className="panel welcome-tile" onClick={() => pick("/learn")}>
+          <div className="welcome-tile-icon">🧠</div>
+          <h3>Learn</h3>
+          <p className="muted">Courses, AI tutor, and live AI streaming.</p>
+        </button>
+        <button type="button" className="panel welcome-tile" onClick={() => pick("/find")}>
+          <div className="welcome-tile-icon">🔍</div>
+          <h3>Find</h3>
+          <p className="muted">Scanner, early signals, and wallet intelligence.</p>
+        </button>
+        <button type="button" className="panel welcome-tile" onClick={() => pick("/build")}>
+          <div className="welcome-tile-icon">🏗️</div>
+          <h3>Build</h3>
+          <p className="muted">DApp builder, agents, developers, and growth hub.</p>
+        </button>
+        <button type="button" className="panel welcome-tile" onClick={() => pick("/earn")}>
+          <div className="welcome-tile-icon">💰</div>
+          <h3>Earn</h3>
+          <p className="muted">Affiliates, streaming revenue, and agent rewards.</p>
+        </button>
+      </div>
+      <p className="muted" style={{ marginTop: "1.25rem" }}>
+        <button type="button" className="btn btn-outline" onClick={skip}>
+          Skip for now
+        </button>
+        {" · "}
+        <Link to="/">Back to home</Link>
+      </p>
+    </section>
+  );
+}
+
+function LearnHubPage() {
+  return (
+    <section>
+      <header className="page-header">
+        <span className="pill">LEARN</span>
+        <h1 className="section-title">Learn hub</h1>
+        <p className="muted">Courses, AI tutoring, and live streaming — one place to start.</p>
+      </header>
+      <div className="card-grid">
+        <Link to="/courses" className="panel pillar-card pillar-learn" style={{ textDecoration: "none" }}>
+          <h3>Course library</h3>
+          <p className="muted">Structured tracks across crypto, AI, and Web3 product skills.</p>
+          <span className="pillar-link">Browse courses →</span>
+        </Link>
+        <Link to="/ai-tutor" className="panel pillar-card pillar-learn" style={{ textDecoration: "none" }}>
+          <h3>AI tutor</h3>
+          <p className="muted">Ask questions and get adaptive explanations tied to CCWEB curriculum.</p>
+          <span className="pillar-link">Open tutor →</span>
+        </Link>
+        <Link to="/ai-streaming" className="panel pillar-card pillar-learn" style={{ textDecoration: "none" }}>
+          <h3>AI streaming</h3>
+          <p className="muted">Host or join live rooms with curriculum-aware AI hosts and session memory.</p>
+          <span className="pillar-link">Go live →</span>
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function BuildHubPage() {
+  return (
+    <section>
+      <header className="page-header">
+        <span className="pill">BUILD</span>
+        <h1 className="section-title">Build hub</h1>
+        <p className="muted">Ship DApps, wire agents, and plug into the developer platform.</p>
+      </header>
+      <div className="card-grid">
+        <Link to="/dapp-builder" className="panel pillar-card pillar-build" style={{ textDecoration: "none" }}>
+          <h3>Visual DApp builder</h3>
+          <p className="muted">Drag-and-drop canvas, templates, and simulated multi-chain deploy.</p>
+          <span className="pillar-link">Open builder →</span>
+        </Link>
+        <Link to="/dapp-dashboard" className="panel pillar-card pillar-build" style={{ textDecoration: "none" }}>
+          <h3>DApp dashboard</h3>
+          <p className="muted">Deployments, transactions, and network breakdown for your builds.</p>
+          <span className="pillar-link">View dashboard →</span>
+        </Link>
+        <Link to="/ai-agents" className="panel pillar-card pillar-build" style={{ textDecoration: "none" }}>
+          <h3>AI agents</h3>
+          <p className="muted">Research, content, and workflow agents with operator-style orchestration.</p>
+          <span className="pillar-link">Explore agents →</span>
+        </Link>
+        <Link to="/developers" className="panel pillar-card pillar-build" style={{ textDecoration: "none" }}>
+          <h3>Developer platform</h3>
+          <p className="muted">API keys, public API, webhooks, and usage logs.</p>
+          <span className="pillar-link">Open console →</span>
+        </Link>
+        <Link
+          to="/developers/onboarding"
+          className="panel pillar-card pillar-build"
+          style={{ textDecoration: "none" }}
+        >
+          <h3>Developer onboarding</h3>
+          <p className="muted">Five-minute path: project, API key, sandbox, and CLI quick start.</p>
+          <span className="pillar-link">Start onboarding →</span>
+        </Link>
+        <Link to="/growth-hub" className="panel pillar-card pillar-build" style={{ textDecoration: "none" }}>
+          <h3>Growth hub</h3>
+          <p className="muted">Marketplace, escrow prototype, campaigns, and lead engine.</p>
+          <span className="pillar-link">Open growth hub →</span>
+        </Link>
+      </div>
+    </section>
   );
 }
 
@@ -243,11 +491,11 @@ function HomePage() {
       </div>
 
       <div className="pillars-grid">
-        <Link to="/courses" className="pillar-card pillar-learn">
+        <Link to="/learn" className="pillar-card pillar-learn">
           <div className="pillar-icon">🧠</div>
           <h3>LEARN</h3>
           <p>AI-powered academy with live streaming sessions, adaptive tutoring, quizzes, and session memory.</p>
-          <span className="pillar-link">Explore Courses →</span>
+          <span className="pillar-link">Open Learn hub →</span>
         </Link>
         <Link to="/find" className="pillar-card pillar-find">
           <div className="pillar-icon">🔍</div>
@@ -255,11 +503,11 @@ function HomePage() {
           <p>Crypto Safety Scanner, Early Signals Dashboard, Smart Money Tracking, and narrative detection.</p>
           <span className="pillar-link">View Intelligence →</span>
         </Link>
-        <Link to="/dapp-builder" className="pillar-card pillar-build">
+        <Link to="/build" className="pillar-card pillar-build">
           <div className="pillar-icon">🏗️</div>
           <h3>BUILD</h3>
           <p>DApp Builder, AI Agents, Business Automation Hub, and workflow operator system.</p>
-          <span className="pillar-link">Start Building →</span>
+          <span className="pillar-link">Open Build hub →</span>
         </Link>
         <Link to="/growth-hub" className="pillar-card pillar-build" style={{ borderStyle: "dashed", opacity: 0.95 }}>
           <div className="pillar-icon">🌍</div>
@@ -1068,30 +1316,288 @@ function AffiliatesPage() {
 }
 
 function CommunityPage() {
+  const { user } = useOutletContext();
+  const [posts, setPosts] = useState([]);
+  const [chats, setChats] = useState([]);
+  const [channel, setChannel] = useState("general");
+  const [chatBody, setChatBody] = useState("");
+  const [postTitle, setPostTitle] = useState("");
+  const [postContent, setPostContent] = useState("");
+  const [bugTitle, setBugTitle] = useState("");
+  const [bugDesc, setBugDesc] = useState("");
+  const [bugSev, setBugSev] = useState("normal");
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+
+  async function loadPosts() {
+    try {
+      const res = await fetch("/api/community/posts");
+      const data = await res.json();
+      setPosts(data.posts || []);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function loadChats() {
+    try {
+      const res = await fetch(`/api/community/chats?channel=${encodeURIComponent(channel)}`);
+      const data = await res.json();
+      setChats(data.chats || []);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  useEffect(() => {
+    loadPosts();
+  }, []);
+
+  useEffect(() => {
+    loadChats();
+  }, [channel]);
+
+  async function submitPost(e) {
+    e.preventDefault();
+    setErr(null);
+    setMsg(null);
+    if (!user) {
+      setErr("Sign in to post.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/community/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          authorUserId: user.id,
+          authorDisplayName: user.displayName,
+          title: postTitle.trim(),
+          content: postContent.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Post failed");
+      setPostTitle("");
+      setPostContent("");
+      setMsg("Post published.");
+      loadPosts();
+      trackEvent("community_post", { postId: data.id }).catch(() => {});
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  async function submitChat(e) {
+    e.preventDefault();
+    setErr(null);
+    setMsg(null);
+    if (!user) {
+      setErr("Sign in to chat.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/community/chats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          authorUserId: user.id,
+          authorDisplayName: user.displayName,
+          channel,
+          message: chatBody.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Message failed");
+      setChatBody("");
+      setMsg("Message sent.");
+      loadChats();
+      trackEvent("community_chat", { channel }).catch(() => {});
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  async function submitBug(e) {
+    e.preventDefault();
+    setErr(null);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/community/bugs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reporterUserId: user?.id,
+          reporterDisplayName: user?.displayName,
+          title: bugTitle.trim(),
+          description: bugDesc.trim(),
+          path: window.location.pathname,
+          severity: bugSev,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Report failed");
+      setBugTitle("");
+      setBugDesc("");
+      setMsg(`Thanks — tracked as ${data.id}.`);
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
   return (
     <section>
       <header className="page-header">
+        <span className="pill">COMMUNITY</span>
         <h1 className="section-title">Community</h1>
-        <p className="muted">Connect, collaborate, and grow with learners.</p>
+        <p className="muted">
+          Lightweight prototype: posts and chat are stored in memory on the API server. Bug reports are logged for
+          early-user testing.
+        </p>
       </header>
+
+      {err && <p style={{ color: "#ff6b6b", marginBottom: "0.75rem" }}>{err}</p>}
+      {msg && <p className="muted" style={{ marginBottom: "0.75rem" }}>{msg}</p>}
+
       <div className="card-grid">
         <article className="panel">
-          <h3>General Discussion</h3>
-          <p className="muted">8,400 members · 2.1K posts</p>
+          <h3>Channels</h3>
+          <p className="muted">Pick a channel for the live chat below.</p>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
+            {["general", "crypto", "builders"].map((c) => (
+              <button
+                key={c}
+                type="button"
+                className={`btn btn-outline${channel === c ? " btn-primary" : ""}`}
+                style={{ fontSize: "0.85rem", padding: "0.45rem 0.7rem" }}
+                onClick={() => setChannel(c)}
+              >
+                #{c}
+              </button>
+            ))}
+          </div>
         </article>
         <article className="panel">
-          <h3>Crypto Trading</h3>
-          <p className="muted">5,200 members · 3.4K posts</p>
-        </article>
-        <article className="panel">
-          <h3>AI Projects</h3>
-          <p className="muted">3,100 members · 890 posts</p>
-        </article>
-        <article className="panel">
-          <h3>Study Groups</h3>
-          <p className="muted">2,800 members · 1.2K posts</p>
+          <h3>Report a bug</h3>
+          <p className="muted">Helps us prioritize fixes during early access.</p>
+          <form onSubmit={submitBug} style={{ marginTop: "0.75rem" }}>
+            <div className="auth-row">
+              <label htmlFor="bug-title">Title</label>
+              <input id="bug-title" value={bugTitle} onChange={(e) => setBugTitle(e.target.value)} required />
+            </div>
+            <div className="auth-row">
+              <label htmlFor="bug-sev">Severity</label>
+              <select id="bug-sev" value={bugSev} onChange={(e) => setBugSev(e.target.value)}>
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div className="auth-row">
+              <label htmlFor="bug-desc">What happened?</label>
+              <textarea
+                id="bug-desc"
+                rows={4}
+                value={bugDesc}
+                onChange={(e) => setBugDesc(e.target.value)}
+                required
+              />
+            </div>
+            <button type="submit" className="btn btn-primary">
+              Submit report
+            </button>
+          </form>
         </article>
       </div>
+
+      <div className="card-grid" style={{ marginTop: "1rem" }}>
+        <article className="panel community-chat-panel">
+          <h3>Live chat · #{channel}</h3>
+          <div className="community-chat-scroll">
+            {chats.length === 0 ? (
+              <p className="muted">No messages yet. Say hello.</p>
+            ) : (
+              chats
+                .slice()
+                .reverse()
+                .map((c) => (
+                  <div key={c.id} className="community-chat-row">
+                    <strong>{c.authorDisplayName}</strong>
+                    <span className="muted" style={{ marginLeft: "0.35rem", fontSize: "0.8rem" }}>
+                      {new Date(c.createdAt).toLocaleString()}
+                    </span>
+                    <p style={{ margin: "0.25rem 0 0" }}>{c.message}</p>
+                  </div>
+                ))
+            )}
+          </div>
+          <form onSubmit={submitChat} style={{ marginTop: "0.75rem" }}>
+            <div className="auth-row">
+              <label htmlFor="chat-msg">Message</label>
+              <input
+                id="chat-msg"
+                value={chatBody}
+                onChange={(e) => setChatBody(e.target.value)}
+                placeholder={user ? "Write a message…" : "Sign in to chat"}
+                disabled={!user}
+              />
+            </div>
+            <button type="submit" className="btn btn-outline" disabled={!user}>
+              Send
+            </button>
+          </form>
+        </article>
+
+        <article className="panel">
+          <h3>New post</h3>
+          {!user ? <p className="muted">Sign in to create a post.</p> : null}
+          <form onSubmit={submitPost} style={{ marginTop: "0.5rem" }}>
+            <div className="auth-row">
+              <label htmlFor="post-title">Title</label>
+              <input
+                id="post-title"
+                value={postTitle}
+                onChange={(e) => setPostTitle(e.target.value)}
+                disabled={!user}
+                required
+              />
+            </div>
+            <div className="auth-row">
+              <label htmlFor="post-body">Body</label>
+              <textarea
+                id="post-body"
+                rows={4}
+                value={postContent}
+                onChange={(e) => setPostContent(e.target.value)}
+                disabled={!user}
+                required
+              />
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={!user}>
+              Publish
+            </button>
+          </form>
+        </article>
+      </div>
+
+      <section className="panel" style={{ marginTop: "1rem" }}>
+        <h3>Recent posts</h3>
+        {posts.length === 0 ? (
+          <p className="muted">No posts yet.</p>
+        ) : (
+          <ul className="list" style={{ marginTop: "0.5rem" }}>
+            {posts.slice(0, 12).map((p) => (
+              <li key={p.id}>
+                <strong>{p.title}</strong> · <span className="muted">{p.authorDisplayName}</span>
+                <p className="muted" style={{ margin: "0.25rem 0 0", fontSize: "0.9rem" }}>
+                  {p.content.slice(0, 180)}
+                  {p.content.length > 180 ? "…" : ""}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </section>
   );
 }
@@ -1348,7 +1854,15 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
       const access = data.accessToken || data.token;
       setSession(access, data.user, data.refreshToken);
       setUser(data.user);
-      navigate("/dashboard");
+      try {
+        if (!localStorage.getItem(WELCOME_KEY)) {
+          navigate("/welcome");
+        } else {
+          navigate("/dashboard");
+        }
+      } catch {
+        navigate("/dashboard");
+      }
     } catch (e) {
       setError(e.message);
     } finally {
@@ -1506,13 +2020,13 @@ function DashboardPage() {
       <section className="panel" style={{ marginTop: "1rem" }}>
         <h3>Pillars quick links</h3>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
-          <Link to="/courses" className="btn btn-outline">
+          <Link to="/learn" className="btn btn-outline">
             Learn
           </Link>
           <Link to="/find" className="btn btn-outline">
             Find
           </Link>
-          <Link to="/dapp-builder" className="btn btn-outline">
+          <Link to="/build" className="btn btn-outline">
             Build
           </Link>
           <Link to="/earn" className="btn btn-outline">
@@ -1565,7 +2079,7 @@ function ProfilePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
       setUser(data);
-      setSession(token, data, undefined);
+      setSession(token, data, getRefreshToken());
       setMsg("Profile saved.");
     } catch (e) {
       setErr(e.message);
@@ -1577,6 +2091,11 @@ function ProfilePage() {
       <header className="page-header">
         <h1 className="section-title">Profile</h1>
         <p className="muted">Signed in as {user.email || user.id}</p>
+        <div style={{ marginTop: "0.6rem" }}>
+          <Link to="/dashboard" className="btn btn-outline btn-sm">
+            Dashboard
+          </Link>
+        </div>
       </header>
       <article className="panel" style={{ maxWidth: 480 }}>
         <div className="auth-row">
@@ -1642,10 +2161,10 @@ function TermsPage() {
   );
 }
 
-function FindPage({ initialTab = "scanner" }) {
+function FindPage({ initialTab = "hub" }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get("tab");
-  const validTabs = ["scanner", "signals", "trending", "wallets", "alerts"];
+  const validTabs = ["hub", "scanner", "signals", "trending", "wallets", "alerts"];
   const initial = tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : initialTab;
   const [tab, setTab] = useState(initial);
 
@@ -1673,7 +2192,7 @@ function FindPage({ initialTab = "scanner" }) {
 
   function goTab(next) {
     setTab(next);
-    setSearchParams(next === "scanner" ? {} : { tab: next });
+    setSearchParams(next === "scanner" || next === "hub" ? {} : { tab: next });
   }
 
   async function doScan() {
@@ -1808,6 +2327,7 @@ function FindPage({ initialTab = "scanner" }) {
 
       <div className="dash-tabs find-hub-tabs">
         {[
+          ["hub", "Hub"],
           ["scanner", "Token Scanner"],
           ["signals", "Early Signals"],
           ["trending", "Trending & Discovery"],
@@ -1824,6 +2344,31 @@ function FindPage({ initialTab = "scanner" }) {
           </button>
         ))}
       </div>
+
+      {tab === "hub" && (
+        <div className="card-grid" style={{ marginTop: "1rem" }}>
+          <Link to="/crypto-scanner" className="panel find-hub-card">
+            <h3>Token scanner</h3>
+            <p className="muted">Safety heuristics, contract context, and risk/opportunity framing.</p>
+            <span className="pillar-link">Open scanner →</span>
+          </Link>
+          <Link to="/early-signals" className="panel find-hub-card">
+            <h3>Early Signals dashboard</h3>
+            <p className="muted">Aggregated feed with narrative and momentum cues (signals, not guarantees).</p>
+            <span className="pillar-link">View dashboard →</span>
+          </Link>
+          <Link to="/find?tab=signals" className="panel find-hub-card">
+            <h3>Hub: Early signals</h3>
+            <p className="muted">In-app signal list tied to the same scoring model as the scanner.</p>
+            <span className="pillar-link">Browse signals →</span>
+          </Link>
+          <Link to="/find?tab=wallets" className="panel find-hub-card">
+            <h3>Smart money &amp; wallets</h3>
+            <p className="muted">Track large-wallet behavior and register alerts for follow-up.</p>
+            <span className="pillar-link">Track wallets →</span>
+          </Link>
+        </div>
+      )}
 
       {tab === "scanner" && (
         <div className="find-scanner find-scanner-wide">

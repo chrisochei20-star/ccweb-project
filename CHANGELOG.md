@@ -13,11 +13,15 @@ All notable changes to this repository are documented here. This project is a **
 ### Added
 
 - **Growth Hub:** Global marketing agent workspace (organic-first content suggestions), marketplace, simulated escrow, lead scoring, CCWEB fee metrics. API `/api/growth/*`, UI `/growth-hub`. [docs/GROWTH_HUB.md](./docs/GROWTH_HUB.md).
+- **App shell:** Bottom navigation (Learn / Find / Build / Earn / Community / Profile), compact top nav, pillar **hub** routes (`/learn`, `/build`), Find **Hub** tab, first-time **welcome** flow after signup/login, and [docs/EARLY_USERS.md](./docs/EARLY_USERS.md) (staging, telemetry, admin).
+- **Telemetry (prototype):** in-memory `telemetryHub.js` with `POST /api/telemetry/event`, `POST /api/telemetry/client-error`, and admin `GET /api/admin/telemetry/summary` when `CCWEB_ADMIN_KEY` is set.
+- **Community testing:** bug report API `POST /api/community/bugs`, admin list `GET /api/admin/community/bugs`, and Community UI for chat, posts, and bug reports.
 
 ### Changed
 
 - Registration no longer auto-issues tokens; client registers then logs in.
 - Frontend login uses JWT access token + optional refresh in sessionStorage when `AUTH_REFRESH_IN_BODY=1`.
+- Home pillar cards and dashboard quick links route through `/learn` and `/build` hubs.
 
 ### Removed
 

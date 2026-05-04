@@ -19,7 +19,7 @@ npm install
 1. **API** (port **3000**): `npm run dev:api`
 2. **Vite** (port **5173**): `npm run dev`
 
-Open **http://localhost:5173**. The Vite dev server proxies `/api` and `/v1` to `http://127.0.0.1:3000`.
+Open **http://localhost:5173**. The Vite dev server proxies `/api`, `/v1`, and `/auth` to `http://127.0.0.1:3000`.
 
 ## Production-style run
 
@@ -59,11 +59,15 @@ Requires `@capacitor/cli` (devDependency). Add iOS with `npx cap add ios` on mac
 | [docs/REPOSITORY_LAYOUT.md](./docs/REPOSITORY_LAYOUT.md) | Where frontend, backend, API, and SDK live in this repo |
 | [docs/BACKEND_SECURITY_ARCHITECTURE.md](./docs/BACKEND_SECURITY_ARCHITECTURE.md) | Backend security layers, scaling, checklist |
 | [docs/AUTH_API.md](./docs/AUTH_API.md) | JWT, 2FA, wallet sign-in, curl examples |
-| [docs/GROWTH_HUB.md](./docs/GROWTH_HUB.md) | Marketing agent, marketplace, escrow API |
+| [docs/EARLY_USERS.md](./docs/EARLY_USERS.md) | Staging notes, telemetry, admin key, feature status |
 
 ## Auth
 
 Email + password with **bcrypt**, **JWT** access + rotating **refresh** (httpOnly cookie; use `AUTH_REFRESH_IN_BODY=1` for Vite dev), optional **TOTP** 2FA, and **wallet** sign-in (EVM / Solana). Configure **`AUTH_JWT_SECRET`** (32+ chars) and **`MONGODB_URI`** for production persistence. See [docs/AUTH_API.md](./docs/AUTH_API.md).
+
+## Early users & staging
+
+Hub navigation (`/learn`, `/find`, `/build`), welcome flow, lightweight telemetry, and admin summaries are documented in [docs/EARLY_USERS.md](./docs/EARLY_USERS.md). **`vercel.json`** provides SPA rewrites for static hosting after `npm run build`.
 
 ## Growth Hub
 
@@ -76,6 +80,9 @@ Global marketing workspace, marketplace, and simulated escrow: **`/growth-hub`**
 - **Intelligence:** `/api/intelligence/*` (dashboard, token detail, tracked wallets/tokens)
 - **Auth:** `/api/auth/*` and `/auth/*` — JWT, 2FA, wallet, refresh (see `docs/AUTH_API.md`)
 - **Growth hub:** `/api/growth/*` — marketing campaigns, marketplace, escrow (see `docs/GROWTH_HUB.md`)
+- **Telemetry (prototype):** `POST /api/telemetry/event`, `POST /api/telemetry/client-error` — in-memory on the Node process
+- **Admin (when `CCWEB_ADMIN_KEY` is set):** `GET /api/admin/telemetry/summary`, `GET /api/admin/users`, `GET /api/admin/community/bugs` — send header `X-CCWEB-Admin`
+- **Community bugs:** `POST /api/community/bugs`, `GET /api/community/bugs`
 
 - `GET /api/streaming/curriculum` is **not** implemented; curriculum context is embedded in room creation responses (see AGENTS.md).
 - Crypto / intelligence outputs are **signals and probabilities**, not financial advice.

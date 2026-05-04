@@ -11,6 +11,7 @@ export function DeveloperPlatformPage() {
   const [projects, setProjects] = useState([]);
   const [tiers, setTiers] = useState(null);
   const [sessions, setSessions] = useState(null);
+  const [usage, setUsage] = useState(null);
   const [logs, setLogs] = useState([]);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [marketplace, setMarketplace] = useState([]);
@@ -84,6 +85,25 @@ export function DeveloperPlatformPage() {
     }
   }
 
+  async function loadUsage() {
+    setErr(null);
+    setUsage(null);
+    if (!apiKey.trim()) {
+      setErr("Paste an API key first.");
+      return;
+    }
+    try {
+      const res = await fetch("/v1/analytics", { headers: { CCWEB_API_KEY: apiKey.trim() } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      setUsage(data);
+      setMsg("Usage snapshot loaded");
+      loadConsole();
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
   async function addWebhook() {
     setErr(null);
     if (!webhookUrl.trim()) return;
@@ -126,6 +146,22 @@ export function DeveloperPlatformPage() {
           Create API keys (console routes are open in this prototype — lock behind auth in production), call the Public
           API at <code className="text-ccweb-cyan">/v1</code>, browse OpenAPI docs, and wire webhooks.
         </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Link
+            to="/developers/onboarding"
+            className="inline-flex items-center rounded-xl bg-gradient-to-r from-ccweb-cyan to-ccweb-violet px-4 py-2 text-sm font-semibold text-[#061329]"
+          >
+            5-minute onboarding
+          </Link>
+          <a
+            href="/docs/DEVELOPER_QUICKSTART.md"
+            className="inline-flex items-center rounded-xl border border-white/20 px-4 py-2 text-sm text-ccweb-cyan"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Quick start guide
+          </a>
+        </div>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -169,10 +205,22 @@ export function DeveloperPlatformPage() {
           <button type="button" className="mt-3 rounded-xl border border-white/20 px-4 py-2 text-sm text-ccweb-cyan" onClick={testPublicApi}>
             GET /v1/sessions
           </button>
+          <button type="button" className="ml-2 mt-3 rounded-xl border border-white/20 px-4 py-2 text-sm text-white" onClick={loadUsage}>
+            GET /v1/analytics (usage)
+          </button>
           {sessions && (
             <pre className="mt-3 max-h-40 overflow-auto rounded-lg bg-black/50 p-2 text-xs text-slate-300">
               {JSON.stringify(sessions, null, 2)}
             </pre>
+          )}
+          {usage && (
+            <div className="mt-3 rounded-lg border border-white/10 bg-black/35 p-3 text-xs text-ccweb-muted">
+              <p>
+                <span className="text-ccweb-cyan">callsThisMonth</span>: {usage.callsThisMonth ?? "—"} ·{" "}
+                <span className="text-ccweb-cyan">rateLimitPerMin</span>: {usage.rateLimitPerMin ?? "—"}
+              </p>
+              <p className="mt-1 text-[11px] opacity-80">projectId: {usage.projectId}</p>
+            </div>
           )}
         </section>
       </div>
@@ -250,7 +298,10 @@ export function DeveloperPlatformPage() {
           </a>{" "}
           · Sandbox: <code className="text-ccweb-cyan">POST /api/developer/sandbox/echo</code>,{" "}
           <code className="text-ccweb-cyan">POST /api/developer/sandbox/workflow</code> ·{" "}
-          · <Link to="/dapp-builder" className="text-ccweb-cyan underline">DApp builder UI</Link> ·{" "}
+          <Link to="/dapp-builder" className="text-ccweb-cyan underline">
+            DApp builder UI
+          </Link>{" "}
+          ·{" "}
           <a href="https://github.com/chrisochei20-star/ccweb-project/blob/main/docs/DEVELOPER_ECOSYSTEM.md" className="text-ccweb-cyan underline" target="_blank" rel="noreferrer">
             Architecture doc
           </a>

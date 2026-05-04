@@ -8,11 +8,12 @@ const apiKey = process.env.CCWEB_API_KEY;
 function help() {
   console.log(`CCWEB CLI (prototype)
 Usage:
+  ccweb init <project-name>               # POST /api/developer/projects
+  ccweb test                              # health + sandbox + optional API (CCWEB_API_KEY)
+  ccweb sandbox                           # POST sandbox echo (no key)
   CCWEB_API_KEY=... ccweb doctor          # health + analytics
   CCWEB_API_KEY=... ccweb call /v1/sessions
-  CCWEB_API_KEY=... ccweb deploy          # minimal dapp deploy (needs body flags or env)
-  ccweb init <project-name>               # POST /api/developer/projects
-  ccweb sandbox                           # POST sandbox echo (no key)
+  CCWEB_API_KEY=... ccweb deploy          # minimal dapp deploy (env overrides)
 `);
 }
 
@@ -38,6 +39,23 @@ async function main() {
       body: JSON.stringify({ ping: true, at: new Date().toISOString() }),
     });
     console.log(JSON.stringify(await res.json(), null, 2));
+    return;
+  }
+  if (cmd === "test") {
+    const h = await fetch(`${baseUrl}/health`);
+    console.log("1) health:", JSON.stringify(await h.json()));
+    const sb = await fetch(`${baseUrl}/api/developer/sandbox/echo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cli: "ccweb test", at: new Date().toISOString() }),
+    });
+    console.log("2) sandbox:", JSON.stringify(await sb.json()));
+    if (apiKey) {
+      const client = createClient({ apiKey, baseUrl });
+      console.log("3) analytics:", JSON.stringify(await client.analytics(), null, 2));
+    } else {
+      console.log("3) (skip) Set CCWEB_API_KEY to also run GET /v1/analytics");
+    }
     return;
   }
   if (!apiKey) {

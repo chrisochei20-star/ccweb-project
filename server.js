@@ -8,7 +8,8 @@ const { createIntelligenceApp } = require("./intelligenceExpress");
 const { createDeveloperApp } = require("./developerExpress");
 const developerPlatform = require("./developerPlatform");
 const { isValidEvmAddress } = require("./developerWeb3");
-const authService = require("./authService");
+const authEngine = require("./auth/authEngine");
+const { createAuthApp } = require("./auth/authExpress");
 
 const PORT = Number(process.env.PORT || 3000);
 const intelligenceApp = createIntelligenceApp();
@@ -254,6 +255,8 @@ function sanitizeUser(user) {
     updatedAt: user.updatedAt,
   };
 }
+
+const authApp = createAuthApp({ ccwebUsers, buildUserProfile, sanitizeUser });
 
 function ensureUser(userId, options = {}) {
   const normalizedId = (userId || "").toString().trim();
@@ -614,7 +617,7 @@ function handleListUsers(res) {
 }
 
 async function handleUpsertUser(req, res) {
-  const tokenUserId = authService.getSessionUserId(getBearerToken(req));
+  const tokenUserId = authEngine.getUserIdFromAccess(getBearerToken(req));
   let body;
   try {
     body = await readJsonBody(req);
@@ -637,7 +640,7 @@ async function handleUpsertUser(req, res) {
 }
 
 function handleListNotifications(req, requestUrl, res) {
-  const tokenUserId = authService.getSessionUserId(getBearerToken(req));
+  const tokenUserId = authEngine.getUserIdFromAccess(getBearerToken(req));
   const userId = (requestUrl.searchParams.get("userId") || tokenUserId || "").trim();
   if (!userId) {
     sendJson(res, 400, { error: "userId is required or sign in." });
@@ -664,7 +667,7 @@ function handleListNotifications(req, requestUrl, res) {
 }
 
 async function handleMarkNotificationsRead(req, res) {
-  const tokenUserId = authService.getSessionUserId(getBearerToken(req));
+  const tokenUserId = authEngine.getUserIdFromAccess(getBearerToken(req));
   let body;
   try {
     body = await readJsonBody(req);
@@ -2931,104 +2934,10 @@ async function handleTrackWallet(req, res) {
   sendJson(res, 200, result);
 }
 
-async function handleAuthRegister(req, res) {
-  let body;
-  try {
-    body = await readJsonBody(req);
-  } catch {
-    sendJsonCors(res, 400, { error: "Body must be valid JSON." });
-    return;
-  }
-  const out = authService.registerUser(ccwebUsers, buildUserProfile, {
-    email: body.email,
-    password: body.password,
-    displayName: body.displayName,
+function delegateAuth(req, res) {
+  authApp(req, res, () => {
+    sendJson(res, 404, { error: "Auth route not found." });
   });
-  if (out.error) {
-    sendJsonCors(res, 400, { error: out.error });
-    return;
-  }
-  const login = authService.loginUser(ccwebUsers, { email: body.email, password: body.password });
-  sendJsonCors(res, 201, {
-    user: sanitizeUser(out.user),
-    token: login.token,
-    expiresAt: login.expiresAt,
-    note: "Prototype auth: replace with managed identity before production.",
-  });
-}
-
-async function handleAuthLogin(req, res) {
-  let body;
-  try {
-    body = await readJsonBody(req);
-  } catch {
-    sendJsonCors(res, 400, { error: "Body must be valid JSON." });
-    return;
-  }
-  const login = authService.loginUser(ccwebUsers, { email: body.email, password: body.password });
-  if (login.error) {
-    sendJsonCors(res, 401, { error: login.error });
-    return;
-  }
-  const user = ccwebUsers.get(login.userId);
-  sendJsonCors(res, 200, {
-    user: sanitizeUser(user),
-    token: login.token,
-    expiresAt: login.expiresAt,
-  });
-}
-
-function handleAuthLogout(req, res) {
-  const token = getBearerToken(req);
-  authService.logoutToken(token);
-  sendJsonCors(res, 200, { ok: true });
-}
-
-function handleAuthMe(req, res) {
-  const token = getBearerToken(req);
-  const userId = authService.getSessionUserId(token);
-  if (!userId) {
-    sendJsonCors(res, 401, { error: "Unauthorized." });
-    return;
-  }
-  const user = ccwebUsers.get(userId);
-  if (!user) {
-    sendJsonCors(res, 401, { error: "Session invalid." });
-    return;
-  }
-  sendJsonCors(res, 200, { user: sanitizeUser(user) });
-}
-
-async function handleAuthPasswordRequest(req, res) {
-  let body;
-  try {
-    body = await readJsonBody(req);
-  } catch {
-    sendJsonCors(res, 400, { error: "Body must be valid JSON." });
-    return;
-  }
-  const out = authService.requestPasswordReset(body.email);
-  sendJsonCors(res, 200, out);
-}
-
-async function handleAuthPasswordReset(req, res) {
-  let body;
-  try {
-    body = await readJsonBody(req);
-  } catch {
-    sendJsonCors(res, 400, { error: "Body must be valid JSON." });
-    return;
-  }
-  const out = authService.completePasswordReset({
-    email: body.email,
-    token: body.token,
-    newPassword: body.newPassword,
-  });
-  if (out.error) {
-    sendJsonCors(res, 400, { error: out.error });
-    return;
-  }
-  sendJsonCors(res, 200, { ok: true });
 }
 
 function handleCryptoAlerts(res) {
@@ -3115,43 +3024,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (pathname.startsWith("/api/auth") && req.method === "OPTIONS") {
-    res.writeHead(204, {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    });
-    res.end();
-    return;
-  }
-
-  if (pathname === "/api/auth/register" && req.method === "POST") {
-    await handleAuthRegister(req, res);
-    return;
-  }
-
-  if (pathname === "/api/auth/login" && req.method === "POST") {
-    await handleAuthLogin(req, res);
-    return;
-  }
-
-  if (pathname === "/api/auth/logout" && req.method === "POST") {
-    handleAuthLogout(req, res);
-    return;
-  }
-
-  if (pathname === "/api/auth/me" && req.method === "GET") {
-    handleAuthMe(req, res);
-    return;
-  }
-
-  if (pathname === "/api/auth/password/request" && req.method === "POST") {
-    await handleAuthPasswordRequest(req, res);
-    return;
-  }
-
-  if (pathname === "/api/auth/password/reset" && req.method === "POST") {
-    await handleAuthPasswordReset(req, res);
+  if (
+    (pathname.startsWith("/api/auth") || pathname.startsWith("/auth")) &&
+    ["GET", "POST", "OPTIONS"].includes(req.method || "GET")
+  ) {
+    delegateAuth(req, res);
     return;
   }
 

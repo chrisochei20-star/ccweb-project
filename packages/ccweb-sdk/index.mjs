@@ -1,14 +1,18 @@
 /**
  * @example
  * import { createClient, createAgentHelpers } from "@ccweb/sdk";
- * const ccweb = createClient({ apiKey: process.env.CCWEB_API_KEY, baseUrl: "http://127.0.0.1:3000" });
+ * const ccweb = createClient({ apiKey: process.env.CCWEB_API_KEY, baseUrl: process.env.CCWEB_API_PUBLIC_URL });
  * const sessions = await ccweb.sessions.list();
  */
-export function createClient({ apiKey, baseUrl = "http://127.0.0.1:3000" }) {
+export function createClient({ apiKey, baseUrl }) {
   if (!apiKey) throw new Error("apiKey is required");
+  const resolved = String(baseUrl || process.env.CCWEB_API_PUBLIC_URL || process.env.CCWEB_BASE_URL || "").trim().replace(/\/$/, "");
+  if (!resolved) {
+    throw new Error("baseUrl is required (or set CCWEB_API_PUBLIC_URL / CCWEB_BASE_URL in the environment).");
+  }
 
   async function request(method, path, body) {
-    const url = `${baseUrl.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+    const url = `${resolved}${path.startsWith("/") ? path : `/${path}`}`;
     const headers = {
       "Content-Type": "application/json",
       CCWEB_API_KEY: apiKey,

@@ -637,7 +637,7 @@ async function handleLearningAdminAnalytics(req, res) {
   const summary = await learningPg.analyticsSummary();
   const live = await learningPg.listLiveSessionsWithStreamIds();
   const recentLedger = await learningPg.listRecentLedger(40);
-  const u = new URL(req.url || "/", "http://127.0.0.1");
+  const u = new URL(req.url || "/", "https://ccweb.internal");
   const revenueOverview = await monPg.adminRevenueOverview({
     meteringDays: Number(u.searchParams.get("meteringDays")) || 90,
     trendDays: Number(u.searchParams.get("trendDays")) || 14,
@@ -3822,7 +3822,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const requestUrl = new URL(req.url, `http://localhost:${PORT}`);
+  const requestUrl = new URL(req.url, "https://ccweb.internal");
   const { pathname } = requestUrl;
 
   if (
@@ -4323,7 +4323,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`ccweb-project app running on http://localhost:${PORT}`);
+  logger.info({ msg: "server_listen", port: PORT, env: process.env.NODE_ENV || "development" });
   if (getPool() && process.env.CCWEB_SKIP_MIGRATIONS !== "1") {
     migrate().catch((e) => logger.error({ msg: "migrate_failed", err: e.message }));
   }

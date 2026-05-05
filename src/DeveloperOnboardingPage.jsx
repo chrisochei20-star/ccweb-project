@@ -84,8 +84,11 @@ export function DeveloperOnboardingPage() {
   }, [loadProjects]);
 
   const baseUrl = useMemo(() => {
-    if (API_BASE_URL) return API_BASE_URL;
-    if (typeof window === "undefined") return "http://127.0.0.1:3000";
+    const fromEnv = (API_BASE_URL || "").trim();
+    if (fromEnv) return fromEnv;
+    if (typeof window === "undefined") {
+      return "https://api.example.com";
+    }
     return `${window.location.protocol}//${window.location.host}`;
   }, []);
 

@@ -1,4 +1,5 @@
 const { logger } = require("../logging/logger");
+const { publicAppBaseUrl } = require("../services/deploymentOrigins");
 const pgGrowth = require("../db/persistenceGrowth");
 
 async function handleStripeCheckoutEscrow(req, res, readJsonBody, sendJson) {
@@ -53,12 +54,8 @@ async function handleStripeCheckoutEscrow(req, res, readJsonBody, sendJson) {
           quantity: 1,
         },
       ],
-      success_url:
-        successUrl ||
-        `${process.env.PUBLIC_APP_URL || "http://localhost:5173"}/marketplace/${listingId}?paid=1`,
-      cancel_url:
-        cancelUrl ||
-        `${process.env.PUBLIC_APP_URL || "http://localhost:5173"}/marketplace/${listingId}?cancelled=1`,
+      success_url: successUrl || `${publicAppBaseUrl()}/marketplace/${listingId}?paid=1`,
+      cancel_url: cancelUrl || `${publicAppBaseUrl()}/marketplace/${listingId}?cancelled=1`,
       metadata: { orderId: order.id, listingId, ...(body.ccwebProjectId ? { ccwebProjectId: String(body.ccwebProjectId) } : {}) },
     });
     await pgGrowth.attachStripeToOrder(order.id, session.id, null);

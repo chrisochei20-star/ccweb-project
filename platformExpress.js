@@ -17,6 +17,7 @@ const { expressStripeEscrowCheckout } = require("./payments/stripeCheckout");
 const aiExecute = require("./services/aiExecute");
 const monetizationEngine = require("./services/monetizationEngine");
 const betaPg = require("./db/persistenceBeta");
+const { publicAppBaseUrl, trimOrigin } = require("./services/deploymentOrigins");
 
 function getClientIp(req) {
   return (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "";
@@ -72,8 +73,8 @@ function createPlatformApp(deps) {
   const v1 = express.Router();
 
   v1.get("/config", (req, res) => {
-    const publicApp = (process.env.PUBLIC_APP_URL || "").replace(/\/$/, "");
-    const apiPublic = (process.env.CCWEB_API_PUBLIC_URL || "").replace(/\/$/, "");
+    const publicApp = trimOrigin(process.env.PUBLIC_APP_URL) || null;
+    const apiPublic = trimOrigin(process.env.CCWEB_API_PUBLIC_URL) || null;
     res.json({
       publicAppUrl: publicApp || null,
       apiPublicUrl: apiPublic || null,
@@ -104,7 +105,7 @@ function createPlatformApp(deps) {
       } catch {
         /* ignore */
       }
-      const base = (process.env.PUBLIC_APP_URL || "").replace(/\/$/, "") || null;
+      const base = trimOrigin(process.env.PUBLIC_APP_URL) || null;
       res.json({
         user: sanitizeUser(user),
         betaSlug,
@@ -155,7 +156,7 @@ function createPlatformApp(deps) {
       } catch {
         /* ignore */
       }
-      const base = (process.env.PUBLIC_APP_URL || "").replace(/\/$/, "") || null;
+      const base = trimOrigin(process.env.PUBLIC_APP_URL) || null;
       res.json({
         user: sanitizeUser(merged),
         betaSlug: betaSlugOut,
@@ -309,7 +310,7 @@ function createPlatformApp(deps) {
       const streak = sr[0]
         ? { current: sr[0].current_streak, longest: sr[0].longest_streak }
         : { current: 0, longest: 0 };
-      const base = (process.env.PUBLIC_APP_URL || "").replace(/\/$/, "") || "http://localhost:5173";
+      const base = publicAppBaseUrl();
       const profile = await learningPg.userLearningProfile(req.ccwebUserId);
       const xp = profile?.xp ?? 0;
       const level =
@@ -476,7 +477,7 @@ function createPlatformApp(deps) {
         const [st, msg] = map[out.error] || [400, "Could not save slug."];
         return res.status(st).json({ error: msg, code: out.error });
       }
-      const base = (process.env.PUBLIC_APP_URL || "").replace(/\/$/, "") || "http://localhost:5173";
+      const base = publicAppBaseUrl();
       res.json({ slug: out.slug, publicUrl: `${base}/u/${out.slug}` });
     } catch (e) {
       next(e);
@@ -536,7 +537,7 @@ function createPlatformApp(deps) {
       if (!out.ok) {
         return res.status(out.error === "invalid_code" ? 400 : 503).json({ error: out.error });
       }
-      const base = (process.env.PUBLIC_APP_URL || "").replace(/\/$/, "") || "";
+      const base = trimOrigin(process.env.PUBLIC_APP_URL) || "";
       res.status(201).json({
         ...out,
         inviteUrl: base ? `${base}/invite/${out.code}` : null,
@@ -683,7 +684,7 @@ function createPlatformApp(deps) {
           const streak = sr[0]
             ? { current: sr[0].current_streak, longest: sr[0].longest_streak }
             : { current: 0, longest: 0 };
-          const base = (process.env.PUBLIC_APP_URL || "").replace(/\/$/, "") || "http://localhost:5173";
+          const base = publicAppBaseUrl();
           const xpVal = profile?.xp ?? 0;
           const level = xpVal >= 5000 ? "elite" : xpVal >= 1500 ? "pro" : xpVal >= 400 ? "builder" : "beginner";
           growth = {

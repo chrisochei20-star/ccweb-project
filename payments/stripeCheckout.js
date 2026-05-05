@@ -69,4 +69,19 @@ async function handleStripeCheckoutEscrow(req, res, readJsonBody, sendJson) {
   }
 }
 
-module.exports = { handleStripeCheckoutEscrow };
+async function expressReadBody(req) {
+  return req.body && typeof req.body === "object" ? req.body : {};
+}
+
+function expressSendJson(res, statusCode, payload) {
+  res.status(statusCode).json(payload);
+}
+
+/**
+ * Express adapter — body already parsed by express.json()
+ */
+async function expressStripeEscrowCheckout(req, res) {
+  await handleStripeCheckoutEscrow(req, res, expressReadBody, expressSendJson);
+}
+
+module.exports = { handleStripeCheckoutEscrow, expressStripeEscrowCheckout };

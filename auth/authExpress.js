@@ -41,6 +41,81 @@ function getDeps(req) {
   return req.app.locals.ccwebAuth;
 }
 
+function mountWalletFlat(router, opts = {}) {
+  const verifyPath = (opts.verifyPath || "/connect").toString();
+  router.post("/nonce", async (req, res) => {
+    const out = await authEngine.walletNonce(req.body || {});
+    if (out.error) return res.status(400).json(out);
+    res.json(out);
+  });
+
+  router.post(verifyPath, async (req, res) => {
+    try {
+      const { ccwebUsers, buildUserProfile, sanitizeUser } = getDeps(req);
+      const ip = getClientIp(req);
+      const rl = rateLimit.check("wallet", ip, 40, 15 * 60 * 1000);
+      if (!rl.ok) {
+        res.setHeader("Retry-After", String(rl.retryAfterSec || 60));
+        return res.status(429).json({ error: "Too many wallet attempts." });
+      }
+      const out = await authEngine.walletVerify(ccwebUsers, buildUserProfile, req.body || {});
+      if (out.error) return res.status(400).json({ error: out.error });
+      sendTokens(
+        res,
+        200,
+        {
+          user: sanitizeUser(out.user),
+          accessToken: out.accessToken,
+          token: out.accessToken,
+          expiresIn: out.expiresIn,
+          tokenType: out.tokenType,
+        },
+        out.refreshToken
+      );
+    } catch (e) {
+      res.status(500).json({ error: e.message || "Server error" });
+    }
+  });
+}
+
+function mountWalletAt(app, basePath) {
+  const p = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;
+
+  app.post(`${p}/wallet/nonce`, async (req, res) => {
+    const out = await authEngine.walletNonce(req.body || {});
+    if (out.error) return res.status(400).json(out);
+    res.json(out);
+  });
+
+  app.post(`${p}/wallet/connect`, async (req, res) => {
+    try {
+      const { ccwebUsers, buildUserProfile, sanitizeUser } = getDeps(req);
+      const ip = getClientIp(req);
+      const rl = rateLimit.check("wallet", ip, 40, 15 * 60 * 1000);
+      if (!rl.ok) {
+        res.setHeader("Retry-After", String(rl.retryAfterSec || 60));
+        return res.status(429).json({ error: "Too many wallet attempts." });
+      }
+      const out = await authEngine.walletVerify(ccwebUsers, buildUserProfile, req.body || {});
+      if (out.error) return res.status(400).json({ error: out.error });
+      sendTokens(
+        res,
+        200,
+        {
+          user: sanitizeUser(out.user),
+          accessToken: out.accessToken,
+          token: out.accessToken,
+          expiresIn: out.expiresIn,
+          tokenType: out.tokenType,
+        },
+        out.refreshToken
+      );
+    } catch (e) {
+      res.status(500).json({ error: e.message || "Server error" });
+    }
+  });
+}
+
 function mountAt(app, basePath) {
   const p = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;
 
@@ -201,40 +276,6 @@ function mountAt(app, basePath) {
     res.json({ ok: true });
   });
 
-  app.post(`${p}/wallet/nonce`, async (req, res) => {
-    const out = await authEngine.walletNonce(req.body || {});
-    if (out.error) return res.status(400).json(out);
-    res.json(out);
-  });
-
-  app.post(`${p}/wallet/connect`, async (req, res) => {
-    try {
-      const { ccwebUsers, buildUserProfile, sanitizeUser } = getDeps(req);
-      const ip = getClientIp(req);
-      const rl = rateLimit.check("wallet", ip, 40, 15 * 60 * 1000);
-      if (!rl.ok) {
-        res.setHeader("Retry-After", String(rl.retryAfterSec || 60));
-        return res.status(429).json({ error: "Too many wallet attempts." });
-      }
-      const out = await authEngine.walletVerify(ccwebUsers, buildUserProfile, req.body || {});
-      if (out.error) return res.status(400).json({ error: out.error });
-      sendTokens(
-        res,
-        200,
-        {
-          user: sanitizeUser(out.user),
-          accessToken: out.accessToken,
-          token: out.accessToken,
-          expiresIn: out.expiresIn,
-          tokenType: out.tokenType,
-        },
-        out.refreshToken
-      );
-    } catch (e) {
-      res.status(500).json({ error: e.message || "Server error" });
-    }
-  });
-
   app.post(`${p}/password/request`, async (req, res) => {
     const ip = getClientIp(req);
     const rl = rateLimit.check("pwreq", ip, 10, 60 * 60 * 1000);
@@ -327,6 +368,8 @@ function createAuthApp(deps) {
 
   mountAt(app, "/auth");
   mountAt(app, "/api/auth");
+  mountWalletAt(app, "/auth");
+  mountWalletAt(app, "/api/auth");
 
   app.use((req, res) => {
     res.status(404).json({ error: "Auth route not found", path: req.originalUrl || req.url });
@@ -335,4 +378,4 @@ function createAuthApp(deps) {
   return app;
 }
 
-module.exports = { createAuthApp };
+module.exports = { createAuthApp, mountAt, mountWalletAt, mountWalletFlat };

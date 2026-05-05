@@ -2,6 +2,7 @@ import { KeyRound, LogOut, Shield, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { getSessionToken, logoutApi, setSession } from "../session";
+import { apiUrl } from "../config/env";
 
 export function ProfileShellPage() {
   const { user, setUser } = useOutletContext() || {};
@@ -16,6 +17,8 @@ export function ProfileShellPage() {
   const [totpCode, setTotpCode] = useState("");
   const [backupCodes, setBackupCodes] = useState(null);
 
+  const [betaSlug, setBetaSlug] = useState("");
+
   useEffect(() => {
     if (user) {
       setDisplayName(user.displayName || "");
@@ -23,29 +26,45 @@ export function ProfileShellPage() {
     }
   }, [user]);
 
+  useEffect(() => {
+    const token = getSessionToken();
+    if (!token || !user?.id) return;
+    let cancelled = false;
+    fetch(apiUrl("/api/v1/users/me"), { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && d.betaSlug) setBetaSlug(d.betaSlug);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
   async function saveProfile() {
     if (!user) return;
     setErr(null);
     setMsg(null);
     const token = getSessionToken();
     try {
-      const res = await fetch("/api/users", {
-        method: "POST",
+      const res = await fetch(apiUrl("/api/v1/users/update"), {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          userId: user.id,
           displayName: displayName.trim(),
           pushEnabled,
+          betaSlug: betaSlug.trim() || undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
-      setUser(data);
-      setSession(token, data, undefined);
-      setMsg("Profile saved.");
+      setUser(data.user);
+      setSession(token, data.user, undefined);
+      if (data.betaSlug) setBetaSlug(data.betaSlug);
+      setMsg(data.betaPublicUrl ? `Profile saved. Share: ${data.betaPublicUrl}` : "Profile saved.");
     } catch (e) {
       setErr(e.message);
     }
@@ -57,7 +76,7 @@ export function ProfileShellPage() {
     setBackupCodes(null);
     const token = getSessionToken();
     try {
-      const res = await fetch("/api/auth/2fa/setup", {
+      const res = await fetch(apiUrl("/api/auth/2fa/setup"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -79,7 +98,7 @@ export function ProfileShellPage() {
     setErr(null);
     const token = getSessionToken();
     try {
-      const res = await fetch("/api/auth/2fa/setup", {
+      const res = await fetch(apiUrl("/api/auth/2fa/setup"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -92,7 +111,7 @@ export function ProfileShellPage() {
       setBackupCodes(data.backupCodes || []);
       setTotpStep("done");
       setMsg("Two-factor authentication enabled.");
-      const me = await fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json());
+      const me = await fetch(apiUrl("/api/auth/me"), { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json());
       if (me.user) {
         setUser(me.user);
         setSession(token, me.user, undefined);
@@ -140,6 +159,16 @@ export function ProfileShellPage() {
         </h2>
         <label className="mt-4 block text-xs font-medium text-ccweb-muted">Display name</label>
         <input className="ccweb-input mt-1" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+        <label className="mt-4 block text-xs font-medium text-ccweb-muted">Public beta URL slug</label>
+        <p className="mt-1 text-xs text-ccweb-muted">
+          Letters, numbers, hyphens — becomes <code className="text-ccweb-cyan">/u/your-slug</code>
+        </p>
+        <input
+          className="ccweb-input mt-1 font-mono text-sm"
+          placeholder="e.g. jamie-trader"
+          value={betaSlug}
+          onChange={(e) => setBetaSlug(e.target.value)}
+        />
         <label className="mt-4 flex items-center gap-2 text-sm text-ccweb-muted">
           <input type="checkbox" checked={pushEnabled} onChange={(e) => setPushEnabled(e.target.checked)} />
           Product updates &amp; session alerts

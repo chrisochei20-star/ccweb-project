@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { apiUrl } from "./config/env";
 
 const CHAINS = [
   { id: "ethereum", label: "Ethereum", wallet: "metamask" },
@@ -221,13 +222,13 @@ export function VisualDappBuilderPage() {
   const currentNetwork = useMemo(() => allowedNetworks.find((n) => n.id === chainId) || allowedNetworks[0], [allowedNetworks, chainId]);
 
   useEffect(() => {
-    fetch("/api/dapp/templates")
+    fetch(apiUrl("/api/dapp/templates"))
       .then((r) => r.json())
       .then((d) => setTemplates(d.templates || []));
-    fetch("/api/dapp/networks")
+    fetch(apiUrl("/api/dapp/networks"))
       .then((r) => r.json())
       .then((d) => setNetworks(d.networks || []));
-    fetch("/api/dapp/prices")
+    fetch(apiUrl("/api/dapp/prices"))
       .then((r) => r.json())
       .then((d) => setPrices(d.prices || {}));
   }, []);
@@ -355,7 +356,7 @@ export function VisualDappBuilderPage() {
     const idempotencyKey = `visual-${walletAddress}-${serverTemplate.id}-${chainId}-${Date.now()}`;
 
     try {
-      const resp = await fetch("/api/dapp/deploy", {
+      const resp = await fetch(apiUrl("/api/dapp/deploy"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

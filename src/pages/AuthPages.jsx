@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 import { BrowserProvider, getAddress } from "ethers";
 import { setSession } from "../session";
+import { apiUrl } from "../config/env";
 
 function loadGoogleScript() {
   return new Promise((resolve, reject) => {
@@ -89,7 +90,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
             setLoading(true);
             setError(null);
             try {
-              const r = await fetch("/api/auth/oauth/google", {
+              const r = await fetch(apiUrl("/api/auth/oauth/google"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
@@ -136,7 +137,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
     setLoading(true);
     try {
       if (mode === "signup") {
-        const reg = await fetch("/api/auth/register", {
+        const reg = await fetch(apiUrl("/api/auth/register"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -150,7 +151,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
         const regData = await reg.json();
         if (!reg.ok) throw new Error(regData.error || "Registration failed");
       }
-      const loginRes = await fetch("/api/auth/login", {
+      const loginRes = await fetch(apiUrl("/api/auth/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -178,7 +179,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
     setError(null);
     setLoading(true);
     try {
-      const loginRes = await fetch("/api/auth/login/2fa", {
+      const loginRes = await fetch(apiUrl("/api/auth/login/2fa"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -208,7 +209,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
       const provider = new BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const address = await signer.getAddress();
-      const nonceRes = await fetch("/api/auth/wallet/nonce", {
+      const nonceRes = await fetch(apiUrl("/api/auth/wallet/nonce"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ address }),
@@ -217,7 +218,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
       if (!nonceRes.ok) throw new Error(nonceJson.error || "Nonce failed");
       const { message } = nonceJson;
       const signature = await signer.signMessage(message);
-      const verifyRes = await fetch("/api/auth/wallet/connect", {
+      const verifyRes = await fetch(apiUrl("/api/auth/wallet/connect"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

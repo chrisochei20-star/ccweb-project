@@ -1,6 +1,7 @@
 import { MessageCircle, MessagesSquare, Newspaper, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
+import { apiUrl } from "../config/env";
 
 export function CommunityShellPage() {
   const { user } = useOutletContext() || {};
@@ -24,7 +25,7 @@ export function CommunityShellPage() {
     setErr(null);
     try {
       const path = feedMode === "trending" ? "/api/community/posts/trending" : "/api/community/posts";
-      const res = await fetch(path);
+      const res = await fetch(apiUrl(path));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load posts");
       setPosts(data.posts || []);
@@ -40,7 +41,7 @@ export function CommunityShellPage() {
     setErr(null);
     try {
       const q = channel ? `?channel=${encodeURIComponent(channel)}` : "";
-      const res = await fetch(`/api/community/chats${q}`);
+      const res = await fetch(apiUrl(`/api/community/chats${q}`));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load chat");
       setChats(data.chats || []);
@@ -64,7 +65,7 @@ export function CommunityShellPage() {
     if (!user?.id || !postTitle.trim() || !postBody.trim()) return;
     setErr(null);
     try {
-      const res = await fetch("/api/community/posts", {
+      const res = await fetch(apiUrl("/api/community/posts"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -89,7 +90,7 @@ export function CommunityShellPage() {
     setExpandedPost(postId);
     if (commentsByPost[postId]) return;
     try {
-      const res = await fetch(`/api/community/posts/${postId}/comments`);
+      const res = await fetch(apiUrl(`/api/community/posts/${postId}/comments`));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Comments failed");
       setCommentsByPost((prev) => ({ ...prev, [postId]: data.comments || [] }));
@@ -104,7 +105,7 @@ export function CommunityShellPage() {
     if (!text) return;
     setErr(null);
     try {
-      const res = await fetch(`/api/community/posts/${postId}/comments`, {
+      const res = await fetch(apiUrl(`/api/community/posts/${postId}/comments`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -116,7 +117,7 @@ export function CommunityShellPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Comment failed");
       setCommentDraft((prev) => ({ ...prev, [postId]: "" }));
-      const listRes = await fetch(`/api/community/posts/${postId}/comments`);
+      const listRes = await fetch(apiUrl(`/api/community/posts/${postId}/comments`));
       const listData = await listRes.json();
       setCommentsByPost((prev) => ({ ...prev, [postId]: listData.comments || [] }));
     } catch (e) {
@@ -129,7 +130,7 @@ export function CommunityShellPage() {
     if (!user?.id || !chatMsg.trim()) return;
     setErr(null);
     try {
-      const res = await fetch("/api/community/chats", {
+      const res = await fetch(apiUrl("/api/community/chats"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

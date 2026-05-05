@@ -1,7 +1,8 @@
 import { BookOpen, Briefcase, Hammer, MessageCircle, Search, User } from "lucide-react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { fetchMe, getStoredUser, logoutApi } from "../session";
+import { captureInviteFromSearch, postBetaClientEvent } from "../lib/betaTelemetry";
 
 const tabs = [
   { to: "/learn", label: "Learn", icon: BookOpen },
@@ -15,7 +16,16 @@ const tabs = [
 export function MobileLayout() {
   const [user, setUser] = useState(() => getStoredUser());
   const navigate = useNavigate();
+  const location = useLocation();
 
+  useEffect(() => {
+    captureInviteFromSearch(location.search || "");
+    postBetaClientEvent({
+      eventType: "route_view",
+      path: location.pathname + location.search,
+      metadata: { route: location.pathname },
+    });
+  }, [location.pathname, location.search]);
   useEffect(() => {
     let cancelled = false;
     (async () => {

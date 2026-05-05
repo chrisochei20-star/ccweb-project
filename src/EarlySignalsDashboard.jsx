@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { API_BASE_URL, apiUrl } from "./config/env";
 
 const trendLabel = {
   warming: "Warming",
@@ -29,7 +30,7 @@ export function EarlySignalsDashboard() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/intelligence/dashboard");
+      const res = await fetch(apiUrl("/api/intelligence/dashboard"));
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load dashboard");
       setData(json);
@@ -47,7 +48,8 @@ export function EarlySignalsDashboard() {
 
   useEffect(() => {
     if (typeof EventSource === "undefined") return;
-    const es = new EventSource("/api/intelligence/stream");
+    const streamUrl = API_BASE_URL ? `${API_BASE_URL}/api/intelligence/stream` : "/api/intelligence/stream";
+    const es = new EventSource(streamUrl);
     es.addEventListener("snapshot", () => {
       load();
     });
@@ -63,7 +65,7 @@ export function EarlySignalsDashboard() {
     setTrackMsg(null);
     if (!trackAddr.trim()) return;
     try {
-      const res = await fetch("/api/intelligence/tracked-wallets", {
+      const res = await fetch(apiUrl("/api/intelligence/tracked-wallets"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

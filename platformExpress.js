@@ -16,6 +16,7 @@ const monPg = require("./db/persistenceMonetization");
 const { expressStripeEscrowCheckout } = require("./payments/stripeCheckout");
 const aiExecute = require("./services/aiExecute");
 const monetizationEngine = require("./services/monetizationEngine");
+const betaPg = require("./db/persistenceBeta");
 
 function getClientIp(req) {
   return (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "";
@@ -70,6 +71,15 @@ function createPlatformApp(deps) {
 
   const v1 = express.Router();
 
+  v1.get("/config", (req, res) => {
+    const publicApp = (process.env.PUBLIC_APP_URL || "").replace(/\/$/, "");
+    const apiPublic = (process.env.CCWEB_API_PUBLIC_URL || "").replace(/\/$/, "");
+    res.json({
+      publicAppUrl: publicApp || null,
+      apiPublicUrl: apiPublic || null,
+      environment: process.env.NODE_ENV === "production" ? "production" : "development",
+    });
+  });
   const authRouter = express.Router();
   mountAt(authRouter, "");
   mountWalletFlat(authRouter);
@@ -88,7 +98,18 @@ function createPlatformApp(deps) {
       const { ccwebUsers, sanitizeUser } = deps;
       const user = ccwebUsers.get(req.ccwebUserId);
       if (!user) return res.status(401).json({ error: "Session invalid." });
-      res.json({ user: sanitizeUser(user) });
+      let betaSlug = null;
+      try {
+        betaSlug = await betaPg.getSlugForUser(req.ccwebUserId);
+      } catch {
+        /* ignore */
+      }
+      const base = (process.env.PUBLIC_APP_URL || "").replace(/\/$/, "") || null;
+      res.json({
+        user: sanitizeUser(user),
+        betaSlug,
+        betaPublicUrl: betaSlug && base ? `${base}/u/${betaSlug}` : null,
+      });
     } catch (e) {
       next(e);
     }
@@ -103,6 +124,7 @@ function createPlatformApp(deps) {
       if (!displayName || displayName.length > 120) {
         return res.status(400).json({ error: "displayName required (max 120 chars)." });
       }
+      const pushEnabled = req.body?.pushEnabled !== false;
       const existingInMem = ccwebUsers.get(req.ccwebUserId);
       const merged = buildUserProfile(
         {
@@ -110,7 +132,7 @@ function createPlatformApp(deps) {
           displayName,
           email: row.email || existingInMem?.email,
           roles: existingInMem?.roles || ["member"],
-          pushEnabled: existingInMem?.pushEnabled ?? true,
+          pushEnabled,
           isOrganic: existingInMem?.isOrganic ?? true,
         },
         existingInMem || null
@@ -120,7 +142,25 @@ function createPlatformApp(deps) {
         ...row,
         email: row.email || merged.email || null,
       });
-      res.json({ user: sanitizeUser(merged) });
+      const slugRaw = (req.body?.betaSlug || req.body?.usernameSlug || "").toString();
+      if (slugRaw.trim()) {
+        const bs = await betaPg.setMySlug(req.ccwebUserId, slugRaw);
+        if (!bs.ok && bs.error === "slug_taken") {
+          return res.status(409).json({ error: "That public URL is already taken.", code: bs.error });
+        }
+      }
+      let betaSlugOut = null;
+      try {
+        betaSlugOut = await betaPg.getSlugForUser(req.ccwebUserId);
+      } catch {
+        /* ignore */
+      }
+      const base = (process.env.PUBLIC_APP_URL || "").replace(/\/$/, "") || null;
+      res.json({
+        user: sanitizeUser(merged),
+        betaSlug: betaSlugOut,
+        betaPublicUrl: betaSlugOut && base ? `${base}/u/${betaSlugOut}` : null,
+      });
     } catch (e) {
       next(e);
     }
@@ -373,6 +413,141 @@ function createPlatformApp(deps) {
 
   v1.use("/monetization", apiRateShort, monetizationRouter);
 
+  const betaRouter = express.Router();
+
+  betaRouter.get("/user/:userId", async (req, res, next) => {
+    try {
+      const id = (req.params.userId || "").trim();
+      if (!id) return res.status(400).json({ error: "userId required." });
+      const { ccwebUsers, sanitizeUser } = deps;
+      const u = ccwebUsers.get(id);
+      if (!u) {
+        return res.json({
+          userId: id,
+          displayName: null,
+          note: "No live session profile for this id (sign in at least once on this deployment for full name).",
+        });
+      }
+      const pub = sanitizeUser(u);
+      delete pub.email;
+      res.json({ ...pub, userId: id });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  betaRouter.get("/profile/:slug", async (req, res, next) => {
+    try {
+      if (!betaPg.usePostgres()) {
+        return res.status(503).json({ error: "PostgreSQL required for beta profile URLs.", code: "NO_DATABASE" });
+      }
+      const row = await betaPg.resolveSlug(req.params.slug);
+      if (!row) return res.status(404).json({ error: "Profile not found." });
+      const { ccwebUsers, sanitizeUser } = deps;
+      const u = ccwebUsers.get(row.userId);
+      if (!u) {
+        return res.json({
+          userId: row.userId,
+          slug: row.slug,
+          displayName: row.userId.slice(0, 8),
+          note: "Profile hydration pending login sync.",
+        });
+      }
+      const publicUser = sanitizeUser(u);
+      delete publicUser.email;
+      res.json({ ...publicUser, slug: row.slug, userId: row.userId });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  betaRouter.put("/profile", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const slug = (req.body?.slug || req.body?.username || "").toString();
+      const out = await betaPg.setMySlug(req.ccwebUserId, slug);
+      if (!out.ok) {
+        const map = {
+          slug_too_short: [400, "Slug must be at least 3 characters after normalization."],
+          invalid_slug: [400, "Use letters, numbers, and hyphens only."],
+          reserved: [400, "That slug is reserved."],
+          slug_taken: [409, "That URL is already taken."],
+          no_database: [503, "PostgreSQL required."],
+        };
+        const [st, msg] = map[out.error] || [400, "Could not save slug."];
+        return res.status(st).json({ error: msg, code: out.error });
+      }
+      const base = (process.env.PUBLIC_APP_URL || "").replace(/\/$/, "") || "http://localhost:5173";
+      res.json({ slug: out.slug, publicUrl: `${base}/u/${out.slug}` });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  betaRouter.get("/invite/:code", async (req, res, next) => {
+    try {
+      if (!betaPg.usePostgres()) {
+        return res.json({ valid: false, reason: "no_database", note: "Invite validation requires PostgreSQL." });
+      }
+      const inv = await betaPg.getInvite(req.params.code);
+      if (!inv) return res.status(404).json({ valid: false, error: "Unknown invite code." });
+      if (inv.expired) return res.status(410).json({ valid: false, error: "Invite expired." });
+      res.json({ valid: true, code: inv.code, label: inv.label });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  betaRouter.post("/event", optionalJwt, async (req, res, next) => {
+    try {
+      const meta = req.body?.metadata && typeof req.body.metadata === "object" ? req.body.metadata : {};
+      if (req.body?.error || req.body?.durationMs != null) {
+        meta.clientError = req.body?.error;
+        meta.durationMs = req.body?.durationMs;
+      }
+      await betaPg.recordBetaEvent({
+        userId: req.ccwebUserId,
+        inviteCode: req.body?.inviteCode,
+        slug: req.body?.slug,
+        eventType: (req.body?.eventType || "page_view").toString().slice(0, 64),
+        path: req.body?.path,
+        featureKey: req.body?.featureKey,
+        userAgent: req.headers["user-agent"],
+        clientIp: getClientIp(req),
+        metadata: meta,
+      });
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  betaRouter.post("/invites", async (req, res, next) => {
+    try {
+      const key = (req.headers["x-ccweb-admin"] || "").toString().trim();
+      const adminKey = (process.env.CCWEB_ADMIN_KEY || "").trim();
+      if (!adminKey || key !== adminKey) {
+        return res.status(403).json({ error: "Admin key required (X-CCWEB-Admin)." });
+      }
+      const out = await betaPg.createInvite({
+        code: req.body?.code,
+        label: req.body?.label,
+        expiresAt: req.body?.expiresAt,
+      });
+      if (!out.ok) {
+        return res.status(out.error === "invalid_code" ? 400 : 503).json({ error: out.error });
+      }
+      const base = (process.env.PUBLIC_APP_URL || "").replace(/\/$/, "") || "";
+      res.status(201).json({
+        ...out,
+        inviteUrl: base ? `${base}/invite/${out.code}` : null,
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  v1.use("/beta", apiRateShort, betaRouter);
+
   const marketplaceRouter = express.Router();
 
   marketplaceRouter.post("/create", authJwtMiddleware, async (req, res, next) => {
@@ -551,6 +726,7 @@ function createPlatformApp(deps) {
         trendDays: Number(req.query.trendDays) || 14,
       });
       const pricing = await monetizationEngine.quotePayPerUse("scan");
+      const betaTesting = await betaPg.betaAnalyticsSummary(Number(req.query.betaDays) || 30);
       res.json({
         learning: summary,
         growthHub: growthOverview,
@@ -561,6 +737,7 @@ function createPlatformApp(deps) {
           dynamicPricingSample: pricing,
           tierDefaults: monetizationEngine.tierLimits("free"),
         },
+        betaTesting,
       });
     } catch (e) {
       next(e);

@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchMe, getStoredUser } from "./session";
+import { API_BASE_URL, apiUrl } from "./config/env";
 
 const LS_KEY = "ccweb_dev_api_key";
 const LS_PROJECT = "ccweb_dev_onboarding_project_id";
@@ -66,7 +67,7 @@ export function DeveloperOnboardingPage() {
 
   const loadProjects = useCallback(async () => {
     try {
-      const res = await fetch("/api/developer/projects");
+      const res = await fetch(apiUrl("/api/developer/projects"));
       const data = await res.json();
       setProjects(data.projects || []);
       if (!projectId && data.projects?.length) {
@@ -83,6 +84,7 @@ export function DeveloperOnboardingPage() {
   }, [loadProjects]);
 
   const baseUrl = useMemo(() => {
+    if (API_BASE_URL) return API_BASE_URL;
     if (typeof window === "undefined") return "http://127.0.0.1:3000";
     return `${window.location.protocol}//${window.location.host}`;
   }, []);
@@ -102,7 +104,7 @@ export function DeveloperOnboardingPage() {
     setBusy(true);
     try {
       const ownerUserId = user?.email || user?.id || "anonymous";
-      const res = await fetch("/api/developer/projects", {
+      const res = await fetch(apiUrl("/api/developer/projects"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: projectName.trim() || "My project", ownerUserId }),
@@ -124,7 +126,7 @@ export function DeveloperOnboardingPage() {
     setBusy(true);
     try {
       const pid = projectId || (projects[0] && projects[0].id);
-      const res = await fetch("/api/developer/keys", {
+      const res = await fetch(apiUrl("/api/developer/keys"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -149,7 +151,7 @@ export function DeveloperOnboardingPage() {
     setSandboxResult(null);
     setBusy(true);
     try {
-      const res = await fetch("/api/developer/sandbox/echo", {
+      const res = await fetch(apiUrl("/api/developer/sandbox/echo"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source: "onboarding", at: new Date().toISOString() }),
@@ -172,7 +174,7 @@ export function DeveloperOnboardingPage() {
     }
     setBusy(true);
     try {
-      const res = await fetch("/v1/analytics", { headers: { CCWEB_API_KEY: apiKey.trim() } });
+      const res = await fetch(apiUrl("/v1/analytics"), { headers: { CCWEB_API_KEY: apiKey.trim() } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || res.statusText);
       setApiTestResult(data);

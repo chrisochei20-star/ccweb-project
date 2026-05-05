@@ -21,6 +21,8 @@ Two processes are needed for development:
 
 The Vite dev server proxies `/api`, `/v1`, and `/auth` to the URL in **`VITE_DEV_API_PROXY_TARGET`** (default `http://127.0.0.1:3000`). Start the API server first, then Vite.
 
+Playwright E2E starts its own API on **`PORT=3055`** (override with **`PLAYWRIGHT_API_PORT`**) so `npm run test` / CI does not collide with a dev server on 3000. Run smoke: `npx playwright test e2e/production-smoke.spec.js` or `npm run test:e2e:production` for deployed URLs.
+
 ### Build
 `npm run build` — outputs to `dist/`. Styling uses **Tailwind CSS v4** (`@tailwindcss/vite`) plus legacy `src/styles.css`.
 

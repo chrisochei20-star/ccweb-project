@@ -55,7 +55,7 @@ export function MobileLayout() {
             {user ? (
               <>
                 <span className="hidden max-w-[140px] truncate text-xs text-ccweb-muted sm:inline">{user.displayName}</span>
-                <button type="button" className="ccweb-outline-btn px-3 py-1.5 text-xs" onClick={handleLogout}>
+                <button type="button" className="ccweb-outline-btn px-3 py-1.5 text-xs" onClick={handleLogout} data-ccweb-e2e="logout">
                   Log out
                 </button>
               </>

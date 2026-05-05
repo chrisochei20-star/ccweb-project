@@ -1471,8 +1471,6 @@ async function handleCreateBugReport(req, res) {
     metadata: { bugId: id, severity: record.severity },
   });
   sendJson(res, 201, record);
-  const blogs = Array.from(aiBlogs.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  sendJson(res, 200, { count: blogs.length, blogs });
 }
 
 async function handleCreateAiBlog(req, res) {
@@ -3728,11 +3726,7 @@ async function handleTrackWallet(req, res) {
 }
 
 function delegatePlatform(req, res) {
-  const origUrl = req.url || "/";
-  const stripped = origUrl.startsWith("/api/v1") ? origUrl.slice("/api/v1".length) || "/" : origUrl;
-  req.url = stripped;
   platformApp(req, res, () => {
-    req.url = origUrl;
     sendJson(res, 404, { error: "API v1 route not found." });
   });
 }

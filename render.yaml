@@ -1,0 +1,43 @@
+# Render Blueprint — CCWEB API (Node). Connect this repo in Render → Blueprints → New Blueprint Instance.
+# Set every env var marked sync: false in the Render Dashboard (secrets + PUBLIC_APP_URL + CORS).
+# Docs: https://docs.render.com/blueprint-spec
+
+services:
+  - type: web
+    runtime: node
+    name: ccweb-api
+    plan: starter
+    region: oregon
+    buildCommand: npm ci
+    preDeployCommand: node db/migrate.js
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"
+      - key: DATABASE_URL
+        sync: false
+      - key: PUBLIC_APP_URL
+        sync: false
+      - key: CCWEB_API_PUBLIC_URL
+        sync: false
+      - key: CCWEB_ALLOWED_ORIGINS
+        sync: false
+      - key: AUTH_JWT_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ETHERSCAN_API_KEY
+        sync: false
+      - key: AUTH_REFRESH_IN_BODY
+        value: "1"
+      - key: AUTH_COOKIE_SECURE
+        value: "1"
+      - key: CCWEB_SKIP_MIGRATIONS
+        value: "0"

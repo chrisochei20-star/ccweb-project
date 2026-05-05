@@ -3797,8 +3797,6 @@ function delegateDeveloper(req, res) {
   });
 }
 
-validateOrExit();
-
 const server = http.createServer(async (req, res) => {
   const reqStart = Date.now();
   res.on("finish", () => {
@@ -3818,6 +3816,18 @@ const server = http.createServer(async (req, res) => {
 
   const requestUrl = new URL(req.url, "https://ccweb.internal");
   const { pathname } = requestUrl;
+
+  if (pathname === "/health" || pathname === "/api/health") {
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(
+      JSON.stringify({
+        status: "ok",
+        message: "CCWEB API is running",
+        service: "ccweb-api",
+      })
+    );
+    return;
+  }
 
   if (
     (pathname.startsWith("/api") || pathname.startsWith("/v1")) &&
@@ -3971,18 +3981,6 @@ const server = http.createServer(async (req, res) => {
     ["GET", "POST", "OPTIONS"].includes(req.method || "GET")
   ) {
     delegateAuth(req, res);
-    return;
-  }
-
-  if (pathname === "/health" || pathname === "/api/health") {
-    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(
-      JSON.stringify({
-        status: "ok",
-        message: "CCWEB API is running",
-        service: "ccweb-api",
-      })
-    );
     return;
   }
 
@@ -4324,6 +4322,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   logger.info({ msg: "server_listen", port: PORT, env: process.env.NODE_ENV || "development" });
+  validateOrExit();
   if (getPool() && process.env.CCWEB_SKIP_MIGRATIONS !== "1") {
     migrate().catch((e) => logger.error({ msg: "migrate_failed", err: e.message }));
   }

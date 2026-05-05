@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { createStreamRoom, fetchLearningProfile, fetchLearningSessions, listStreamRooms } from "../api/learningApi";
 
-export function LearningHubPage() {
+export function LearningHubPage({ compact = false }) {
   const { user } = useOutletContext() || {};
   const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
@@ -96,13 +96,15 @@ export function LearningHubPage() {
   }, [liveRooms, dbSessions]);
 
   return (
-    <section className="learning-page">
-      <header className="page-header">
-        <h1 className="section-title">Learn · AI streaming &amp; tutor</h1>
-        <p className="muted">
-          Join live CCWEB sessions, track time, and pay securely with Stripe when the database is configured.
-        </p>
-      </header>
+    <section className={`learning-page${compact ? " learning-page--compact" : ""}`}>
+      {!compact && (
+        <header className="page-header">
+          <h1 className="section-title">Learn · AI streaming &amp; tutor</h1>
+          <p className="muted">
+            Join live CCWEB sessions, track time, and pay securely with Stripe when the database is configured.
+          </p>
+        </header>
+      )}
 
       <div className="learning-grid learning-grid--2">
         <article className="panel learning-glass">

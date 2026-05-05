@@ -1200,6 +1200,9 @@ async function handleCreatePostComment(req, res, postId) {
     metadata: { postId, commentId: id },
   });
   sendJson(res, 201, row);
+}
+
+function handleListCommunityChats(requestUrl, res) {
   const channelFilter = (requestUrl.searchParams.get("channel") || "").trim();
   if (useCommunityPg()) {
     communityPg
@@ -3920,6 +3923,24 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === "/api/community/posts" && req.method === "POST") {
     await handleCreateCommunityPost(req, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/community\/posts\/[^/]+$/) && req.method === "GET") {
+    const postId = pathname.split("/").pop();
+    handleGetCommunityPost(postId, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/community\/posts\/[^/]+\/comments$/) && req.method === "GET") {
+    const postId = pathname.split("/")[4];
+    handleListPostComments(postId, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/community\/posts\/[^/]+\/comments$/) && req.method === "POST") {
+    const postId = pathname.split("/")[4];
+    await handleCreatePostComment(req, res, postId);
     return;
   }
 

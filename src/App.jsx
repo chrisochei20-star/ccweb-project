@@ -1,9 +1,7 @@
 import {
   BrowserRouter,
   Link,
-  NavLink,
   Navigate,
-  Outlet,
   Route,
   Routes,
   useNavigate,
@@ -17,86 +15,44 @@ import { DeveloperOnboardingPage } from "./DeveloperOnboardingPage";
 import { DeveloperPlatformPage } from "./DeveloperPlatformPage";
 import { VisualDappBuilderPage } from "./VisualDappBuilderPage";
 import { GrowthHubPage } from "./GrowthHubPage";
-import { fetchMe, getSessionToken, getStoredUser, logoutApi, setSession } from "./session";
+import { CCWEB_COURSES } from "./data/courses";
+import { MobileLayout } from "./layout/MobileLayout";
+import { LoginPage, SignupPage } from "./pages/AuthPages";
+import { BuildHubPage } from "./pages/BuildHubPage";
+import { CommunityShellPage } from "./pages/CommunityShellPage";
+import { EarnShellPage } from "./pages/EarnShellPage";
+import { LearnShellPage } from "./pages/LearnShellPage";
+import { MobileDashboardPage } from "./pages/MobileDashboardPage";
+import { ProfileShellPage } from "./pages/ProfileShellPage";
+import { getSessionToken, setSession } from "./session";
 import { LearningAdminPage } from "./learning/LearningAdminPage";
-import { LearningHubPage } from "./learning/LearningHubPage";
 import { LearningSessionPage } from "./learning/LearningSessionPage";
 import { TokenDetailPage } from "./TokenDetailPage";
-
-const navItems = [
-  { label: "Home", to: "/" },
-  { label: "Learn", to: "/learn" },
-  { label: "Courses", to: "/courses" },
-  { label: "AI Streaming", to: "/ai-streaming" },
-  { label: "Find", to: "/find" },
-  { label: "Early Signals", to: "/early-signals" },
-  { label: "Build", to: "/dapp-builder" },
-  { label: "Developers", to: "/developers" },
-  { label: "Dev onboarding", to: "/developers/onboarding" },
-  { label: "AI Agents", to: "/ai-agents" },
-  { label: "Growth Hub", to: "/growth-hub" },
-  { label: "Earn", to: "/earn" },
-  { label: "Community", to: "/community" },
-  { label: "About", to: "/about" },
-];
-
-const courses = [
-  {
-    id: 1,
-    category: "Crypto",
-    title: "Blockchain Fundamentals",
-    level: "Beginner",
-    duration: "6h",
-    students: "12,400",
-    rating: "4.9",
-  },
-  {
-    id: 2,
-    category: "Crypto",
-    title: "Smart Contract Development",
-    level: "Intermediate",
-    duration: "10h",
-    students: "8,200",
-    rating: "4.8",
-  },
-  {
-    id: 3,
-    category: "Crypto",
-    title: "DeFi Masterclass",
-    level: "Advanced",
-    duration: "12h",
-    students: "5,100",
-    rating: "4.9",
-  },
-  {
-    id: 4,
-    category: "AI",
-    title: "AI & Machine Learning Basics",
-    level: "Beginner",
-    duration: "8h",
-    students: "15,600",
-    rating: "4.7",
-  },
-];
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<HomePage />} />
-          <Route path="learn" element={<LearningHubPage />} />
+        <Route element={<MobileLayout />}>
+          <Route index element={<MobileDashboardPage />} />
+          <Route path="learn" element={<LearnShellPage />} />
           <Route path="learn/session/:roomId" element={<LearningSessionPage />} />
           <Route path="learn/admin" element={<LearningAdminPage />} />
-          <Route path="courses" element={<CoursesPage />} />
-          <Route path="courses/:id" element={<CourseNotFoundPage />} />
-          <Route path="ai-tutor" element={<AiTutorPage />} />
-          <Route path="ai-streaming" element={<AiStreamingPage />} />
           <Route path="find" element={<FindPage />} />
           <Route path="crypto-scanner" element={<FindPage initialTab="scanner" />} />
           <Route path="crypto/trending" element={<FindPage initialTab="trending" />} />
           <Route path="crypto/early-signals" element={<FindPage initialTab="signals" />} />
           <Route path="crypto/wallets" element={<FindPage initialTab="wallets" />} />
+          <Route path="build" element={<BuildHubPage />} />
+          <Route path="earn" element={<EarnShellPage />} />
+          <Route path="community" element={<CommunityShellPage />} />
+          <Route path="profile" element={<ProfileShellPage />} />
+          <Route path="marketplace" element={<GrowthHubPage initialTab="marketplace" />} />
+          <Route path="escrow" element={<GrowthHubPage initialTab="escrow" />} />
+          <Route path="courses" element={<CoursesPage />} />
+          <Route path="courses/:id" element={<CourseNotFoundPage />} />
+          <Route path="ai-tutor" element={<AiTutorPage />} />
+          <Route path="ai-streaming" element={<AiStreamingPage />} />
           <Route path="early-signals" element={<EarlySignalsDashboard />} />
           <Route path="token/:slug" element={<TokenDetailPage />} />
           <Route path="developers" element={<DeveloperPlatformPage />} />
@@ -105,11 +61,9 @@ function App() {
           <Route path="dapp-dashboard" element={<DappDashboardPage />} />
           <Route path="ai-agents" element={<AiAgentsPage />} />
           <Route path="growth-hub" element={<GrowthHubPage />} />
-          <Route path="earn" element={<EarnPage />} />
           <Route path="pricing" element={<PricingPage />} />
           <Route path="tokens" element={<Navigate to="/earn" replace />} />
           <Route path="affiliates" element={<Navigate to="/earn" replace />} />
-          <Route path="community" element={<CommunityPage />} />
           <Route path="blog" element={<BlogPage />} />
           <Route path="about" element={<AboutPage />} />
           <Route path="faq" element={<FaqPage />} />
@@ -119,104 +73,12 @@ function App() {
           <Route path="privacy" element={<PrivacyPage />} />
           <Route path="terms" element={<TermsPage />} />
           <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="profile" element={<ProfilePage />} />
           <Route path="forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="welcome" element={<HomePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>
-  );
-}
-
-function Layout() {
-  const [user, setUser] = useState(() => getStoredUser());
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const u = await fetchMe();
-      if (!cancelled) setUser(u);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  async function handleLogout() {
-    await logoutApi();
-    setUser(null);
-    navigate("/");
-  }
-
-  return (
-    <div className="site-shell">
-      <header className="navbar">
-        <div className="container navbar-content">
-          <Link to="/" className="brand">
-            <span className="brand-bolt">⚡</span>
-            CHRISCCWEB
-          </Link>
-          <nav className="nav-links">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.label}
-                to={item.to}
-                className={({ isActive }) =>
-                  `nav-link${isActive ? " active" : ""}`
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-          <div className="nav-cta">
-            {user ? (
-              <>
-                <span className="nav-link" style={{ cursor: "default", opacity: 0.9 }}>
-                  {user.displayName}
-                </span>
-                <NavLink to="/dashboard" className="nav-link">
-                  Dashboard
-                </NavLink>
-                <NavLink to="/profile" className="nav-link">
-                  Profile
-                </NavLink>
-                <button type="button" className="btn btn-outline" onClick={handleLogout}>
-                  Log out
-                </button>
-              </>
-            ) : (
-              <>
-                <NavLink to="/login" className="nav-link">
-                  Login
-                </NavLink>
-                <Link to="/signup" className="btn btn-primary">
-                  Get Started
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <main className="main-content">
-        <div className="container">
-          <Outlet context={{ user, setUser }} />
-        </div>
-      </main>
-
-      <footer className="footer">
-        <div className="container">
-          © {new Date().getFullYear()} Chrisccwebfoundation ·{" "}
-          <Link to="/contact">Contact</Link> · <Link to="/dashboard">Dashboard</Link>
-          {" · "}
-          <Link to="/privacy">Privacy</Link>
-          {" · "}
-          <Link to="/terms">Terms</Link>
-        </div>
-      </footer>
-    </div>
   );
 }
 
@@ -263,17 +125,17 @@ function HomePage() {
           <p>Crypto Safety Scanner, Early Signals Dashboard, Smart Money Tracking, and narrative detection.</p>
           <span className="pillar-link">View Intelligence →</span>
         </Link>
-        <Link to="/dapp-builder" className="pillar-card pillar-build">
+        <Link to="/build" className="pillar-card pillar-build">
           <div className="pillar-icon">🏗️</div>
           <h3>BUILD</h3>
           <p>DApp Builder, AI Agents, Business Automation Hub, and workflow operator system.</p>
           <span className="pillar-link">Start Building →</span>
         </Link>
-        <Link to="/growth-hub" className="pillar-card pillar-build" style={{ borderStyle: "dashed", opacity: 0.95 }}>
+        <Link to="/marketplace" className="pillar-card pillar-build" style={{ borderStyle: "dashed", opacity: 0.95 }}>
           <div className="pillar-icon">🌍</div>
-          <h3>GROWTH HUB</h3>
-          <p>Global marketing agent, marketplace, escrow monetization, and lead engine — organic-first.</p>
-          <span className="pillar-link">Open Growth Hub →</span>
+          <h3>MARKETPLACE</h3>
+          <p>Global marketing agent, business listings, escrow pay-on-delivery, and lead engine — organic-first.</p>
+          <span className="pillar-link">Open marketplace →</span>
         </Link>
         <Link to="/earn" className="pillar-card pillar-earn">
           <div className="pillar-icon">💰</div>
@@ -310,7 +172,7 @@ function CoursesPage() {
         </div>
       </header>
       <div className="course-grid">
-        {courses.map((course) => (
+        {CCWEB_COURSES.map((course) => (
           <article key={course.id} className="course-card">
             <span className="badge">{course.category}</span>
             <h3>{course.title}</h3>
@@ -1078,35 +940,6 @@ function AffiliatesPage() {
   return <Navigate to="/earn" replace />;
 }
 
-function CommunityPage() {
-  return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">Community</h1>
-        <p className="muted">Connect, collaborate, and grow with learners.</p>
-      </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>General Discussion</h3>
-          <p className="muted">8,400 members · 2.1K posts</p>
-        </article>
-        <article className="panel">
-          <h3>Crypto Trading</h3>
-          <p className="muted">5,200 members · 3.4K posts</p>
-        </article>
-        <article className="panel">
-          <h3>AI Projects</h3>
-          <p className="muted">3,100 members · 890 posts</p>
-        </article>
-        <article className="panel">
-          <h3>Study Groups</h3>
-          <p className="muted">2,800 members · 1.2K posts</p>
-        </article>
-      </div>
-    </section>
-  );
-}
-
 function BlogPage() {
   return (
     <section>
@@ -1193,38 +1026,6 @@ function FaqPage() {
         </ul>
       </article>
     </section>
-  );
-}
-
-function LoginPage() {
-  const { setUser } = useOutletContext();
-  return (
-    <AuthPage
-      mode="login"
-      title="Welcome Back"
-      subtitle="Sign in to continue learning"
-      action="Sign In"
-      prompt="Don't have an account?"
-      promptHref="/signup"
-      promptLabel="Sign Up"
-      setUser={setUser}
-    />
-  );
-}
-
-function SignupPage() {
-  const { setUser } = useOutletContext();
-  return (
-    <AuthPage
-      mode="signup"
-      title="Create Account"
-      subtitle="Start learning and earning today"
-      action="Create Account"
-      prompt="Already have an account?"
-      promptHref="/login"
-      promptLabel="Sign In"
-      setUser={setUser}
-    />
   );
 }
 
@@ -1319,112 +1120,6 @@ function ForgotPasswordPage() {
       {err && <p style={{ marginTop: "1rem", color: "#ff6b6b" }}>{err}</p>}
       <p className="muted" style={{ marginTop: "1rem" }}>
         <Link to="/login">Back to login</Link>
-      </p>
-    </section>
-  );
-}
-
-function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLabel, setUser }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
-
-  async function submit() {
-    setError(null);
-    setLoading(true);
-    try {
-      if (mode === "signup") {
-        const reg = await fetch("/api/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, displayName: displayName.trim() || undefined }),
-        });
-        const regData = await reg.json();
-        if (!reg.ok) throw new Error(regData.error || "Registration failed");
-      }
-      const loginRes = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await loginRes.json();
-      if (!loginRes.ok) throw new Error(data.error || "Authentication failed");
-      if (data.needsTwoFactor) {
-        throw new Error("This account has 2FA enabled. Use the full login flow with an authenticator code (coming in UI).");
-      }
-      const access = data.accessToken || data.token;
-      setSession(access, data.user, data.refreshToken);
-      setUser(data.user);
-      navigate("/dashboard");
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <section className="auth-card">
-      <h1 className="section-title">{title}</h1>
-      <p className="muted">{subtitle}</p>
-      {mode === "signup" && (
-        <div className="auth-row">
-          <label htmlFor="displayName">Display name</label>
-          <input
-            id="displayName"
-            type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Your name"
-          />
-        </div>
-      )}
-      <div className="auth-row">
-        <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-        />
-      </div>
-      <div className="auth-row">
-        <label htmlFor="password">Password</label>
-        <input
-          id="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="min 8 characters"
-        />
-      </div>
-      {error && <p style={{ color: "#ff6b6b", marginBottom: "0.75rem" }}>{error}</p>}
-      <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
-        <button type="button" className="btn btn-primary" disabled={loading} onClick={submit}>
-          {loading ? "Please wait…" : action}
-        </button>
-        <button type="button" className="btn btn-outline" disabled>
-          Continue with Google (coming soon)
-        </button>
-      </div>
-      <p className="muted" style={{ marginTop: "1rem" }}>
-        {prompt} <Link to={promptHref}>{promptLabel}</Link>
-        {mode === "login" && (
-          <>
-            {" · "}
-            <Link to="/forgot-password">Forgot password?</Link>
-          </>
-        )}
-      </p>
-      <p className="muted" style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>
-        JWT access tokens (bcrypt passwords, optional 2FA, wallet sign-in). Set <code>AUTH_JWT_SECRET</code> (32+ chars)
-        in production. Refresh token is httpOnly cookie when same-origin; for SPA dev from Vite use{" "}
-        <code>AUTH_REFRESH_IN_BODY=1</code>.
       </p>
     </section>
   );
@@ -1534,86 +1229,6 @@ function DashboardPage() {
           </Link>
         </div>
       </section>
-    </section>
-  );
-}
-
-function ProfilePage() {
-  const { user, setUser } = useOutletContext();
-  const [displayName, setDisplayName] = useState(user?.displayName || "");
-  const [pushEnabled, setPushEnabled] = useState(user?.pushEnabled !== false);
-  const [msg, setMsg] = useState(null);
-  const [err, setErr] = useState(null);
-
-  useEffect(() => {
-    if (user) {
-      setDisplayName(user.displayName || "");
-      setPushEnabled(user.pushEnabled !== false);
-    }
-  }, [user]);
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  async function save() {
-    setErr(null);
-    setMsg(null);
-    const token = getSessionToken();
-    try {
-      const res = await fetch("/api/users", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          userId: user.id,
-          displayName: displayName.trim(),
-          pushEnabled,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Save failed");
-      setUser(data);
-      setSession(token, data, undefined);
-      setMsg("Profile saved.");
-    } catch (e) {
-      setErr(e.message);
-    }
-  }
-
-  return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">Profile</h1>
-        <p className="muted">Signed in as {user.email || user.id}</p>
-      </header>
-      <article className="panel" style={{ maxWidth: 480 }}>
-        <div className="auth-row">
-          <label htmlFor="p-name">Display name</label>
-          <input
-            id="p-name"
-            type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-          />
-        </div>
-        <div className="auth-row" style={{ alignItems: "center" }}>
-          <label htmlFor="p-push">Push notifications</label>
-          <input
-            id="p-push"
-            type="checkbox"
-            checked={pushEnabled}
-            onChange={(e) => setPushEnabled(e.target.checked)}
-          />
-        </div>
-        {err && <p style={{ color: "#ff6b6b" }}>{err}</p>}
-        {msg && <p className="muted">{msg}</p>}
-        <button type="button" className="btn btn-primary" style={{ marginTop: "0.75rem" }} onClick={save}>
-          Save changes
-        </button>
-      </article>
     </section>
   );
 }
@@ -2351,74 +1966,6 @@ function AiAgentsPage() {
           <div className="panel"><h4>Execute</h4><p className="muted">Runs workflows autonomously with error handling and retries.</p></div>
           <div className="panel"><h4>Optimize</h4><p className="muted">Monitors performance metrics and improves over time.</p></div>
         </div>
-      </section>
-    </section>
-  );
-}
-
-function EarnPage() {
-  return (
-    <section>
-      <header className="page-header">
-        <span className="pill">EARN — Revenue Streams</span>
-        <h1 className="section-title">Earn With CCWEB</h1>
-        <p className="muted">
-          Multiple revenue streams powered by real utility — no platform token required.
-          Earn through skills, referrals, and participation.
-        </p>
-      </header>
-
-      <div className="card-grid">
-        <article className="panel">
-          <h3>🎓 Affiliate Program</h3>
-          <p className="muted">30% recurring commissions on all referred subscriptions. Share your unique link and earn passive income.</p>
-          <ul className="list">
-            <li>Recurring monthly commissions</li>
-            <li>Real-time tracking dashboard</li>
-            <li>Payout in USDC or fiat</li>
-          </ul>
-          <Link to="/signup" className="btn btn-primary" style={{ marginTop: "0.6rem" }}>Become an Affiliate</Link>
-        </article>
-        <article className="panel">
-          <h3>📡 Streaming Revenue</h3>
-          <p className="muted">Create AI-powered live learning sessions and earn organic revenue share based on attendance and engagement.</p>
-          <ul className="list">
-            <li>63% creator revenue share</li>
-            <li>Watch-time weighted distribution</li>
-            <li>Payout via USDC settlement</li>
-          </ul>
-          <Link to="/ai-streaming" className="btn btn-outline" style={{ marginTop: "0.6rem" }}>Start Streaming</Link>
-        </article>
-        <article className="panel">
-          <h3>🏗️ Skill-Based Income</h3>
-          <p className="muted">Use the Business Engine to match your skills with real client needs. Get paid for completed work through secure escrow.</p>
-          <ul className="list">
-            <li>AI-matched opportunities</li>
-            <li>Secure escrow payments</li>
-            <li>Performance-based bonuses</li>
-          </ul>
-          <Link to="/growth-hub" className="btn btn-primary" style={{ marginTop: "0.6rem" }}>
-            Open Growth Hub
-          </Link>
-        </article>
-        <article className="panel">
-          <h3>🤖 Agent Rewards</h3>
-          <p className="muted">Deploy AI agents that generate value, optimize workflows, and earn based on measurable outcomes.</p>
-          <ul className="list">
-            <li>Revenue from agent operations</li>
-            <li>Performance-linked payouts</li>
-            <li>Scalable passive income</li>
-          </ul>
-          <Link to="/ai-agents" className="btn btn-outline" style={{ marginTop: "0.6rem" }}>Deploy Agents</Link>
-        </article>
-      </div>
-
-      <section className="panel" style={{ marginTop: "1.5rem" }}>
-        <h3>No Platform Token Required</h3>
-        <p className="muted">
-          All earnings are paid in external tokens (USDC, ETH) or fiat. CCWEB focuses on real utility and
-          measurable value — not token speculation. You earn by contributing real skills, content, and referrals.
-        </p>
       </section>
     </section>
   );

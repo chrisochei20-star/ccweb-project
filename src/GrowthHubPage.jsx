@@ -11,8 +11,12 @@ async function j(path, opts = {}) {
   return data;
 }
 
-export function GrowthHubPage() {
-  const [tab, setTab] = useState("overview");
+export function GrowthHubPage({ initialTab = "overview" } = {}) {
+  const [tab, setTab] = useState(initialTab);
+
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
   const [overview, setOverview] = useState(null);
   const [listings, setListings] = useState([]);
   const [orders, setOrders] = useState([]);

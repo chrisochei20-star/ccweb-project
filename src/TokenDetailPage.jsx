@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { apiUrl } from "./config/env";
 import {
   Bar,
   CartesianGrid,
@@ -53,7 +54,7 @@ export function TokenDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/intelligence/token/${encodeURIComponent(slug)}`);
+      const res = await fetch(apiUrl(`/api/intelligence/token/${encodeURIComponent(slug)}`));
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load token");
       setData(json);
@@ -82,14 +83,14 @@ export function TokenDetailPage() {
     try {
       if (data.tracking?.isTracked) {
         const res = await fetch(
-          `/api/intelligence/tracked-tokens/${encodeURIComponent(data.tracking.key)}`,
+          apiUrl(`/api/intelligence/tracked-tokens/${encodeURIComponent(data.tracking.key)}`),
           { method: "DELETE" }
         );
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Untrack failed");
         setTrackMsg("Removed from watchlist.");
       } else {
-        const res = await fetch("/api/intelligence/tracked-tokens", {
+        const res = await fetch(apiUrl("/api/intelligence/tracked-tokens"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

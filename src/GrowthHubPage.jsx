@@ -1,8 +1,10 @@
 import { Link, useOutletContext } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { http } from "./api/http";
+import { apiUrl } from "./config/env";
 
 async function j(path, opts = {}) {
-  const res = await fetch(`/api/growth${path}`, {
+  const res = await fetch(apiUrl(`/api/growth${path}`), {
     headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
     ...opts,
   });
@@ -66,7 +68,9 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
       setCampaigns(cmp.campaigns || []);
       await loadOrders();
       if (user?.id) {
-        const leadRes = await fetch(`/api/growth/leads?businessId=${encodeURIComponent(user.id)}`).then((r) => r.json());
+        const leadRes = await fetch(apiUrl(`/api/growth/leads?businessId=${encodeURIComponent(user.id)}`)).then((r) =>
+          r.json()
+        );
         setLeads(leadRes.leads || []);
       } else {
         setLeads([]);

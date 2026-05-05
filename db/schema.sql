@@ -341,3 +341,38 @@ CREATE TABLE IF NOT EXISTS ccweb_metering_events (
 
 CREATE INDEX IF NOT EXISTS ccweb_metering_kind ON ccweb_metering_events (kind, created_at DESC);
 CREATE INDEX IF NOT EXISTS ccweb_metering_user ON ccweb_metering_events (user_id, created_at DESC) WHERE user_id IS NOT NULL;
+
+-- Beta testing: vanity URLs /invite/{code}, /u/{slug}, analytics
+CREATE TABLE IF NOT EXISTS ccweb_profile_slugs (
+  user_id TEXT PRIMARY KEY REFERENCES ccweb_auth_users(id) ON DELETE CASCADE,
+  slug TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_profile_slugs_slug_lower ON ccweb_profile_slugs (lower(slug));
+
+CREATE TABLE IF NOT EXISTS ccweb_beta_invites (
+  code TEXT PRIMARY KEY,
+  label TEXT,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ccweb_beta_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES ccweb_auth_users(id) ON DELETE SET NULL,
+  invite_code TEXT,
+  slug TEXT,
+  event_type TEXT NOT NULL DEFAULT 'page_view',
+  path TEXT,
+  feature_key TEXT,
+  user_agent TEXT,
+  ip_hash TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_beta_events_created ON ccweb_beta_events (created_at DESC);
+CREATE INDEX IF NOT EXISTS ccweb_beta_events_invite ON ccweb_beta_events (invite_code) WHERE invite_code IS NOT NULL;
+CREATE INDEX IF NOT EXISTS ccweb_beta_events_user ON ccweb_beta_events (user_id, created_at DESC) WHERE user_id IS NOT NULL;

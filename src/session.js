@@ -1,3 +1,7 @@
+import { API_BASE_URL } from "./config/env";
+
+const apiOrigin = API_BASE_URL || "";
+
 const TOKEN_KEY = "ccweb_session_token";
 const USER_KEY = "ccweb_user";
 const REFRESH_KEY = "ccweb_refresh_token";
@@ -37,7 +41,7 @@ export function clearSession() {
 export async function fetchMe() {
   const token = getSessionToken();
   if (!token) return null;
-  const res = await fetch("/api/auth/me", {
+  const res = await fetch(`${apiOrigin}/api/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
     credentials: "include",
   });
@@ -55,7 +59,7 @@ export async function logoutApi() {
   const refresh = getRefreshToken();
   if (token) {
     try {
-      await fetch("/api/auth/logout", {
+      await fetch(`${apiOrigin}/api/auth/logout`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         credentials: "include",

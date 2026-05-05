@@ -1,6 +1,7 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ShareActions } from "../components/ShareCard";
+import { apiUrl } from "../config/env";
 
 export function FindPage({ initialTab = "scanner" }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -44,7 +45,7 @@ export function FindPage({ initialTab = "scanner" }) {
       const params = new URLSearchParams();
       if (scanSymbol.trim()) params.set("token", scanSymbol.trim().toUpperCase());
       if (scanAddress.trim()) params.set("address", scanAddress.trim());
-      const res = await fetch(`/api/scan-token?${params.toString()}`);
+      const res = await fetch(apiUrl(`/api/scan-token?${params.toString()}`));
       const data = await res.json();
       setScanResult(data);
     } catch {
@@ -56,7 +57,7 @@ export function FindPage({ initialTab = "scanner" }) {
   async function loadSignals() {
     setLoadingSignals(true);
     try {
-      const res = await fetch("/api/find/signals");
+      const res = await fetch(apiUrl("/api/find/signals"));
       const data = await res.json();
       setSignals(data.signals || []);
     } catch {
@@ -68,7 +69,7 @@ export function FindPage({ initialTab = "scanner" }) {
   async function loadSmartMoney() {
     setLoadingSm(true);
     try {
-      const res = await fetch("/api/find/smart-money");
+      const res = await fetch(apiUrl("/api/find/smart-money"));
       const data = await res.json();
       setSmartMoney(data);
     } catch {
@@ -80,7 +81,7 @@ export function FindPage({ initialTab = "scanner" }) {
   async function loadDiscover() {
     setLoadingDiscover(true);
     try {
-      const res = await fetch("/api/discover-tokens");
+      const res = await fetch(apiUrl("/api/discover-tokens"));
       const data = await res.json();
       setDiscover(data);
     } catch {
@@ -92,7 +93,7 @@ export function FindPage({ initialTab = "scanner" }) {
   async function loadAlerts() {
     setLoadingAlerts(true);
     try {
-      const res = await fetch("/api/crypto/alerts");
+      const res = await fetch(apiUrl("/api/crypto/alerts"));
       const data = await res.json();
       setAlerts(data);
     } catch {
@@ -107,7 +108,7 @@ export function FindPage({ initialTab = "scanner" }) {
     setWalletScan(null);
     setWalletTrackMsg(null);
     try {
-      const res = await fetch(`/api/scan-wallet?address=${encodeURIComponent(walletInput.trim())}`);
+      const res = await fetch(apiUrl(`/api/scan-wallet?address=${encodeURIComponent(walletInput.trim())}`));
       const data = await res.json();
       setWalletScan(data.error ? null : data);
     } catch {
@@ -120,7 +121,7 @@ export function FindPage({ initialTab = "scanner" }) {
     if (!walletInput.trim()) return;
     setWalletTrackMsg(null);
     try {
-      const res = await fetch("/api/track-wallet", {
+      const res = await fetch(apiUrl("/api/track-wallet"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -21,6 +21,8 @@ import { ProfileShellPage } from "./pages/ProfileShellPage";
 import { getSessionToken, setSession } from "./session";
 import { LearningAdminPage } from "./learning/LearningAdminPage";
 import { LearningSessionPage } from "./learning/LearningSessionPage";
+import { BetaInvitePage, BetaTestUserPage, BetaUserSlugPage } from "./pages/BetaPages";
+import { apiUrl } from "./config/env";
 
 const FindPage = lazy(() => import("./pages/FindPage").then((m) => ({ default: m.FindPage })));
 const EarlySignalsDashboard = lazy(() =>
@@ -53,6 +55,9 @@ function App() {
       <Suspense fallback={<RouteFallback />}>
         <Routes>
         <Route element={<MobileLayout />}>
+          <Route path="invite/:code" element={<BetaInvitePage />} />
+          <Route path="u/:slug" element={<BetaUserSlugPage />} />
+          <Route path="test/:userId" element={<BetaTestUserPage />} />
           <Route index element={<MobileDashboardPage />} />
           <Route path="learn" element={<LearnShellPage />} />
           <Route path="learn/session/:roomId" element={<LearningSessionPage />} />
@@ -381,7 +386,7 @@ function AiStreamingPage() {
 
   async function loadRooms() {
     try {
-      const res = await fetch("/api/streaming/rooms");
+      const res = await fetch(apiUrl("/api/streaming/rooms"));
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Could not load rooms.");
@@ -411,7 +416,7 @@ function AiStreamingPage() {
     setError("");
     try {
       const expectedGross = Number(payload.expectedAudience) * Number(payload.expectedArppuUsd);
-      const res = await fetch("/api/streaming/rooms", {
+      const res = await fetch(apiUrl("/api/streaming/rooms"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -449,7 +454,7 @@ function AiStreamingPage() {
         throw new Error(roomData.error || "Could not create room.");
       }
 
-      const payoutRes = await fetch("/api/streaming/payouts", {
+      const payoutRes = await fetch(apiUrl("/api/streaming/payouts"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -484,7 +489,7 @@ function AiStreamingPage() {
     setJoinLoading(true);
     setJoinError("");
     try {
-      const res = await fetch(`/api/streaming/rooms/${selectedRoomId}/attendance`, {
+      const res = await fetch(apiUrl(`/api/streaming/rooms/${selectedRoomId}/attendance`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -520,7 +525,7 @@ function AiStreamingPage() {
     setJoinLoading(true);
     setJoinError("");
     try {
-      const res = await fetch(`/api/streaming/rooms/${selectedRoomId}/attendance`, {
+      const res = await fetch(apiUrl(`/api/streaming/rooms/${selectedRoomId}/attendance`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -555,7 +560,7 @@ function AiStreamingPage() {
     setJoinLoading(true);
     setJoinError("");
     try {
-      const res = await fetch(`/api/streaming/rooms/${selectedRoomId}/finish`, {
+      const res = await fetch(apiUrl(`/api/streaming/rooms/${selectedRoomId}/finish`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1061,7 +1066,7 @@ function ForgotPasswordPage() {
     setErr(null);
     setMsg(null);
     try {
-      const res = await fetch("/api/auth/password/request", {
+      const res = await fetch(apiUrl("/api/auth/password/request"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -1080,7 +1085,7 @@ function ForgotPasswordPage() {
     setErr(null);
     setMsg(null);
     try {
-      const res = await fetch("/api/auth/password/reset", {
+      const res = await fetch(apiUrl("/api/auth/password/reset"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, token, newPassword: pw }),
@@ -1294,7 +1299,12 @@ function AiAgentsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/build/agents").then((r) => r.json()).then((d) => { setAgents(d.agents || []); setLoading(false); });
+    fetch(apiUrl("/api/build/agents"))
+      .then((r) => r.json())
+      .then((d) => {
+        setAgents(d.agents || []);
+        setLoading(false);
+      });
   }, []);
 
   return (
@@ -1354,9 +1364,9 @@ function DappDashboardPage() {
     setLoading(true);
     try {
       const [statsRes, deploymentsRes, txRes] = await Promise.all([
-        fetch("/api/dapp/dashboard").then((r) => r.json()),
-        fetch("/api/dapp/deployments").then((r) => r.json()),
-        fetch("/api/dapp/transactions").then((r) => r.json()),
+        fetch(apiUrl("/api/dapp/dashboard")).then((r) => r.json()),
+        fetch(apiUrl("/api/dapp/deployments")).then((r) => r.json()),
+        fetch(apiUrl("/api/dapp/transactions")).then((r) => r.json()),
       ]);
       setStats(statsRes);
       setDeployments(deploymentsRes.deployments || []);

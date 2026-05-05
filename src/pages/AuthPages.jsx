@@ -1,6 +1,6 @@
 import { Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useOutletContext } from "react-router-dom";
+import { Link, useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 import { BrowserProvider, getAddress } from "ethers";
 import { setSession } from "../session";
 
@@ -59,6 +59,10 @@ export function SignupPage() {
 }
 
 function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLabel, setUser }) {
+  const [searchParams] = useSearchParams();
+  const refFromUrl = (searchParams.get("ref") || "").trim();
+  const utmSource = (searchParams.get("utm_source") || "").trim();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -89,7 +93,11 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
-                body: JSON.stringify({ idToken }),
+                body: JSON.stringify({
+                  idToken,
+                  referralCode: refFromUrl || undefined,
+                  utm_source: utmSource || undefined,
+                }),
               });
               const data = await r.json();
               if (!r.ok) throw new Error(data.error || "Google sign-in failed");
@@ -131,7 +139,13 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
         const reg = await fetch("/api/auth/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, displayName: displayName.trim() || undefined }),
+          body: JSON.stringify({
+            email,
+            password,
+            displayName: displayName.trim() || undefined,
+            referralCode: refFromUrl || undefined,
+            utm_source: utmSource || undefined,
+          }),
         });
         const regData = await reg.json();
         if (!reg.ok) throw new Error(regData.error || "Registration failed");
@@ -207,7 +221,14 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ address: getAddress(address), message, signature, chainType: "evm" }),
+        body: JSON.stringify({
+          address: getAddress(address),
+          message,
+          signature,
+          chainType: "evm",
+          referralCode: refFromUrl || undefined,
+          utm_source: utmSource || undefined,
+        }),
       });
       const data = await verifyRes.json();
       if (!verifyRes.ok) throw new Error(data.error || "Wallet verification failed");

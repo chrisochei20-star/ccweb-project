@@ -1,11 +1,36 @@
 import { ArrowRight, Bot, Gift, Sparkles, TrendingUp } from "lucide-react";
+import { useEffect } from "react";
 import { useMemo } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import { useCachedFetch } from "../hooks/useCachedFetch";
+import { http } from "../api/http";
+import { fetchMe } from "../session";
 
 export function MobileDashboardPage() {
   const { user } = useOutletContext() || {};
   const canAnalytics = Boolean(user);
+
+  useEffect(() => {
+    if (!user) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        await http.post("/api/v1/growth/daily", {});
+      } catch {
+        /* optional */
+      }
+      if (!cancelled) {
+        try {
+          await fetchMe();
+        } catch {
+          /* ignore */
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
   const { data: analytics, loading, error, refresh } = useCachedFetch(
     canAnalytics ? "/api/v1/analytics/user" : null,
     { enabled: canAnalytics }

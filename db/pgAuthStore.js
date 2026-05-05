@@ -35,6 +35,8 @@ function fromRow(r) {
     oauthProvider: r.oauth_provider || null,
     oauthSub: r.oauth_sub || null,
     appleSub: r.apple_sub || null,
+    referredByUserId: r.referred_by_user_id || null,
+    acquisitionSource: r.acquisition_source || null,
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : undefined,
     updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : undefined,
   };
@@ -62,6 +64,8 @@ function toRow(u) {
     oauth_provider: u.oauthProvider || null,
     oauth_sub: u.oauthSub || null,
     apple_sub: u.appleSub || null,
+    referred_by_user_id: u.referredByUserId || null,
+    acquisition_source: u.acquisitionSource || null,
   };
 }
 
@@ -119,7 +123,8 @@ async function saveUser(row) {
       totp_secret_enc = $7, totp_enabled = $8, backup_codes_hashed = $9::jsonb,
       refresh_family_id = $10, refresh_token_hash = $11, failed_login_attempts = $12, locked_until = $13,
       email_verify_token = $14, email_verify_expires = $15, password_reset_token = $16, password_reset_expires = $17,
-      oauth_provider = $18, oauth_sub = $19, apple_sub = $20, updated_at = NOW()
+      oauth_provider = $18, oauth_sub = $19, apple_sub = $20,
+      referred_by_user_id = $21, acquisition_source = $22, updated_at = NOW()
      WHERE id = $1`,
     [
       t.id,
@@ -142,6 +147,8 @@ async function saveUser(row) {
       t.oauth_provider,
       t.oauth_sub,
       t.apple_sub,
+      t.referred_by_user_id,
+      t.acquisition_source,
     ]
   );
 }
@@ -169,6 +176,8 @@ async function createUser(row) {
     oauthProvider: row.oauthProvider || null,
     oauthSub: row.oauthSub || null,
     appleSub: row.appleSub || null,
+    referredByUserId: row.referredByUserId || null,
+    acquisitionSource: row.acquisitionSource || null,
     createdAt: row.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -179,9 +188,9 @@ async function createUser(row) {
         id, email, email_verified, password_hash, wallet_evm, wallet_sol, totp_secret_enc, totp_enabled, backup_codes_hashed,
         refresh_family_id, refresh_token_hash, failed_login_attempts, locked_until,
         email_verify_token, email_verify_expires, password_reset_token, password_reset_expires,
-        oauth_provider, oauth_sub, apple_sub, created_at, updated_at
+        oauth_provider, oauth_sub, apple_sub, referred_by_user_id, acquisition_source, created_at, updated_at
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NOW(),NOW()
+        $1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,NOW(),NOW()
       )`,
       [
         t.id,
@@ -204,6 +213,8 @@ async function createUser(row) {
         t.oauth_provider,
         t.oauth_sub,
         t.apple_sub,
+        t.referred_by_user_id,
+        t.acquisition_source,
       ]
     );
   } catch (e) {

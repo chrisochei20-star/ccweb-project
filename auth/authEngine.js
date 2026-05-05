@@ -307,6 +307,8 @@ async function walletVerify(ccwebUsers, buildUserProfile, body) {
   const { message, signature } = body;
   const address = body.address;
   const publicKeyBase58 = body.publicKeyBase58;
+  const referralCode = body.referralCode || body.ref;
+  const acquisitionSource = body.utm_source || body.acquisitionSource;
 
   let walletAddr;
   if (chainType === "solana") {
@@ -371,13 +373,26 @@ async function walletVerify(ccwebUsers, buildUserProfile, body) {
   }
 
   const user = ccwebUsers.get(row.id);
+  try {
+    const { applyReferralAttribution } = require("../db/referralAttribution");
+    const growthEngine = require("../db/persistenceGrowthEngine");
+    await applyReferralAttribution(row.id, { referralCode, acquisitionSource });
+    await growthEngine.ensureReferralCode(row.id);
+    await growthEngine.onUserLogin(row.id);
+  } catch {
+    /* non-fatal */
+  }
   return await issueTokenPair(row, user);
 }
 
 /**
  * Google / Apple Sign in with ID token (OIDC). Creates or links user; email marked verified from IdP.
  */
-async function oauthSignIn(ccwebUsers, buildUserProfile, { provider, email, oauthSub, displayName, appleSub }) {
+async function oauthSignIn(
+  ccwebUsers,
+  buildUserProfile,
+  { provider, email, oauthSub, displayName, appleSub, referralCode, acquisitionSource }
+) {
   const prov = (provider || "").toLowerCase();
   if (prov !== "google" && prov !== "apple") return { error: "Unsupported OAuth provider." };
   const sub = String(oauthSub || "").trim();
@@ -457,6 +472,16 @@ async function oauthSignIn(ccwebUsers, buildUserProfile, { provider, email, oaut
   } else if (displayName) {
     user = { ...user, displayName: displayName.trim() };
     ccwebUsers.set(row.id, user);
+  }
+
+  try {
+    const { applyReferralAttribution } = require("../db/referralAttribution");
+    const growthEngine = require("../db/persistenceGrowthEngine");
+    await applyReferralAttribution(row.id, { referralCode, acquisitionSource });
+    await growthEngine.ensureReferralCode(row.id);
+    await growthEngine.onUserLogin(row.id);
+  } catch {
+    /* non-fatal */
   }
 
   return await issueTokenPair(row, user);

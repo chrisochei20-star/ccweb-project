@@ -124,6 +124,16 @@ function mountAt(app, basePath) {
       const { ccwebUsers, buildUserProfile, sanitizeUser } = getDeps(req);
       const out = await authEngine.registerUser(ccwebUsers, buildUserProfile, req.body || {});
       if (out.error) return res.status(400).json({ error: out.error });
+      if (out.user?.id) {
+        try {
+          const { applyReferralAttribution } = require("../db/referralAttribution");
+          const growthEngine = require("../db/persistenceGrowthEngine");
+          await applyReferralAttribution(out.user.id, req.body || {});
+          await growthEngine.ensureReferralCode(out.user.id);
+        } catch {
+          /* non-fatal */
+        }
+      }
       res.status(201).json({
         user: sanitizeUser(out.user),
         message: "Registered. Verify email for full account trust.",
@@ -152,6 +162,14 @@ function mountAt(app, basePath) {
           message: "Enter your authenticator code.",
         });
       }
+      if (out.user?.id) {
+        try {
+          const growthEngine = require("../db/persistenceGrowthEngine");
+          await growthEngine.onUserLogin(out.user.id);
+        } catch {
+          /* ignore */
+        }
+      }
       sendTokens(
         res,
         200,
@@ -179,6 +197,14 @@ function mountAt(app, basePath) {
         return res.status(429).json({ error: out.error });
       }
       if (out.error) return res.status(401).json({ error: out.error });
+      if (out.user?.id) {
+        try {
+          const growthEngine = require("../db/persistenceGrowthEngine");
+          await growthEngine.onUserLogin(out.user.id);
+        } catch {
+          /* ignore */
+        }
+      }
       sendTokens(
         res,
         200,
@@ -301,6 +327,8 @@ function mountAt(app, basePath) {
         email: g.email,
         oauthSub: g.sub,
         displayName: g.name,
+        referralCode: req.body?.referralCode || req.body?.ref,
+        acquisitionSource: req.body?.utm_source || req.body?.acquisitionSource,
       });
       if (out.error) return res.status(400).json({ error: out.error });
       sendTokens(
@@ -337,6 +365,8 @@ function mountAt(app, basePath) {
         oauthSub: a.sub,
         appleSub: a.sub,
         displayName: req.body?.displayName,
+        referralCode: req.body?.referralCode || req.body?.ref,
+        acquisitionSource: req.body?.utm_source || req.body?.acquisitionSource,
       });
       if (out.error) return res.status(400).json({ error: out.error });
       sendTokens(

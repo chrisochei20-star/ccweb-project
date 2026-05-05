@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
 import { useCachedFetch } from "../hooks/useCachedFetch";
+import { GrowthLoopCard } from "../components/GrowthLoopCard";
+import { ShareActions } from "../components/ShareCard";
 
 export function EarnShellPage() {
   const { user } = useOutletContext() || {};
@@ -10,6 +12,11 @@ export function EarnShellPage() {
     user ? "/api/v1/analytics/user" : null,
     { enabled: Boolean(user), ttlMs: 60_000 }
   );
+
+  const { data: lb, loading: lbLoading } = useCachedFetch(user ? "/api/v1/growth/leaderboards?limit=15" : null, {
+    enabled: Boolean(user),
+    ttlMs: 120_000,
+  });
 
   const summary = useMemo(() => {
     if (!analytics?.postgres || !analytics.profile) return null;
@@ -24,22 +31,59 @@ export function EarnShellPage() {
     };
   }, [analytics]);
 
+  const growth = analytics?.growth;
+
+  const earningsSharePayload = useMemo(
+    () => ({
+      headline:
+        summary?.xp != null
+          ? `${summary.xp} XP · $${summary.credits ?? "0"} credits`
+          : "Building on CCWEB",
+    }),
+    [summary]
+  );
+
   return (
     <div className="mx-auto max-w-3xl space-y-5 px-3 pb-6 pt-3 md:max-w-5xl">
       <header>
         <p className="text-xs font-semibold uppercase tracking-widest text-ccweb-green">Earn</p>
         <h1 className="mt-1 text-2xl font-bold text-white md:text-3xl">Revenue &amp; referrals</h1>
         <p className="mt-1 max-w-2xl text-sm text-ccweb-muted">
-          Affiliate-style growth, AI streaming payouts, and escrow-backed client work — grounded in real API data where Postgres is enabled.
+          Credits, XP, invites, and leaderboards — tied to real Postgres rows when the API is connected.
         </p>
       </header>
 
       {!user && (
         <div className="ccweb-glass rounded-2xl p-5">
-          <p className="text-sm text-ccweb-muted">Sign in to load your credits, XP, and marketplace orders.</p>
+          <p className="text-sm text-ccweb-muted">Sign in to load your credits, XP, invite link, and marketplace orders.</p>
           <Link to="/login" className="mt-3 inline-block ccweb-gradient-btn text-sm">
             Sign in
           </Link>
+        </div>
+      )}
+
+      {user && growth && (
+        <GrowthLoopCard
+          referralLink={growth.referralLink}
+          referralCode={growth.referralCode}
+          invitedCount={growth.invitedCount}
+          convertedCount={growth.convertedCount}
+          conversionRate={growth.conversionRate}
+          badges={growth.badges}
+          streak={growth.streak}
+          level={growth.level}
+          xp={growth.profileXp ?? summary?.xp}
+          rewardHint={growth.rewardHint}
+        />
+      )}
+
+      {user && growth && (
+        <div className="ccweb-glass rounded-2xl p-5">
+          <h3 className="text-sm font-semibold text-white">Share your progress</h3>
+          <p className="mt-1 text-xs text-ccweb-muted">One tap — no spammy defaults; you edit before posting.</p>
+          <div className="mt-3">
+            <ShareActions kind="earn_snapshot" payload={earningsSharePayload} />
+          </div>
         </div>
       )}
 
@@ -55,7 +99,7 @@ export function EarnShellPage() {
           {error && <p className="mt-3 text-sm text-rose-300">{error}</p>}
           {!loading && analytics && !analytics.postgres && (
             <p className="mt-3 text-sm text-amber-200/90">
-              Connect <code className="rounded bg-black/30 px-1">DATABASE_URL</code> to sync credits, subscriptions, and order lines shown here.
+              Connect <code className="rounded bg-black/30 px-1">DATABASE_URL</code> to sync credits, subscriptions, referral codes, and order lines.
             </p>
           )}
           {summary && (
@@ -105,15 +149,65 @@ export function EarnShellPage() {
         </section>
       )}
 
+      {user && lb && (
+        <section className="ccweb-glass rounded-2xl p-5">
+          <h2 className="text-lg font-semibold text-white">Leaderboards</h2>
+          <p className="mt-1 text-xs text-ccweb-muted">
+            {lbLoading ? "Loading ranks…" : "Top learners (XP), credit balances, and referrers — anonymized IDs."}
+          </p>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div>
+              <p className="text-xs font-medium text-ccweb-muted">Top XP</p>
+              <ol className="mt-2 space-y-1 text-xs text-ccweb-muted">
+                {(lb.topXp || []).slice(0, 8).map((r, i) => (
+                  <li key={r.userId} className="flex justify-between gap-2">
+                    <span>
+                      #{i + 1} {r.userId.slice(0, 10)}…
+                    </span>
+                    <span className="text-white">{r.xp}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-ccweb-muted">Top credits</p>
+              <ol className="mt-2 space-y-1 text-xs text-ccweb-muted">
+                {(lb.topCredits || []).slice(0, 8).map((r, i) => (
+                  <li key={r.userId} className="flex justify-between gap-2">
+                    <span>
+                      #{i + 1} {r.userId.slice(0, 10)}…
+                    </span>
+                    <span className="text-white">${(r.creditsCents / 100).toFixed(2)}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-ccweb-muted">Top referrers</p>
+              <ol className="mt-2 space-y-1 text-xs text-ccweb-muted">
+                {(lb.topReferrers || []).slice(0, 8).map((r, i) => (
+                  <li key={r.userId} className="flex justify-between gap-2">
+                    <span>
+                      #{i + 1} {r.userId.slice(0, 10)}…
+                    </span>
+                    <span className="text-white">{r.referrals}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="grid gap-4 sm:grid-cols-2">
         <div className="ccweb-glass rounded-2xl p-5">
           <Share2 className="h-6 w-6 text-ccweb-cyan" />
-          <h3 className="mt-3 font-semibold text-white">Referral program</h3>
+          <h3 className="mt-3 font-semibold text-white">Invite loop</h3>
           <p className="mt-2 text-sm text-ccweb-muted">
-            Share CCWEB with builders and learners. Track recurring commissions from your referral dashboard when billing is connected.
+            Your referral link lives above when signed in with Postgres. Friends who join and engage unlock bonus credits for both sides.
           </p>
           <Link to="/signup" className="mt-4 inline-block text-sm font-medium text-ccweb-cyan hover:underline">
-            Get your invite link →
+            Preview signup →
           </Link>
         </div>
         <div className="ccweb-glass rounded-2xl p-5">

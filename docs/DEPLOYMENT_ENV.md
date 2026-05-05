@@ -4,6 +4,8 @@ Use **`.env.production.example`** as the checklist for real hosts. Copy to `.env
 
 **Step-by-step cloud deploy:** see [LIVE_DEPLOYMENT.md](./LIVE_DEPLOYMENT.md) and repo root **`render.yaml`** (Render Blueprint for the API).
 
+**Repo layout (Render + Vercel from one tree):** [PROJECT_LAYOUT.md](./PROJECT_LAYOUT.md).
+
 ## Split frontend + API
 
 | Variable | Where | Purpose |

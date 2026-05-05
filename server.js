@@ -3974,9 +3974,15 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (pathname === "/health") {
+  if (pathname === "/health" || pathname === "/api/health") {
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ status: "ok" }));
+    res.end(
+      JSON.stringify({
+        status: "ok",
+        message: "CCWEB API is running",
+        service: "ccweb-api",
+      })
+    );
     return;
   }
 

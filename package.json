@@ -9,6 +9,7 @@
     "dev": "vite",
     "dev:api": "node server.js",
     "build": "vite build",
+    "build:client": "vite build",
     "preview": "vite preview",
     "start": "node server.js",
     "test": "vitest run",

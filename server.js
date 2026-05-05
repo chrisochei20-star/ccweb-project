@@ -4,6 +4,7 @@ const fs = require("fs/promises");
 const path = require("path");
 const { URL } = require("url");
 const cryptoSafety = require("./cryptoSafety");
+const liveIntel = require("./intel/liveCryptoIntel");
 const { createIntelligenceApp } = require("./intelligenceExpress");
 const { createDeveloperApp } = require("./developerExpress");
 const developerPlatform = require("./developerPlatform");
@@ -17,6 +18,7 @@ const { getPool } = require("./db/pool");
 const pgGrowth = require("./db/persistenceGrowth");
 const learningPg = require("./db/persistenceLearning");
 const { migrate } = require("./db/migrate");
+const { validateOrExit } = require("./productionGate");
 const { logger } = require("./logging/logger");
 const { checkApiRateLimit } = require("./security/apiRateLimit");
 const { createSocialApp } = require("./social/socialRouter");
@@ -3485,7 +3487,7 @@ async function handleDappRetryDeployment(req, res) {
 
 // ─── FIND Pillar: Crypto Safety Scanner, Alpha Engine, On-chain Intel ───
 
-function handleCryptoScan(requestUrl, res) {
+async function handleCryptoScan(requestUrl, res) {
   const token = (requestUrl.searchParams.get("token") || "").toUpperCase().trim();
   const address = (requestUrl.searchParams.get("address") || "").trim();
 
@@ -3494,27 +3496,40 @@ function handleCryptoScan(requestUrl, res) {
     return;
   }
 
-  sendJson(res, 200, cryptoSafety.buildTokenScanFromQuery(token, address));
+  try {
+    const scan = await liveIntel.buildTokenScan(token, address);
+    sendJson(res, 200, scan);
+  } catch (e) {
+    sendJson(res, e.status || 400, { error: e.message || "Scan failed" });
+  }
 }
 
-function handleEarlySignals(res) {
-  const feed = cryptoSafety.getIntelligenceFeed();
-  sendJson(res, 200, {
-    count: feed.signals.length,
-    signals: feed.signals,
-    updatedAt: feed.updatedAt,
-    disclaimer: feed.disclaimer,
-  });
+async function handleEarlySignals(res) {
+  try {
+    const feed = await liveIntel.getIntelligenceFeed();
+    sendJson(res, 200, {
+      count: feed.signals.length,
+      signals: feed.signals,
+      updatedAt: feed.updatedAt,
+      disclaimer: feed.disclaimer,
+    });
+  } catch (e) {
+    sendJson(res, 500, { error: e.message || "Feed failed" });
+  }
 }
 
-function handleSmartMoney(res) {
-  const feed = cryptoSafety.getIntelligenceFeed();
-  sendJson(res, 200, {
-    wallets: feed.smartMoney.wallets,
-    trends: feed.smartMoney.trends,
-    updatedAt: feed.updatedAt,
-    disclaimer: feed.disclaimer,
-  });
+async function handleSmartMoney(res) {
+  try {
+    const feed = await liveIntel.getIntelligenceFeed();
+    sendJson(res, 200, {
+      wallets: feed.smartMoney.wallets,
+      trends: feed.smartMoney.trends,
+      updatedAt: feed.updatedAt,
+      disclaimer: feed.disclaimer,
+    });
+  } catch (e) {
+    sendJson(res, 500, { error: e.message || "Smart money failed" });
+  }
 }
 
 async function handleScanTokenPost(req, res) {
@@ -3533,7 +3548,12 @@ async function handleScanTokenPost(req, res) {
     return;
   }
 
-  sendJson(res, 200, cryptoSafety.buildTokenScanFromQuery(token, address));
+  try {
+    const scan = await liveIntel.buildTokenScan(token, address);
+    sendJson(res, 200, scan);
+  } catch (e) {
+    sendJson(res, e.status || 400, { error: e.message || "Scan failed" });
+  }
 }
 
 async function handleScanWalletPost(req, res) {
@@ -3546,28 +3566,50 @@ async function handleScanWalletPost(req, res) {
   }
 
   const address = body.address || body.wallet;
-  const result = cryptoSafety.buildWalletScan(address);
-  if (result.error) {
-    sendJson(res, 400, result);
-    return;
+  try {
+    const result = await liveIntel.buildWalletScan(address);
+    if (result.error) {
+      sendJson(res, 400, result);
+      return;
+    }
+    sendJson(res, 200, result);
+  } catch (e) {
+    sendJson(res, 500, { error: e.message || "Wallet scan failed" });
   }
-  sendJson(res, 200, result);
 }
 
-function handleScanWalletGet(requestUrl, res) {
+async function handleScanWalletGet(requestUrl, res) {
   const address = requestUrl.searchParams.get("address") || requestUrl.searchParams.get("wallet");
-  const result = cryptoSafety.buildWalletScan(address);
-  if (result.error) {
-    sendJson(res, 400, result);
-    return;
+  try {
+    const result = await liveIntel.buildWalletScan(address);
+    if (result.error) {
+      sendJson(res, 400, result);
+      return;
+    }
+    sendJson(res, 200, result);
+  } catch (e) {
+    sendJson(res, 500, { error: e.message || "Wallet scan failed" });
   }
-  sendJson(res, 200, result);
 }
 
-function handleDiscoverTokens(requestUrl, res) {
+async function handleDiscoverTokens(requestUrl, res) {
   const chain = requestUrl.searchParams.get("chain") || "";
   const minSignalStrength = requestUrl.searchParams.get("minSignalStrength");
-  sendJson(res, 200, cryptoSafety.discoverTokens({ chain, minSignalStrength }));
+  try {
+    const data = await liveIntel.discoverTokens({ chain, minSignalStrength });
+    sendJson(res, 200, data);
+  } catch (e) {
+    sendJson(res, 500, { error: e.message || "Discovery failed" });
+  }
+}
+
+async function handleCryptoAlerts(res) {
+  try {
+    const snap = liveIntel.getAlertsSnapshot();
+    sendJson(res, 200, snap);
+  } catch (e) {
+    sendJson(res, 500, { error: e.message || "Alerts failed" });
+  }
 }
 
 async function handleTrackWallet(req, res) {
@@ -3602,10 +3644,6 @@ function delegateAuth(req, res) {
   authApp(req, res, () => {
     sendJson(res, 404, { error: "Auth route not found." });
   });
-}
-
-function handleCryptoAlerts(res) {
-  sendJson(res, 200, cryptoSafety.getAlertsSnapshot());
 }
 
 // ─── BUILD Pillar: AI Agents ───
@@ -3667,6 +3705,8 @@ function delegateDeveloper(req, res) {
     sendJson(res, 404, { error: "Developer route not found." });
   });
 }
+
+validateOrExit();
 
 const server = http.createServer(async (req, res) => {
   const reqStart = Date.now();

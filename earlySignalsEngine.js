@@ -4,7 +4,7 @@
  */
 
 const crypto = require("crypto");
-const cryptoSafety = require("./cryptoSafety");
+const liveIntel = require("./intel/liveCryptoIntel");
 
 const DISCLAIMER =
   "Signals combine heuristics and optional third-party APIs. Scores are not predictions. Crypto is highly volatile. Verify independently. Not financial advice.";
@@ -79,23 +79,30 @@ function buildWarnings(riskScore, liquidityUsd, deployedHoursAgo) {
 function enrichDiscoverRow(row) {
   const seed = hashSeed(row.id + row.contractAddress);
   const keywords = row.narrativeKeywords || [];
-  const volumeScore = volumeActivityScore(row.volumeUsd24h);
+  const volumeUsd24h = Number(row.volumeUsd24h || 0);
+  const holderCount = row.holderCount != null ? Number(row.holderCount) : 1000;
+  const txCount24h = row.txCount24h != null ? Number(row.txCount24h) : 100;
+  const liquidityUsd = Number(row.liquidityUsd || 0);
+  const deployedHoursAgo =
+    row.deployedHoursAgo != null ? Number(row.deployedHoursAgo) : 720;
+
+  const volumeScore = volumeActivityScore(volumeUsd24h);
   const opportunityScore = computeOpportunityScore(
     {
-      volumeUsd24h: row.volumeUsd24h,
-      holderCount: row.holderCount,
-      txCount24h: row.txCount24h,
-      liquidityUsd: row.liquidityUsd,
+      volumeUsd24h,
+      holderCount,
+      txCount24h,
+      liquidityUsd,
       keywords,
     },
     seed
   );
   const contractVerifiedGuess =
-    row.network === "solana" ? null : row.symbol === "FROG2" ? false : seed % 7 !== 0;
+    row.network === "solana" ? null : seed % 7 !== 0;
   const riskScore = computeRiskScore(
     {
-      liquidityUsd: row.liquidityUsd,
-      deployedHoursAgo: row.deployedHoursAgo,
+      liquidityUsd,
+      deployedHoursAgo,
       contractVerifiedGuess,
     },
     seed
@@ -107,44 +114,49 @@ function enrichDiscoverRow(row) {
     symbol: row.symbol,
     chain: row.network,
     contractAddress: row.contractAddress,
-    detectedAt: new Date(Date.now() - row.deployedHoursAgo * 3600000).toISOString(),
-    deployedHoursAgo: row.deployedHoursAgo,
+    detectedAt: new Date(Date.now() - deployedHoursAgo * 3600000).toISOString(),
+    deployedHoursAgo,
     opportunityScore,
     riskScore,
     trendStatus: status,
-    liquidityUsd: row.liquidityUsd,
-    volumeUsd24h: row.volumeUsd24h,
-    holderCount: row.holderCount,
-    txCount24h: row.txCount24h,
+    liquidityUsd,
+    volumeUsd24h,
+    holderCount,
+    txCount24h,
     signalProbabilities: {
       volumeSpike: clamp(volumeScore / 100, 0, 1),
-      holderGrowth: clamp(holderGrowthScore(row.holderCount, row.txCount24h) / 100, 0, 1),
+      holderGrowth: clamp(holderGrowthScore(holderCount, txCount24h) / 100, 0, 1),
       socialBuzz: clamp(socialBuzzScore(keywords, seed) / 100, 0, 1),
-      whaleActivity: clamp(whaleActivityScore(row.txCount24h, row.liquidityUsd, seed) / 100, 0, 1),
+      whaleActivity: clamp(whaleActivityScore(txCount24h, liquidityUsd, seed) / 100, 0, 1),
     },
-    warnings: buildWarnings(riskScore, row.liquidityUsd, row.deployedHoursAgo),
+    warnings: buildWarnings(riskScore, liquidityUsd, deployedHoursAgo),
     narrativeKeywords: keywords,
     dataSourceNote: row.dataSourceNote,
   };
 }
 
 function buildNarrativeTrends() {
-  const seed = Date.now();
   return {
     updatedAt: new Date().toISOString(),
     channels: {
-      twitter: { label: "X (Twitter)", note: "Keyword velocity from sampled public posts (simulated unless wired)." },
-      reddit: { label: "Reddit", note: "Subreddit mention rates aggregated (simulated unless wired)." },
-      telegram: { label: "Telegram", note: "Public channel keyword scans (simulated unless wired)." },
+      twitter: {
+        label: "X (Twitter)",
+        note: process.env.TWITTER_BEARER_TOKEN
+          ? "Bearer token configured — extend earlySignalsEngine to query recent posts."
+          : "Set TWITTER_BEARER_TOKEN for live narrative velocity.",
+      },
+      reddit: {
+        label: "Reddit",
+        note: "Reddit API credentials not configured in this deployment.",
+      },
+      telegram: {
+        label: "Telegram",
+        note: "Telegram Bot API not configured.",
+      },
     },
-    keywords: [
-      { term: "restaking", momentum: 78 + (seed % 8), sources: { twitter: 0.42, reddit: 0.31, telegram: 0.27 } },
-      { term: "modular L2", momentum: 71 + (seed % 10), sources: { twitter: 0.38, reddit: 0.35, telegram: 0.27 } },
-      { term: "RWA", momentum: 66 + (seed % 12), sources: { twitter: 0.33, reddit: 0.41, telegram: 0.26 } },
-      { term: "AI agents", momentum: 62 + (seed % 9), sources: { twitter: 0.51, reddit: 0.28, telegram: 0.21 } },
-      { term: "memecoin", momentum: 58 + (seed % 15), sources: { twitter: 0.44, reddit: 0.22, telegram: 0.34 } },
-    ],
-    disclaimer: "Keyword momentum is not endorsement. High momentum often coincides with scams and pumps.",
+    keywords: [],
+    disclaimer:
+      "Narrative keyword momentum is disabled until social API credentials are configured. Discovery feed uses live DEX data.",
   };
 }
 
@@ -190,7 +202,7 @@ async function fetchEtherscanTokenSnapshot(contractAddress, apiKey) {
 }
 
 async function buildFeedItems() {
-  const discover = cryptoSafety.discoverTokens({});
+  const discover = await liveIntel.discoverTokens({});
   const items = discover.tokens.map((row) => enrichDiscoverRow(row));
   const apiKey = process.env.ETHERSCAN_API_KEY;
   if (apiKey) {
@@ -218,14 +230,14 @@ async function buildFeedItems() {
 }
 
 async function buildSmartMoneySection(trackedFromDb) {
-  const feed = cryptoSafety.getIntelligenceFeed();
+  const feed = await liveIntel.getIntelligenceFeed();
   const marketWallets = feed.smartMoney.wallets;
   const tracked = (trackedFromDb || []).map((w, i) => ({
     address: w.address,
     label: w.label,
     addedAt: w.addedAt,
-    recentMoves: marketWallets[i % marketWallets.length]?.recentMoves?.slice(0, 3) || [],
-    note: "Recent moves are illustrative samples paired to your address row; not a live mempool feed.",
+    recentMoves: marketWallets[i % Math.max(1, marketWallets.length)]?.recentMoves?.slice(0, 3) || [],
+    note: "Moves shown when available from live pair/boost feeds.",
   }));
   return {
     tracked,

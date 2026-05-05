@@ -37,6 +37,11 @@ export async function quoteAccess(streamRoomId, hours = 1) {
   return data;
 }
 
+export async function fetchLearningSessions(params = {}) {
+  const { data } = await http.get("/api/learning/sessions", { params });
+  return data;
+}
+
 export async function fetchLearningProfile(userId) {
   const { data } = await http.get("/api/learning/me", { params: { userId } });
   return data;

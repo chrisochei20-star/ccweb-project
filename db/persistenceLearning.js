@@ -286,6 +286,43 @@ async function markSessionRevenueClosed(streamRoomId) {
   );
 }
 
+async function listLearningSessions(options = {}) {
+  if (!usePostgres()) return [];
+  const limit = Math.min(100, Math.max(1, Number(options.limit || 50)));
+  const status = (options.status || "all").toString().trim().toLowerCase();
+  const params = [];
+  let sql = `SELECT id, stream_room_id, title, topic, created_by, status, hourly_rate_usd, platform_fee_percent,
+    total_gross_usd, total_platform_usd, total_creator_usd, revenue_closed, started_at, ended_at, metadata
+    FROM learning_sessions`;
+  if (status && status !== "all") {
+    sql += ` WHERE status = $1`;
+    params.push(status);
+    sql += ` ORDER BY started_at DESC LIMIT $2`;
+    params.push(limit);
+  } else {
+    sql += ` ORDER BY started_at DESC LIMIT $1`;
+    params.push(limit);
+  }
+  const { rows } = await query(sql, params);
+  return rows.map((r) => ({
+    id: r.id,
+    streamRoomId: r.stream_room_id,
+    title: r.title,
+    topic: r.topic,
+    createdBy: r.created_by,
+    status: r.status,
+    hourlyRateUsd: Number(r.hourly_rate_usd),
+    platformFeePercent: Number(r.platform_fee_percent),
+    totalGrossUsd: Number(r.total_gross_usd),
+    totalPlatformUsd: Number(r.total_platform_usd),
+    totalCreatorUsd: Number(r.total_creator_usd),
+    revenueClosed: r.revenue_closed,
+    startedAt: r.started_at,
+    endedAt: r.ended_at,
+    metadata: r.metadata,
+  }));
+}
+
 async function listLiveSessionsWithStreamIds() {
   if (!usePostgres()) return [];
   const { rows } = await query(
@@ -344,4 +381,5 @@ module.exports = {
   listLiveSessionsWithStreamIds,
   listRecentLedger,
   getLearningSessionDetail,
+  listLearningSessions,
 };

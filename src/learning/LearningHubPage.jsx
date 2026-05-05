@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
-import { createStreamRoom, fetchLearningProfile, listStreamRooms } from "../api/learningApi";
+import { createStreamRoom, fetchLearningProfile, fetchLearningSessions, listStreamRooms } from "../api/learningApi";
 
 export function LearningHubPage() {
   const { user } = useOutletContext() || {};
   const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
+  const [dbSessions, setDbSessions] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -18,6 +19,12 @@ export function LearningHubPage() {
     try {
       const r = await listStreamRooms();
       setRooms(r.rooms || []);
+      try {
+        const ls = await fetchLearningSessions({ status: "live", limit: 50 });
+        setDbSessions(ls);
+      } catch {
+        setDbSessions({ postgres: false, sessions: [] });
+      }
       if (user?.id) {
         const me = await fetchLearningProfile(user.id);
         setProfile(me);
@@ -68,6 +75,25 @@ export function LearningHubPage() {
   }
 
   const liveRooms = rooms.filter((x) => x.status === "live");
+
+  const mergedLiveRows = useMemo(() => {
+    const rows = [];
+    const dbList = dbSessions?.sessions || [];
+    const byStreamId = new Map(dbList.map((s) => [s.streamRoomId, s]));
+    for (const room of liveRooms) {
+      rows.push({
+        streamRoomId: room.id,
+        room,
+        db: byStreamId.get(room.id) || null,
+      });
+    }
+    for (const s of dbList) {
+      if (!liveRooms.some((r) => r.id === s.streamRoomId)) {
+        rows.push({ streamRoomId: s.streamRoomId, room: null, db: s });
+      }
+    }
+    return rows;
+  }, [liveRooms, dbSessions]);
 
   return (
     <section className="learning-page">
@@ -145,17 +171,26 @@ export function LearningHubPage() {
             Refresh
           </button>
         </div>
-        {liveRooms.length === 0 && !loading && <p className="muted">No live rooms. Create one above.</p>}
+        {mergedLiveRows.length === 0 && !loading && <p className="muted">No live sessions. Create one above.</p>}
         <ul className="list" style={{ marginTop: "0.75rem" }}>
-          {liveRooms.map((room) => (
-            <li key={room.id} style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
+          {mergedLiveRows.map((row) => (
+            <li
+              key={row.streamRoomId}
+              style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}
+            >
               <div>
-                <strong>{room.roomName}</strong>
+                <strong>{row.room?.roomName || row.db?.title || "Session"}</strong>
                 <div className="muted" style={{ fontSize: "0.85rem" }}>
-                  {room.topic} · {room.id}
+                  {row.room?.topic || row.db?.topic || ""} · {row.streamRoomId}
+                  {row.db && (
+                    <>
+                      {" "}
+                      · ${Number(row.db.hourlyRateUsd).toFixed(2)}/h · CCWEB {Number(row.db.platformFeePercent).toFixed(1)}%
+                    </>
+                  )}
                 </div>
               </div>
-              <Link className="btn btn-primary" to={`/learn/session/${room.id}`}>
+              <Link className="btn btn-primary" to={`/learn/session/${row.streamRoomId}`}>
                 Open live console
               </Link>
             </li>

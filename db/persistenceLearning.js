@@ -89,12 +89,6 @@ async function activateAccessByCheckoutSession(stripeSessionId, paymentIntentId)
     `UPDATE learning_access SET status = 'active', stripe_payment_intent_id = COALESCE($2, stripe_payment_intent_id), updated_at = NOW() WHERE id = $1`,
     [row.id, paymentIntentId || null]
   );
-  await query(`INSERT INTO platform_transactions (kind, reference_id, provider, amount_usd, currency, status, metadata)
-     VALUES ('learning_access', $1, 'stripe', $2, 'USD', 'captured', $3::jsonb)`, [
-    row.id,
-    money(row.amount_usd),
-    JSON.stringify({ userId: row.user_id, sessionId: row.session_id, hours: row.hours_purchased }),
-  ]);
   return row;
 }
 
@@ -184,11 +178,6 @@ async function addCredits(userId, cents, stripeSessionId) {
      VALUES ($1,$2,0,NOW())
      ON CONFLICT (user_id) DO UPDATE SET credits_cents = learning_user_wallet.credits_cents + $2, updated_at = NOW()`,
     [userId, Math.round(cents)]
-  );
-  await query(
-    `INSERT INTO platform_transactions (kind, reference_id, provider, amount_usd, currency, status, metadata)
-     VALUES ('learning_credits', $1, 'stripe', $2, 'USD', 'captured', $3::jsonb)`,
-    [stripeSessionId || userId, money(cents / 100), JSON.stringify({ userId, cents })]
   );
 }
 

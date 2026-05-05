@@ -59,7 +59,7 @@ async function handleStripeCheckoutEscrow(req, res, readJsonBody, sendJson) {
       cancel_url:
         cancelUrl ||
         `${process.env.PUBLIC_APP_URL || "http://localhost:5173"}/marketplace/${listingId}?cancelled=1`,
-      metadata: { orderId: order.id, listingId },
+      metadata: { orderId: order.id, listingId, ...(body.ccwebProjectId ? { ccwebProjectId: String(body.ccwebProjectId) } : {}) },
     });
     await pgGrowth.attachStripeToOrder(order.id, session.id, null);
     sendJson(res, 200, { checkoutUrl: session.url, sessionId: session.id, orderId: order.id });

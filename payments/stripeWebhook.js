@@ -1,6 +1,25 @@
 const { logger } = require("../logging/logger");
 const pgGrowth = require("../db/persistenceGrowth");
 const learningPg = require("../db/persistenceLearning");
+const revenuePg = require("../db/persistenceRevenue");
+
+async function recordStripeCapture(kind, session, extraMeta = {}) {
+  const cents = session.amount_total;
+  const amountUsd = cents != null ? Number(cents) / 100 : null;
+  if (amountUsd == null || amountUsd <= 0) return;
+  const pi = session.payment_intent;
+  const piId = typeof pi === "string" ? pi : pi?.id;
+  await revenuePg.recordStripeCheckoutCapture({
+    kind,
+    referenceId: session.id,
+    amountUsd,
+    metadata: {
+      ...extraMeta,
+      stripePaymentIntentId: piId || undefined,
+      ...(session.metadata || {}),
+    },
+  });
+}
 
 async function readRawBody(req) {
   const chunks = [];
@@ -44,6 +63,7 @@ async function handleStripeWebhook(req, res) {
     if (orderId && pgGrowth.usePostgres()) {
       try {
         await pgGrowth.attachStripeToOrder(orderId, session.id, piId);
+        await recordStripeCapture("growth_escrow", session, { orderId, listingId: session.metadata?.listingId });
       } catch (e) {
         logger.error({ msg: "stripe_attach_order_fail", orderId, err: e.message });
       }
@@ -53,6 +73,7 @@ async function handleStripeWebhook(req, res) {
       if (kind === "learning_session_access") {
         try {
           await learningPg.activateAccessByCheckoutSession(session.id, piId);
+          await recordStripeCapture("learning_access", session);
         } catch (e) {
           logger.error({ msg: "learning_access_activate_fail", err: e.message });
         }
@@ -62,6 +83,7 @@ async function handleStripeWebhook(req, res) {
         if (userId && cents > 0) {
           try {
             await learningPg.addCredits(userId, cents, session.id);
+            await recordStripeCapture("learning_credits", session);
           } catch (e) {
             logger.error({ msg: "learning_credits_fail", err: e.message });
           }
@@ -88,6 +110,23 @@ async function handleStripeWebhook(req, res) {
     const invoice = event.data.object;
     const subRef = invoice.subscription;
     const subId = typeof subRef === "string" ? subRef : subRef?.id;
+    const amountUsd = invoice.amount_paid != null ? Number(invoice.amount_paid) / 100 : null;
+    if (subId && amountUsd != null && amountUsd > 0) {
+      try {
+        await revenuePg.recordStripeCheckoutCapture({
+          kind: "learning_subscription_invoice",
+          referenceId: String(invoice.id),
+          amountUsd,
+          metadata: {
+            subscriptionId: subId,
+            invoiceId: invoice.id,
+            customerId: invoice.customer,
+          },
+        });
+      } catch (e) {
+        logger.warn({ msg: "record_invoice_revenue_skip", err: e.message });
+      }
+    }
     if (subId) {
       try {
         const fullSub = await stripe.subscriptions.retrieve(subId);

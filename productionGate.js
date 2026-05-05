@@ -6,6 +6,12 @@ function validateOrExit() {
   if (process.env.NODE_ENV !== "production") return;
   const errs = [];
   if (!(process.env.DATABASE_URL || "").trim()) errs.push("DATABASE_URL");
+  const pub = (process.env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
+  if (!pub) errs.push("PUBLIC_APP_URL (https SPA origin, no trailing slash)");
+  else if (!/^https:\/\//i.test(pub)) errs.push("PUBLIC_APP_URL must use https:// in production");
+  if (!(process.env.CCWEB_ALLOWED_ORIGINS || "").trim()) {
+    errs.push("CCWEB_ALLOWED_ORIGINS (comma-separated https origins for browser CORS)");
+  }
   if (!(process.env.AUTH_JWT_SECRET || "").trim() || process.env.AUTH_JWT_SECRET.length < 32) {
     errs.push("AUTH_JWT_SECRET (min 32 characters)");
   }

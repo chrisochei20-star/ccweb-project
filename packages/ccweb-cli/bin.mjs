@@ -2,7 +2,7 @@
 import { createClient } from "../ccweb-sdk/index.mjs";
 
 const [cmd, ...rest] = process.argv.slice(2);
-const baseUrl = process.env.CCWEB_BASE_URL || "http://127.0.0.1:3000";
+const baseUrl = String(process.env.CCWEB_BASE_URL || process.env.CCWEB_API_PUBLIC_URL || "").trim().replace(/\/$/, "");
 const apiKey = process.env.CCWEB_API_KEY;
 
 function help() {
@@ -11,13 +11,18 @@ Usage:
   ccweb init <project-name>               # POST /api/developer/projects
   ccweb test                              # health + sandbox + optional API (CCWEB_API_KEY)
   ccweb sandbox                           # POST sandbox echo (no key)
-  CCWEB_API_KEY=... ccweb doctor          # health + analytics
-  CCWEB_API_KEY=... ccweb call /v1/sessions
-  CCWEB_API_KEY=... ccweb deploy          # minimal dapp deploy (env overrides)
+  CCWEB_BASE_URL=https://api.example.com ccweb init "My Project"
+  CCWEB_BASE_URL=... CCWEB_API_KEY=... ccweb doctor          # health + analytics
+  CCWEB_BASE_URL=... CCWEB_API_KEY=... ccweb call /v1/sessions
+  CCWEB_BASE_URL=... CCWEB_API_KEY=... ccweb deploy          # minimal dapp deploy (env overrides)
 `);
 }
 
 async function main() {
+  if (!baseUrl) {
+    console.error("Set CCWEB_BASE_URL or CCWEB_API_PUBLIC_URL to your API origin (e.g. https://api.example.com).");
+    process.exit(1);
+  }
   if (!cmd || cmd === "help" || cmd === "-h") {
     help();
     process.exit(0);

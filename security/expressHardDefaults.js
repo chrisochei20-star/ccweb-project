@@ -11,6 +11,9 @@ function parseAllowedOrigins() {
   if (raw) {
     return raw.split(",").map((s) => s.trim()).filter(Boolean);
   }
+  if (process.env.NODE_ENV === "production") {
+    return [];
+  }
   return [
     "http://localhost:5173",
     "http://127.0.0.1:5173",

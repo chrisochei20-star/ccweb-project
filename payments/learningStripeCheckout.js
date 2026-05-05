@@ -1,4 +1,5 @@
 const { logger } = require("../logging/logger");
+const { publicAppBaseUrl } = require("../services/deploymentOrigins");
 const learningPg = require("../db/persistenceLearning");
 
 const STANDARD_USD = Number(process.env.CCWEB_SUBSCRIPTION_STANDARD_USD || 19);
@@ -26,9 +27,9 @@ async function handleLearningStripeCheckout(req, res, readJsonBody, sendJson) {
   const stripe = new Stripe(key, { apiVersion: "2024-11-20.acacia" });
   const kind = (body.kind || "").toString();
   const userId = (body.userId || "").toString().trim();
-  const successUrl =
-    body.successUrl || `${process.env.PUBLIC_APP_URL || "http://localhost:5173"}/ai-streaming?paid=1`;
-  const cancelUrl = body.cancelUrl || `${process.env.PUBLIC_APP_URL || "http://localhost:5173"}/ai-streaming?cancelled=1`;
+  const base = publicAppBaseUrl();
+  const successUrl = body.successUrl || `${base}/ai-streaming?paid=1`;
+  const cancelUrl = body.cancelUrl || `${base}/ai-streaming?cancelled=1`;
 
   try {
     if (kind === "session_access") {

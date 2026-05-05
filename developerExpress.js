@@ -377,7 +377,15 @@ function createDeveloperApp(opts) {
 
   dev.get("/openapi.json", (req, res) => {
     const proto = req.headers["x-forwarded-proto"] || "http";
-    const host = req.headers.host || `localhost:${process.env.PORT || 3000}`;
+    const { trimOrigin } = require("./services/deploymentOrigins");
+    let host = req.headers.host;
+    if (!host && process.env.CCWEB_API_PUBLIC_URL) {
+      const t = trimOrigin(process.env.CCWEB_API_PUBLIC_URL);
+      host = t.replace(/^https?:\/\//i, "");
+    }
+    if (!host) {
+      host = `127.0.0.1:${process.env.PORT || 3000}`;
+    }
     res.json(dp.buildOpenApiSpec(`${proto}://${host}`));
   });
 

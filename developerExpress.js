@@ -7,7 +7,9 @@ const express = require("express");
 const { applyExpressSecurity } = require("./security/expressHardDefaults");
 const crypto = require("crypto");
 const dp = require("./developerPlatform");
-const cryptoSafety = require("./cryptoSafety");
+const liveIntel = require("./intel/liveCryptoIntel");
+const aiExecute = require("./services/aiExecute");
+const pgGrowth = require("./db/persistenceGrowth");
 
 function getClientIp(req) {
   return (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "";
@@ -101,14 +103,21 @@ function createDeveloperApp(opts) {
   sandbox.post("/echo", (req, res) => {
     res.json({ ok: true, receivedAt: new Date().toISOString(), body: req.body || {} });
   });
-  sandbox.post("/workflow", (req, res) => {
-    const steps = Array.isArray(req.body?.steps) ? req.body.steps : [];
-    res.json({
-      simulated: true,
-      runId: `run_${crypto.randomBytes(6).toString("hex")}`,
-      stepsExecuted: steps.length,
-      output: { message: "Sandbox workflow completed (no side effects)." },
-    });
+  sandbox.post("/workflow", async (req, res, next) => {
+    try {
+      const steps = Array.isArray(req.body?.steps) ? req.body.steps : [];
+      const out = await aiExecute.runWorkflowSteps(steps, req.body || {});
+      res.json({
+        runId: `run_${crypto.randomBytes(6).toString("hex")}`,
+        stepsExecuted: steps.length,
+        provider: out.provider,
+        output: out.text,
+        usage: out.usage,
+      });
+    } catch (e) {
+      if (e.code === "AI_NOT_CONFIGURED") return res.status(503).json({ error: e.message, code: e.code });
+      next(e);
+    }
   });
 
   const v1 = express.Router();
@@ -207,19 +216,16 @@ function createDeveloperApp(opts) {
   });
 
   v1.get("/revenue", (req, res) => {
-    const bump = Math.round((req.ccwebApiKey.callsThisMonth || 0) * 0.02);
-    const grossUsd = 120 + bump;
-    const feePct = dp.PLATFORM_FEE_PCT;
-    const platformUsd = +((grossUsd * feePct) / 100).toFixed(2);
-    const netUsd = +(grossUsd - platformUsd).toFixed(2);
-    dp.emitWebhook(req.ccwebProjectId, "revenue.updated", { grossUsd, netUsd, period: "current_month" });
-    res.json({
-      projectId: req.ccwebProjectId,
-      platformFeePercent: feePct,
-      grossUsd,
-      netUsd,
-      period: "current_month",
-      note: "Synthetic ledger for prototype; connect Stripe or on-chain settlement for production.",
+    if (!pgGrowth.usePostgres()) {
+      return res.status(503).json({
+        error: "Revenue API requires PostgreSQL (DATABASE_URL) and recorded transactions.",
+        code: "NOT_CONFIGURED",
+      });
+    }
+    return res.status(501).json({
+      error: "Connect billing tables or Stripe reports; aggregate not implemented in this build.",
+      code: "USE_STRIPE_DASHBOARD",
+      hint: "Use Stripe Dashboard + learning/growth ledger exports until unified revenue query ships.",
     });
   });
 
@@ -233,9 +239,13 @@ function createDeveloperApp(opts) {
     });
   });
 
-  v1.get("/agents", (req, res) => {
-    const feed = cryptoSafety.getIntelligenceFeed();
-    res.json({ count: feed.smartMoney.wallets.length, agents: feed.smartMoney.wallets });
+  v1.get("/agents", async (req, res, next) => {
+    try {
+      const feed = await liveIntel.getIntelligenceFeed();
+      res.json({ count: feed.smartMoney.wallets.length, agents: feed.smartMoney.wallets });
+    } catch (e) {
+      next(e);
+    }
   });
 
   v1.post("/agents", (req, res) => {
@@ -244,15 +254,21 @@ function createDeveloperApp(opts) {
     res.status(201).json({ id, status: "registered", note: "In-memory prototype; persist to DB in production." });
   });
 
-  v1.post("/agents/:id/execute", (req, res) => {
-    const runId = `run_${crypto.randomBytes(6).toString("hex")}`;
-    dp.emitWebhook(req.ccwebProjectId, "agent.execution.completed", {
-      agentId: req.params.id,
-      runId,
-      input: req.body || {},
-      result: { ok: true, simulated: true },
-    });
-    res.json({ runId, agentId: req.params.id, status: "completed", simulated: true });
+  v1.post("/agents/:id/execute", async (req, res, next) => {
+    try {
+      const out = await aiExecute.runAgent({ id: req.params.id, name: "CCWEB agent", description: "Public API agent" }, req.body);
+      const runId = `run_${crypto.randomBytes(6).toString("hex")}`;
+      dp.emitWebhook(req.ccwebProjectId, "agent.execution.completed", {
+        agentId: req.params.id,
+        runId,
+        input: req.body || {},
+        result: out,
+      });
+      res.json({ runId, agentId: req.params.id, status: "completed", provider: out.provider, output: out.text, usage: out.usage });
+    } catch (e) {
+      if (e.code === "AI_NOT_CONFIGURED") return res.status(503).json({ error: e.message, code: e.code });
+      next(e);
+    }
   });
 
   v1.get("/workflows", (req, res) => {
@@ -266,10 +282,11 @@ function createDeveloperApp(opts) {
     res.status(201).json(row);
   });
 
-  v1.post("/workflows/:id/run", (req, res) => {
-    const out = dp.runWorkflow(req.ccwebProjectId, req.params.id, req.body || {});
+  v1.post("/workflows/:id/run", async (req, res) => {
+    const out = await dp.runWorkflow(req.ccwebProjectId, req.params.id, req.body || {});
     if (out.error) {
-      res.status(404).json(out);
+      const code = out.code === "AI_NOT_CONFIGURED" ? 503 : out.status || 404;
+      res.status(code).json(out);
       return;
     }
     dp.emitWebhook(req.ccwebProjectId, "workflow.run.completed", { workflowId: req.params.id, runId: out.runId });
@@ -292,22 +309,29 @@ function createDeveloperApp(opts) {
     }
   });
 
-  v1.post("/graphql", (req, res) => {
+  v1.post("/graphql", async (req, res, next) => {
     const q = (req.body && req.body.query) || "";
     if (/sessions/i.test(q)) {
       const rooms = streamRoomsGetter();
       return res.json({ data: { sessions: { count: rooms.length, nodes: rooms.slice(0, 20) } } });
     }
     if (/revenue/i.test(q)) {
-      return res.json({ data: { revenue: { grossUsd: 120, platformFeePercent: dp.PLATFORM_FEE_PCT } } });
+      return res.json({
+        data: { revenue: { note: "Use PostgreSQL + Stripe for revenue; see /v1/revenue" } },
+        errors: [{ message: "Revenue field not implemented; use billing integration." }],
+      });
     }
     if (/agents/i.test(q)) {
-      const feed = cryptoSafety.getIntelligenceFeed();
-      return res.json({ data: { agents: { count: feed.smartMoney.wallets.length } } });
+      try {
+        const feed = await liveIntel.getIntelligenceFeed();
+        return res.json({ data: { agents: { count: feed.smartMoney.wallets.length } } });
+      } catch (e) {
+        return next(e);
+      }
     }
     res.json({
       data: {},
-      extensions: { note: "Subset GraphQL-style gateway; expand with graphql-js in production." },
+      extensions: { note: "GraphQL-style subset; add graphql-js for full schema." },
     });
   });
 

@@ -6,7 +6,7 @@ const express = require("express");
 const { applyExpressSecurity } = require("./security/expressHardDefaults");
 const earlySignalsEngine = require("./earlySignalsEngine");
 const intelligenceDb = require("./intelligenceDb");
-const { buildTokenDetail } = require("./tokenDetail");
+const { buildTokenDetail } = require("./tokenDetailLive");
 
 function normalizeAddress(addr) {
   const a = String(addr || "").trim().toLowerCase();
@@ -117,7 +117,7 @@ function createIntelligenceRouter() {
         res.status(400).json({ error: "Token slug required." });
         return;
       }
-      const data = buildTokenDetail(slug);
+      const data = await buildTokenDetail(slug);
       const key = intelligenceDb.tokenKey(data.symbol, data.chain, data.contractAddress);
       const isTracked = await intelligenceDb.isTokenTracked(key);
       res.json({ ...data, tracking: { isTracked, key } });

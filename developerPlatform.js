@@ -4,6 +4,7 @@
  */
 
 const crypto = require("crypto");
+const aiExecute = require("./services/aiExecute");
 
 const PLATFORM_FEE_PCT = 8;
 
@@ -45,18 +46,26 @@ function createWorkflow(projectId, body) {
   return row;
 }
 
-function runWorkflow(projectId, workflowId, input) {
+async function runWorkflow(projectId, workflowId, input) {
   const w = workflows.get(workflowId);
   if (!w || w.projectId !== projectId) return { error: "Workflow not found." };
   const runId = `run_${crypto.randomBytes(8).toString("hex")}`;
-  return {
-    runId,
-    workflowId,
-    status: "completed",
-    simulated: true,
-    stepsExecuted: w.steps.length,
-    output: { message: "Workflow run simulated.", input: input || {} },
-  };
+  try {
+    const ai = await aiExecute.runWorkflowSteps(w.steps, input);
+    return {
+      runId,
+      workflowId,
+      status: "completed",
+      provider: ai.provider,
+      stepsExecuted: w.steps.length,
+      output: { text: ai.text, usage: ai.usage },
+    };
+  } catch (e) {
+    if (e.code === "AI_NOT_CONFIGURED") {
+      return { error: e.message, code: "AI_NOT_CONFIGURED", status: 503 };
+    }
+    return { error: e.message || "Workflow execution failed", status: e.status || 500 };
+  }
 }
 
 function hashKey(secret) {
@@ -217,11 +226,11 @@ function buildOpenApiSpec(baseUrl) {
       "/revenue": { get: { summary: "Revenue summary" } },
       "/analytics": { get: { summary: "Usage analytics" } },
       "/agents": { get: { summary: "List agents" }, post: { summary: "Register agent" } },
-      "/agents/{id}/execute": { post: { summary: "Execute agent (simulated)" } },
+      "/agents/{id}/execute": { post: { summary: "Execute agent (OpenAI when OPENAI_API_KEY is set)" } },
       "/workflows": { get: { summary: "List workflows" }, post: { summary: "Create workflow" } },
-      "/workflows/{id}/run": { post: { summary: "Run workflow (simulated)" } },
+      "/workflows/{id}/run": { post: { summary: "Run workflow (OpenAI-backed steps)" } },
       "/dapp/templates": { get: { summary: "DApp templates" } },
-      "/dapp/deploy": { post: { summary: "Deploy (simulated settlement)" } },
+      "/dapp/deploy": { post: { summary: "Deploy (see deployment handler)" } },
       "/graphql": { post: { summary: "GraphQL-style query (subset)" } },
     },
   };

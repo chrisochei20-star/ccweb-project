@@ -12,6 +12,7 @@ const { mountAt, mountWalletFlat } = require("./auth/authExpress");
 const learningPg = require("./db/persistenceLearning");
 const pgGrowth = require("./db/persistenceGrowth");
 const { expressStripeEscrowCheckout } = require("./payments/stripeCheckout");
+const aiExecute = require("./services/aiExecute");
 
 function getClientIp(req) {
   return (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "";
@@ -207,18 +208,23 @@ function createPlatformApp(deps) {
       const agent = catalogAgents.find((x) => x.id === agentId);
       if (!agent) return res.status(404).json({ error: "Agent not found." });
       const runId = `run_${crypto.randomBytes(8).toString("hex")}`;
+      const ai = await aiExecute.runAgent(agent, input);
       const result = {
         runId,
         agentId,
         status: "completed",
-        summary: `Sandbox run for "${agent.name}" with keys: ${Object.keys(input || {}).join(", ") || "none"}.`,
-        outputPreview: "Configure upstream LLM providers in production.",
+        summary: ai.text.slice(0, 400),
+        outputPreview: ai.text.slice(0, 800),
+        provider: ai.provider,
+        model: ai.model,
+        usage: ai.usage,
         finishedAt: new Date().toISOString(),
       };
       agentRuns.unshift({ ...result, userId: req.ccwebUserId });
       if (agentRuns.length > 500) agentRuns.pop();
       res.status(200).json(result);
     } catch (e) {
+      if (e.code === "AI_NOT_CONFIGURED") return res.status(503).json({ error: e.message, code: e.code });
       next(e);
     }
   });

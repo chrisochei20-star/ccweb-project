@@ -38,19 +38,69 @@ export function clearSession() {
   sessionStorage.removeItem(REFRESH_KEY);
 }
 
+async function tryRefreshSession() {
+  const refresh = getRefreshToken();
+  if (!refresh) return null;
+  try {
+    const r = await fetch(`${apiOrigin}/api/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ refreshToken: refresh }),
+    });
+    const data = await r.json();
+    if (!r.ok) return null;
+    const access = data.accessToken || data.token;
+    if (!access) return null;
+    setSession(access, data.user, data.refreshToken || refresh);
+    return data.user || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Hydrate current user from API. Preserves refresh token when /me returns only { user }.
+ * On 401, attempts refresh once (cookie or body refresh) before clearing session.
+ */
 export async function fetchMe() {
-  const token = getSessionToken();
-  if (!token) return null;
-  const res = await fetch(`${apiOrigin}/api/auth/me`, {
-    headers: { Authorization: `Bearer ${token}` },
-    credentials: "include",
-  });
+  let token = getSessionToken();
+  const existingRefresh = getRefreshToken();
+
+  async function callMe(access) {
+    return fetch(`${apiOrigin}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${access}` },
+      credentials: "include",
+    });
+  }
+
+  if (!token) {
+    const u = await tryRefreshSession();
+    if (u) return u;
+    return null;
+  }
+
+  let res = await callMe(token);
+  if (res.status === 401 && existingRefresh) {
+    const u = await tryRefreshSession();
+    if (u) {
+      token = getSessionToken();
+      if (token) res = await callMe(token);
+    }
+  }
+
   if (!res.ok) {
     clearSession();
     return null;
   }
   const data = await res.json();
-  setSession(data.accessToken || data.token, data.user, data.refreshToken);
+  const nextAccess = data.accessToken || data.token;
+  const nextRefresh = data.refreshToken;
+  setSession(
+    nextAccess || token,
+    data.user,
+    nextRefresh !== undefined ? nextRefresh : existingRefresh
+  );
   return data.user;
 }
 

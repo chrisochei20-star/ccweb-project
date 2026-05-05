@@ -22,7 +22,7 @@ const { checkApiRateLimit } = require("./security/apiRateLimit");
 const { createSocialApp } = require("./social/socialRouter");
 const { handleStripeWebhook } = require("./payments/stripeWebhook");
 const { handleStripeCheckoutEscrow } = require("./payments/stripeCheckout");
-const { handleLearningStripeCheckout } = require("./payments/learningStripeCheckout");
+const { createPlatformApp } = require("./platformExpress");
 
 function useCommunityPg() {
   return Boolean(getPool());
@@ -306,6 +306,7 @@ function sanitizeUser(user) {
 }
 
 const authApp = createAuthApp({ ccwebUsers, buildUserProfile, sanitizeUser });
+const platformApp = createPlatformApp({ ccwebUsers, buildUserProfile, sanitizeUser });
 
 function ensureUser(userId, options = {}) {
   const normalizedId = (userId || "").toString().trim();
@@ -3584,6 +3585,16 @@ async function handleTrackWallet(req, res) {
   sendJson(res, 200, result);
 }
 
+function delegatePlatform(req, res) {
+  const origUrl = req.url || "/";
+  const stripped = origUrl.startsWith("/api/v1") ? origUrl.slice("/api/v1".length) || "/" : origUrl;
+  req.url = stripped;
+  platformApp(req, res, () => {
+    req.url = origUrl;
+    sendJson(res, 404, { error: "API v1 route not found." });
+  });
+}
+
 function delegateAuth(req, res) {
   authApp(req, res, () => {
     sendJson(res, 404, { error: "Auth route not found." });
@@ -3804,6 +3815,20 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     delegateDeveloper(req, res);
+    return;
+  }
+
+  if (pathname.startsWith("/api/v1") && ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"].includes(req.method || "GET")) {
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-CCWEB-Admin, Cookie",
+      });
+      res.end();
+      return;
+    }
+    delegatePlatform(req, res);
     return;
   }
 

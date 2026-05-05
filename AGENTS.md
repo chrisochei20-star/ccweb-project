@@ -12,6 +12,7 @@ This is a React 19 + Vite 7 frontend with a Node.js backend (`server.js`). **Opt
 - **Social posting:** `POST /api/social/publish` — requires `approved: true`, optional `dryRun: true`. X posting needs `TWITTER_ACCESS_TOKEN` (user OAuth2 with `tweet.write`); app-only `TWITTER_BEARER_TOKEN` alone cannot create tweets. Facebook: `FACEBOOK_PAGE_ACCESS_TOKEN`, optional `FACEBOOK_PAGE_ID` (default `me`). LinkedIn: `LINKEDIN_ACCESS_TOKEN`, `LINKEDIN_AUTHOR_URN`.
 - **OAuth sign-in:** `POST /api/auth/oauth/google` and `POST /api/auth/oauth/apple` (ID tokens); configure `GOOGLE_CLIENT_ID`, `APPLE_CLIENT_ID` (see `.env.example`).
 - **AI Learning monetization (PostgreSQL + Stripe):** tables `learning_*` in `db/schema.sql`. **Endpoints:** `GET /api/learning/sessions` (query `status`, `limit`), `GET /api/learning/access/quote`, `GET /api/learning/me?userId=`, `POST /api/payments/stripe/checkout/learning`, SSE `/api/learning/sessions/:streamRoomId/events`, chat `/api/learning/sessions/:streamRoomId/channel`, `POST /api/learning/tutor/message`, admin `GET /api/learning/admin/analytics` (`X-CCWEB-Admin`). **Frontend:** `/learn`, `/learn/session/:roomId`, `/learn/admin`. Logical folder map: [ccweb/README.md](./ccweb/README.md).
+- **REST API v1 (Express Routers):** `GET/POST /api/v1/...` — auth, wallet, users, agents, marketplace, payments, analytics. See [docs/API_V1.md](./docs/API_V1.md).
 
 ### Running the development environment
 Two processes are needed for development:

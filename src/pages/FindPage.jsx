@@ -1,5 +1,6 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { ShareActions } from "../components/ShareCard";
 
 export function FindPage({ initialTab = "scanner" }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -233,6 +234,19 @@ export function FindPage({ initialTab = "scanner" }) {
                     )}
                   </div>
                 </div>
+                <div className="mt-3">
+                  <ShareActions
+                    kind="token_scan"
+                    payload={{
+                      symbol: scanResult.token,
+                      score: scanResult.score,
+                      url:
+                        typeof window !== "undefined"
+                          ? `${window.location.origin}/token/${encodeURIComponent(scanResult.contractAddress || scanResult.token)}`
+                          : "",
+                    }}
+                  />
+                </div>
                 <p className="muted find-band-label">
                   Risk tier: <strong>{sec?.riskBand || "—"}</strong>
                   {ai && (
@@ -423,6 +437,11 @@ export function FindPage({ initialTab = "scanner" }) {
                 </div>
                 <h4>{sig.title}</h4>
                 <p className="muted">{sig.description}</p>
+                <ShareActions
+                  kind="signal"
+                  payload={{ title: sig.title }}
+                  className="mt-2"
+                />
                 <div className="pill-row">
                   {sig.tokens.map((t) => (
                     <span key={t} className="tiny-pill">

@@ -1,4 +1,4 @@
-import { MessageCircle, MessagesSquare, Newspaper } from "lucide-react";
+import { MessageCircle, MessagesSquare, Newspaper, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 
@@ -6,6 +6,7 @@ export function CommunityShellPage() {
   const { user } = useOutletContext() || {};
   const [tab, setTab] = useState("feed");
   const [posts, setPosts] = useState([]);
+  const [feedMode, setFeedMode] = useState("latest");
   const [chats, setChats] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [loadingChats, setLoadingChats] = useState(false);
@@ -22,7 +23,8 @@ export function CommunityShellPage() {
     setLoadingPosts(true);
     setErr(null);
     try {
-      const res = await fetch("/api/community/posts");
+      const path = feedMode === "trending" ? "/api/community/posts/trending" : "/api/community/posts";
+      const res = await fetch(path);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load posts");
       setPosts(data.posts || []);
@@ -31,7 +33,7 @@ export function CommunityShellPage() {
     } finally {
       setLoadingPosts(false);
     }
-  }, []);
+  }, [feedMode]);
 
   const loadChats = useCallback(async () => {
     setLoadingChats(true);
@@ -214,7 +216,27 @@ export function CommunityShellPage() {
           )}
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-ccweb-muted">Latest</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-ccweb-muted">
+                {feedMode === "trending" ? "Trending" : "Latest"}
+              </h2>
+              <div className="flex gap-1 rounded-full border border-white/10 bg-black/30 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setFeedMode("latest")}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${feedMode === "latest" ? "bg-white/15 text-white" : "text-ccweb-muted"}`}
+                >
+                  Latest
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFeedMode("trending")}
+                  className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${feedMode === "trending" ? "bg-white/15 text-white" : "text-ccweb-muted"}`}
+                >
+                  <TrendingUp className="h-3.5 w-3.5" /> Trending
+                </button>
+              </div>
+            </div>
             {loadingPosts && <p className="text-sm text-ccweb-muted">Loading posts…</p>}
             {!loadingPosts && posts.length === 0 && <p className="text-sm text-ccweb-muted">No posts yet — be the first.</p>}
             <ul className="space-y-3">
@@ -227,7 +249,10 @@ export function CommunityShellPage() {
                         {p.authorDisplayName || "Member"} · {new Date(p.createdAt).toLocaleString()}
                       </p>
                     </div>
-                    <span className="text-xs text-ccweb-muted">{p.commentCount ?? 0} comments</span>
+                      <span className="text-xs text-ccweb-muted">
+                        {p.commentCount ?? 0} comments
+                        {p.reactionCount != null ? ` · ${p.reactionCount} reactions` : ""}
+                      </span>
                   </div>
                   <p className="mt-2 text-sm text-ccweb-muted">{p.content}</p>
                   <button

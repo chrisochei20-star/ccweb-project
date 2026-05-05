@@ -17,6 +17,7 @@ const communityPg = require("./db/persistenceCommunity");
 const { getPool } = require("./db/pool");
 const pgGrowth = require("./db/persistenceGrowth");
 const learningPg = require("./db/persistenceLearning");
+const growthEngine = require("./db/persistenceGrowthEngine");
 const { migrate } = require("./db/migrate");
 const { validateOrExit } = require("./productionGate");
 const { logger } = require("./logging/logger");
@@ -1024,6 +1025,17 @@ function handleListCommunityPosts(res) {
   sendJson(res, 200, { count: posts.length, posts });
 }
 
+function handleListTrendingCommunityPosts(res) {
+  if (useCommunityPg()) {
+    communityPg
+      .listTrendingPosts(40)
+      .then((posts) => sendJson(res, 200, { count: posts.length, posts }))
+      .catch((e) => sendJson(res, 500, { error: e.message }));
+    return;
+  }
+  handleListCommunityPosts(res);
+}
+
 async function handleCreateCommunityPost(req, res) {
   let body;
   try {
@@ -1059,6 +1071,8 @@ async function handleCreateCommunityPost(req, res) {
         broadcast: true,
         metadata: { postId: post.id, authorUserId: author.id },
       });
+      growthEngine.recordEvent(author.id, "community_post", { postId: post.id }).catch(() => {});
+      if (learningPg.usePostgres()) learningPg.addXpDelta(author.id, 25).catch(() => {});
       sendJson(res, 201, post);
     } catch (e) {
       sendJson(res, 500, { error: e.message });
@@ -1343,6 +1357,8 @@ async function handleCreateCommunityReaction(req, res) {
           metadata: { reactionId: record.id, targetType, targetId, fromUserId: actor.id },
         });
       }
+      growthEngine.recordEvent(actor.id, "community_reaction", { targetType, targetId }).catch(() => {});
+      if (learningPg.usePostgres()) learningPg.addXpDelta(actor.id, 5).catch(() => {});
       sendJson(res, 201, record);
     } catch (e) {
       sendJson(res, 500, { error: e.message });
@@ -1667,6 +1683,9 @@ async function handleUpsertStreamAttendance(pathname, req, res) {
     const sess = await learningPg.getSessionByStreamRoomId(roomId);
     if (sess) {
       await learningPg.upsertParticipation(sess.id, roomId, user.id, watchMinutes, interactionScore);
+      if (watchMinutes >= 5) {
+        growthEngine.recordEvent(user.id, "session_attended", { roomId, watchMinutes }).catch(() => {});
+      }
     }
   }
 
@@ -3953,6 +3972,11 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === "/api/notifications/read" && req.method === "POST") {
     await handleMarkNotificationsRead(req, res);
+    return;
+  }
+
+  if (pathname === "/api/community/posts/trending" && req.method === "GET") {
+    handleListTrendingCommunityPosts(res);
     return;
   }
 

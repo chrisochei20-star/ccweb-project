@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS ccweb_auth_users (
   oauth_provider TEXT,
   oauth_sub TEXT,
   apple_sub TEXT UNIQUE,
+  referred_by_user_id TEXT REFERENCES ccweb_auth_users(id) ON DELETE SET NULL,
+  acquisition_source TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -31,6 +33,44 @@ CREATE UNIQUE INDEX IF NOT EXISTS ccweb_auth_users_oauth_unique
   WHERE oauth_provider IS NOT NULL AND oauth_sub IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS ccweb_auth_users_email_verify ON ccweb_auth_users (email_verify_token) WHERE email_verify_token IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS ccweb_auth_users_referred_by ON ccweb_auth_users (referred_by_user_id) WHERE referred_by_user_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS ccweb_referral_codes (
+  user_id TEXT PRIMARY KEY REFERENCES ccweb_auth_users(id) ON DELETE CASCADE,
+  code TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_referral_codes_lower ON ccweb_referral_codes (lower(code));
+
+CREATE TABLE IF NOT EXISTS ccweb_growth_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES ccweb_auth_users(id) ON DELETE CASCADE,
+  event_type TEXT NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_growth_events_user ON ccweb_growth_events (user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS ccweb_growth_events_type ON ccweb_growth_events (event_type);
+
+CREATE TABLE IF NOT EXISTS ccweb_user_badges (
+  user_id TEXT NOT NULL REFERENCES ccweb_auth_users(id) ON DELETE CASCADE,
+  badge_id TEXT NOT NULL,
+  earned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, badge_id)
+);
+
+CREATE TABLE IF NOT EXISTS ccweb_login_streaks (
+  user_id TEXT PRIMARY KEY REFERENCES ccweb_auth_users(id) ON DELETE CASCADE,
+  current_streak INT NOT NULL DEFAULT 0,
+  longest_streak INT NOT NULL DEFAULT 0,
+  last_login_date DATE,
+  streak_bonus_claimed BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 CREATE TABLE IF NOT EXISTS growth_listings (
   id TEXT PRIMARY KEY,
@@ -266,3 +306,8 @@ CREATE TABLE IF NOT EXISTS learning_tutor_events (
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Existing deployments: add referral columns if table predates growth engine
+ALTER TABLE ccweb_auth_users ADD COLUMN IF NOT EXISTS referred_by_user_id TEXT REFERENCES ccweb_auth_users(id) ON DELETE SET NULL;
+ALTER TABLE ccweb_auth_users ADD COLUMN IF NOT EXISTS acquisition_source TEXT;
+CREATE INDEX IF NOT EXISTS ccweb_auth_users_referred_by ON ccweb_auth_users (referred_by_user_id) WHERE referred_by_user_id IS NOT NULL;

@@ -20,6 +20,28 @@ async function listPosts() {
   return rows.map((r) => mapPost(r, Number(r.comment_count)));
 }
 
+async function listTrendingPosts(limit = 30) {
+  const lim = Math.min(100, Math.max(5, limit));
+  const { rows } = await query(
+    `SELECT p.*,
+            COALESCE(cc.cnt, 0)::int AS comment_count,
+            COALESCE(rr.cnt, 0)::int AS reaction_count
+     FROM community_posts p
+     LEFT JOIN (SELECT post_id, COUNT(*)::int AS cnt FROM community_post_comments GROUP BY post_id) cc ON cc.post_id = p.id
+     LEFT JOIN (
+       SELECT target_id, COUNT(*)::int AS cnt FROM community_reactions WHERE target_type = 'post' GROUP BY target_id
+     ) rr ON rr.target_id = p.id
+     ORDER BY COALESCE(rr.cnt, 0) DESC, COALESCE(cc.cnt, 0) DESC, p.created_at DESC
+     LIMIT $1`,
+    [lim]
+  );
+  return rows.map((r) => ({
+    ...mapPost(r, Number(r.comment_count)),
+    reactionCount: Number(r.reaction_count),
+    trendingScore: Number(r.reaction_count) * 3 + Number(r.comment_count),
+  }));
+}
+
 async function createPost(body) {
   const id = newId("post");
   const tags = Array.isArray(body.tags) ? body.tags.map((t) => t.toString()) : [];
@@ -228,6 +250,7 @@ async function createBug(body) {
 
 module.exports = {
   listPosts,
+  listTrendingPosts,
   createPost,
   getPostWithComments,
   listComments,

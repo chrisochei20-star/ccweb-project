@@ -181,6 +181,30 @@ async function addCredits(userId, cents, stripeSessionId) {
   );
 }
 
+async function addCreditsCents(userId, cents) {
+  if (!usePostgres()) return;
+  const n = Math.round(Number(cents) || 0);
+  if (n <= 0) return;
+  await query(
+    `INSERT INTO learning_user_wallet (user_id, credits_cents, xp, updated_at)
+     VALUES ($1,$2,0,NOW())
+     ON CONFLICT (user_id) DO UPDATE SET credits_cents = learning_user_wallet.credits_cents + $2, updated_at = NOW()`,
+    [userId, n]
+  );
+}
+
+async function addXpDelta(userId, xpDelta) {
+  if (!usePostgres()) return;
+  const n = Math.round(Number(xpDelta) || 0);
+  if (n === 0) return;
+  await query(
+    `INSERT INTO learning_user_wallet (user_id, credits_cents, xp, updated_at)
+     VALUES ($1,0,$2,NOW())
+     ON CONFLICT (user_id) DO UPDATE SET xp = learning_user_wallet.xp + $2, updated_at = NOW()`,
+    [userId, n]
+  );
+}
+
 async function getCreditBalanceCents(userId) {
   const { rows } = await query(`SELECT credits_cents FROM learning_user_wallet WHERE user_id = $1`, [userId]);
   return rows[0] ? Number(rows[0].credits_cents) : 0;
@@ -358,6 +382,8 @@ module.exports = {
   upsertParticipation,
   finalizeSessionRevenue,
   addCredits,
+  addCreditsCents,
+  addXpDelta,
   getCreditBalanceCents,
   debitCreditsForMinutes,
   getActiveSubscription,

@@ -11,6 +11,7 @@ const rateLimitAuth = require("./auth/rateLimit");
 const { mountAt, mountWalletFlat } = require("./auth/authExpress");
 const learningPg = require("./db/persistenceLearning");
 const pgGrowth = require("./db/persistenceGrowth");
+const growthEngine = require("./db/persistenceGrowthEngine");
 const { expressStripeEscrowCheckout } = require("./payments/stripeCheckout");
 const aiExecute = require("./services/aiExecute");
 
@@ -209,6 +210,14 @@ function createPlatformApp(deps) {
       if (!agent) return res.status(404).json({ error: "Agent not found." });
       const runId = `run_${crypto.randomBytes(8).toString("hex")}`;
       const ai = await aiExecute.runAgent(agent, input);
+      if (learningPg.usePostgres()) {
+        try {
+          await learningPg.addXpDelta(req.ccwebUserId, 12);
+          await growthEngine.recordEvent(req.ccwebUserId, "ai_tool_used", { agentId });
+        } catch {
+          /* ignore */
+        }
+      }
       const result = {
         runId,
         agentId,
@@ -230,6 +239,76 @@ function createPlatformApp(deps) {
   });
 
   v1.use("/agents", agentsRouter);
+
+  const growthRouter = express.Router();
+
+  growthRouter.get("/me", authJwtMiddleware, async (req, res, next) => {
+    try {
+      if (!learningPg.usePostgres()) {
+        return res.status(503).json({ error: "PostgreSQL required for growth features.", code: "NO_DATABASE" });
+      }
+      const code = await growthEngine.ensureReferralCode(req.ccwebUserId);
+      const stats = await growthEngine.referralStats(req.ccwebUserId);
+      const badges = await growthEngine.listBadges(req.ccwebUserId);
+      const { query } = require("./db/pool");
+      const { rows: sr } = await query(`SELECT current_streak, longest_streak FROM ccweb_login_streaks WHERE user_id = $1`, [
+        req.ccwebUserId,
+      ]);
+      const streak = sr[0]
+        ? { current: sr[0].current_streak, longest: sr[0].longest_streak }
+        : { current: 0, longest: 0 };
+      const base = (process.env.PUBLIC_APP_URL || "").replace(/\/$/, "") || "http://localhost:5173";
+      const profile = await learningPg.userLearningProfile(req.ccwebUserId);
+      const xp = profile?.xp ?? 0;
+      const level =
+        xp >= 5000 ? "elite" : xp >= 1500 ? "pro" : xp >= 400 ? "builder" : "beginner";
+      res.json({
+        referralLink: `${base}/signup?ref=${code}`,
+        referralCode: code,
+        ...stats,
+        badges,
+        streak,
+        level,
+        xp,
+        rewardHint: `When someone you invite attends a session or runs AI tools, you both earn credits (see server limits).`,
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  growthRouter.get("/leaderboards", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const lb = await growthEngine.leaderboards(Number(req.query.limit) || 25);
+      res.json(lb);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  growthRouter.post("/events", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const type = String(req.body?.type || "").trim();
+      const allowed = ["share", "milestone", "scan_completed"];
+      if (!allowed.includes(type)) return res.status(400).json({ error: "Invalid event type." });
+      await growthEngine.recordEvent(req.ccwebUserId, `client_${type}`, req.body?.metadata || {});
+      if (learningPg.usePostgres() && type === "share") await learningPg.addXpDelta(req.ccwebUserId, 8);
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  growthRouter.post("/daily", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const streak = await growthEngine.onUserLogin(req.ccwebUserId);
+      res.json(streak);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  v1.use("/growth", apiRateShort, growthRouter);
 
   const marketplaceRouter = express.Router();
 
@@ -353,7 +432,37 @@ function createPlatformApp(deps) {
         const all = await pgGrowth.listOrders(null);
         orders = [...seller, ...all.filter((o) => o.buyerId === req.ccwebUserId)];
       }
-      res.json({ postgres: true, profile, orders: orders.slice(0, 25) });
+      let growth = null;
+      if (learningPg.usePostgres()) {
+        try {
+          const { query } = require("./db/pool");
+          const code = await growthEngine.ensureReferralCode(req.ccwebUserId);
+          const stats = await growthEngine.referralStats(req.ccwebUserId);
+          const badges = await growthEngine.listBadges(req.ccwebUserId);
+          const { rows: sr } = await query(`SELECT current_streak, longest_streak FROM ccweb_login_streaks WHERE user_id = $1`, [
+            req.ccwebUserId,
+          ]);
+          const streak = sr[0]
+            ? { current: sr[0].current_streak, longest: sr[0].longest_streak }
+            : { current: 0, longest: 0 };
+          const base = (process.env.PUBLIC_APP_URL || "").replace(/\/$/, "") || "http://localhost:5173";
+          const xpVal = profile?.xp ?? 0;
+          const level = xpVal >= 5000 ? "elite" : xpVal >= 1500 ? "pro" : xpVal >= 400 ? "builder" : "beginner";
+          growth = {
+            referralLink: `${base}/signup?ref=${code}`,
+            referralCode: code,
+            ...stats,
+            badges,
+            streak,
+            level,
+            profileXp: xpVal,
+            rewardHint: `Invite friends — you both earn about $${(growthEngine.REF_CREDIT_CENTS / 100).toFixed(2)} in learning credits when they attend a session or run AI tools (first activation).`,
+          };
+        } catch {
+          growth = null;
+        }
+      }
+      res.json({ postgres: true, profile, orders: orders.slice(0, 25), growth });
     } catch (e) {
       next(e);
     }
@@ -371,7 +480,9 @@ function createPlatformApp(deps) {
       }
       const summary = await learningPg.analyticsSummary();
       const growthOverview = pgGrowth.usePostgres() ? await pgGrowth.overview() : null;
-      res.json({ learning: summary, growthHub: growthOverview });
+      const growthViral = await growthEngine.growthAnalyticsSummary();
+      const leaderboards = await growthEngine.leaderboards(30);
+      res.json({ learning: summary, growthHub: growthOverview, growthViral, leaderboards });
     } catch (e) {
       next(e);
     }

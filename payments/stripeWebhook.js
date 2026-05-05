@@ -14,9 +14,9 @@ async function recordStripeCapture(kind, session, extraMeta = {}) {
     referenceId: session.id,
     amountUsd,
     metadata: {
+      ...(session.metadata && typeof session.metadata === "object" ? session.metadata : {}),
       ...extraMeta,
       stripePaymentIntentId: piId || undefined,
-      ...(session.metadata || {}),
     },
   });
 }
@@ -83,7 +83,7 @@ async function handleStripeWebhook(req, res) {
         if (userId && cents > 0) {
           try {
             await learningPg.addCredits(userId, cents, session.id);
-            await recordStripeCapture("learning_credits", session);
+            await recordStripeCapture("learning_credits", session, { userId });
           } catch (e) {
             logger.error({ msg: "learning_credits_fail", err: e.message });
           }
@@ -100,6 +100,7 @@ async function handleStripeWebhook(req, res) {
               typeof session.customer === "string" ? session.customer : session.customer?.id || fullSub.customer;
             const end = new Date(fullSub.current_period_end * 1000).toISOString();
             await learningPg.setSubscriptionActive(userId, tier, cust, subId, end);
+            await recordStripeCapture("learning_subscription", session, { userId, tier });
           } catch (e) {
             logger.error({ msg: "learning_subscription_activate_fail", err: e.message });
           }
@@ -121,6 +122,7 @@ async function handleStripeWebhook(req, res) {
             subscriptionId: subId,
             invoiceId: invoice.id,
             customerId: invoice.customer,
+            ...(invoice.metadata && typeof invoice.metadata === "object" ? invoice.metadata : {}),
           },
         });
       } catch (e) {

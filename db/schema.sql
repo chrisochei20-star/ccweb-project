@@ -311,3 +311,33 @@ CREATE TABLE IF NOT EXISTS learning_tutor_events (
 ALTER TABLE ccweb_auth_users ADD COLUMN IF NOT EXISTS referred_by_user_id TEXT REFERENCES ccweb_auth_users(id) ON DELETE SET NULL;
 ALTER TABLE ccweb_auth_users ADD COLUMN IF NOT EXISTS acquisition_source TEXT;
 CREATE INDEX IF NOT EXISTS ccweb_auth_users_referred_by ON ccweb_auth_users (referred_by_user_id) WHERE referred_by_user_id IS NOT NULL;
+
+-- Monetization: monthly usage counters + metering audit (pay-per-use, upsell, admin analytics)
+CREATE TABLE IF NOT EXISTS ccweb_monetization_usage_monthly (
+  user_id TEXT NOT NULL REFERENCES ccweb_auth_users(id) ON DELETE CASCADE,
+  period_month DATE NOT NULL,
+  tier TEXT NOT NULL DEFAULT 'free',
+  scan_count INT NOT NULL DEFAULT 0,
+  intelligence_calls INT NOT NULL DEFAULT 0,
+  ai_platform_runs INT NOT NULL DEFAULT 0,
+  hub_agent_runs INT NOT NULL DEFAULT 0,
+  hub_workflow_runs INT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, period_month)
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_mon_usage_period ON ccweb_monetization_usage_monthly (period_month DESC);
+
+CREATE TABLE IF NOT EXISTS ccweb_metering_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES ccweb_auth_users(id) ON DELETE SET NULL,
+  project_id TEXT,
+  kind TEXT NOT NULL,
+  amount_usd NUMERIC(14,4) NOT NULL DEFAULT 0,
+  platform_share_usd NUMERIC(14,4) NOT NULL DEFAULT 0,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_metering_kind ON ccweb_metering_events (kind, created_at DESC);
+CREATE INDEX IF NOT EXISTS ccweb_metering_user ON ccweb_metering_events (user_id, created_at DESC) WHERE user_id IS NOT NULL;

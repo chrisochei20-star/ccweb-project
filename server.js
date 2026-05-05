@@ -26,6 +26,8 @@ const { createSocialApp } = require("./social/socialRouter");
 const { handleStripeWebhook } = require("./payments/stripeWebhook");
 const { handleStripeCheckoutEscrow } = require("./payments/stripeCheckout");
 const { createPlatformApp } = require("./platformExpress");
+const monetizationEngine = require("./services/monetizationEngine");
+const monPg = require("./db/persistenceMonetization");
 
 function useCommunityPg() {
   return Boolean(getPool());
@@ -635,7 +637,12 @@ async function handleLearningAdminAnalytics(req, res) {
   const summary = await learningPg.analyticsSummary();
   const live = await learningPg.listLiveSessionsWithStreamIds();
   const recentLedger = await learningPg.listRecentLedger(40);
-  sendJson(res, 200, { summary, liveSessions: live, recentLedger });
+  const u = new URL(req.url || "/", "http://127.0.0.1");
+  const revenueOverview = await monPg.adminRevenueOverview({
+    meteringDays: Number(u.searchParams.get("meteringDays")) || 90,
+    trendDays: Number(u.searchParams.get("trendDays")) || 14,
+  });
+  sendJson(res, 200, { summary, liveSessions: live, recentLedger, monetization: revenueOverview });
 }
 
 async function handleLearningSessionDetail(streamRoomId, res) {
@@ -3504,9 +3511,22 @@ async function handleDappRetryDeployment(req, res) {
   sendJson(res, 200, deployment);
 }
 
+async function gateScanFind(req) {
+  const token = getBearerToken(req);
+  const uid = token ? authEngine.getUserIdFromAccess(token) : null;
+  if (!uid) return { ok: true, anonymous: true };
+  const gate = await monetizationEngine.enforcePaywall(uid, "scan");
+  if (!gate.ok) return { ok: false, monetization: gate };
+  return { ok: true, userId: uid, monetization: gate };
+}
+
+async function finishScanGate(gate) {
+  if (gate.userId && gate.ok) await monetizationEngine.afterSuccessfulUse(gate.userId, "scan");
+}
+
 // ─── FIND Pillar: Crypto Safety Scanner, Alpha Engine, On-chain Intel ───
 
-async function handleCryptoScan(requestUrl, res) {
+async function handleCryptoScan(requestUrl, res, req) {
   const token = (requestUrl.searchParams.get("token") || "").toUpperCase().trim();
   const address = (requestUrl.searchParams.get("address") || "").trim();
 
@@ -3515,9 +3535,20 @@ async function handleCryptoScan(requestUrl, res) {
     return;
   }
 
+  const g = await gateScanFind(req || {});
+  if (!g.ok) {
+    sendJson(res, 402, {
+      error: "Token scan allowance exhausted.",
+      code: "MON_LIMIT",
+      monetization: g.monetization,
+    });
+    return;
+  }
+
   try {
     const scan = await liveIntel.buildTokenScan(token, address);
-    sendJson(res, 200, scan);
+    await finishScanGate(g);
+    sendJson(res, 200, { ...scan, monetization: g.monetization?.payPerUse ? { chargedCreditsCents: g.monetization.chargedCreditsCents } : undefined });
   } catch (e) {
     sendJson(res, e.status || 400, { error: e.message || "Scan failed" });
   }
@@ -3567,9 +3598,20 @@ async function handleScanTokenPost(req, res) {
     return;
   }
 
+  const g = await gateScanFind(req);
+  if (!g.ok) {
+    sendJson(res, 402, {
+      error: "Token scan allowance exhausted.",
+      code: "MON_LIMIT",
+      monetization: g.monetization,
+    });
+    return;
+  }
+
   try {
     const scan = await liveIntel.buildTokenScan(token, address);
-    sendJson(res, 200, scan);
+    await finishScanGate(g);
+    sendJson(res, 200, { ...scan, monetization: g.monetization?.payPerUse ? { chargedCreditsCents: g.monetization.chargedCreditsCents } : undefined });
   } catch (e) {
     sendJson(res, e.status || 400, { error: e.message || "Scan failed" });
   }
@@ -3585,38 +3627,74 @@ async function handleScanWalletPost(req, res) {
   }
 
   const address = body.address || body.wallet;
+
+  const g = await gateScanFind(req);
+  if (!g.ok) {
+    sendJson(res, 402, {
+      error: "Wallet scan allowance exhausted.",
+      code: "MON_LIMIT",
+      monetization: g.monetization,
+    });
+    return;
+  }
+
   try {
     const result = await liveIntel.buildWalletScan(address);
     if (result.error) {
       sendJson(res, 400, result);
       return;
     }
-    sendJson(res, 200, result);
+    await finishScanGate(g);
+    sendJson(res, 200, { ...result, monetization: g.monetization?.payPerUse ? { chargedCreditsCents: g.monetization.chargedCreditsCents } : undefined });
   } catch (e) {
     sendJson(res, 500, { error: e.message || "Wallet scan failed" });
   }
 }
 
-async function handleScanWalletGet(requestUrl, res) {
+async function handleScanWalletGet(requestUrl, res, req) {
   const address = requestUrl.searchParams.get("address") || requestUrl.searchParams.get("wallet");
+
+  const g = await gateScanFind(req || {});
+  if (!g.ok) {
+    sendJson(res, 402, {
+      error: "Wallet scan allowance exhausted.",
+      code: "MON_LIMIT",
+      monetization: g.monetization,
+    });
+    return;
+  }
+
   try {
     const result = await liveIntel.buildWalletScan(address);
     if (result.error) {
       sendJson(res, 400, result);
       return;
     }
-    sendJson(res, 200, result);
+    await finishScanGate(g);
+    sendJson(res, 200, { ...result, monetization: g.monetization?.payPerUse ? { chargedCreditsCents: g.monetization.chargedCreditsCents } : undefined });
   } catch (e) {
     sendJson(res, 500, { error: e.message || "Wallet scan failed" });
   }
 }
 
-async function handleDiscoverTokens(requestUrl, res) {
+async function handleDiscoverTokens(requestUrl, res, req) {
   const chain = requestUrl.searchParams.get("chain") || "";
   const minSignalStrength = requestUrl.searchParams.get("minSignalStrength");
+
+  const g = await gateScanFind(req || {});
+  if (!g.ok) {
+    sendJson(res, 402, {
+      error: "Discovery allowance exhausted (same quota as scans).",
+      code: "MON_LIMIT",
+      monetization: g.monetization,
+    });
+    return;
+  }
+
   try {
     const data = await liveIntel.discoverTokens({ chain, minSignalStrength });
-    sendJson(res, 200, data);
+    await finishScanGate(g);
+    sendJson(res, 200, { ...data, monetization: g.monetization?.payPerUse ? { chargedCreditsCents: g.monetization.chargedCreditsCents } : undefined });
   } catch (e) {
     sendJson(res, 500, { error: e.message || "Discovery failed" });
   }
@@ -4177,7 +4255,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/find/scan" && req.method === "GET") {
-    handleCryptoScan(requestUrl, res);
+    handleCryptoScan(requestUrl, res, req);
     return;
   }
 
@@ -4197,7 +4275,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/scan-token" && req.method === "GET") {
-    handleCryptoScan(requestUrl, res);
+    handleCryptoScan(requestUrl, res, req);
     return;
   }
 
@@ -4207,12 +4285,12 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/scan-wallet" && req.method === "GET") {
-    handleScanWalletGet(requestUrl, res);
+    handleScanWalletGet(requestUrl, res, req);
     return;
   }
 
   if (pathname === "/api/discover-tokens" && req.method === "GET") {
-    handleDiscoverTokens(requestUrl, res);
+    handleDiscoverTokens(requestUrl, res, req);
     return;
   }
 

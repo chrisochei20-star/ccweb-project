@@ -72,9 +72,10 @@ export async function fetchSessionDetail(streamRoomId) {
   return data;
 }
 
-export async function fetchLearningAdminAnalytics(adminKey) {
+export async function fetchLearningAdminAnalytics(adminKey, params = {}) {
   const { data } = await http.get("/api/learning/admin/analytics", {
     headers: { "X-CCWEB-Admin": adminKey },
+    params,
   });
   return data;
 }

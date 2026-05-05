@@ -60,6 +60,10 @@ function mapOrderRow(r) {
 async function seedIfEmpty() {
   const { rows } = await query("SELECT COUNT(*)::int AS c FROM growth_listings", []);
   if (rows[0].c > 0) return;
+  const allowSeed =
+    process.env.CCWEB_SEED_GROWTH_SAMPLES === "1" ||
+    (process.env.NODE_ENV !== "production" && process.env.CCWEB_SEED_GROWTH_SAMPLES !== "0");
+  if (!allowSeed) return;
   const samples = [
     ["Fractional CMO — 90-day growth sprint", "service", "consulting", 12000, "biz-demo-1", "Northstar Advisory", "Strategy, positioning, and weekly execution reviews."],
     ["Shopify store optimization bundle", "product", "e-commerce", 2499, "biz-demo-2", "Atlas Commerce Lab", "CRO audit, collection structure, and email flows."],
@@ -198,6 +202,16 @@ async function listOrders(sellerId) {
   }
   sql += " ORDER BY created_at DESC";
   const { rows } = await query(sql, params);
+  return rows.map(mapOrderRow);
+}
+
+/** Orders where the user is seller or buyer (for authenticated dashboard). */
+async function listOrdersForParticipant(userId) {
+  await seedIfEmpty();
+  const { rows } = await query(
+    `SELECT * FROM growth_orders WHERE seller_id = $1 OR buyer_id = $1 ORDER BY created_at DESC`,
+    [userId]
+  );
   return rows.map(mapOrderRow);
 }
 
@@ -381,7 +395,7 @@ async function attachStripeToOrder(orderId, sessionId, paymentIntentId) {
     `UPDATE growth_orders SET
       stripe_checkout_session_id = COALESCE($2, stripe_checkout_session_id),
       stripe_payment_intent_id = COALESCE($3, stripe_payment_intent_id),
-      status = CASE WHEN $1::text IS NOT NULL AND status = 'pending_payment' THEN 'escrow_funded' ELSE status END,
+      status = CASE WHEN $2 IS NOT NULL AND status = 'pending_payment' THEN 'escrow_funded' ELSE status END,
       audit = $4::jsonb
      WHERE id = $1`,
     [orderId, sessionId || null, paymentIntentId || null, JSON.stringify(audit)]
@@ -403,6 +417,7 @@ module.exports = {
   createOrder,
   getOrder,
   listOrders,
+  listOrdersForParticipant,
   markDelivered,
   confirmOrder,
   createLead,

@@ -38,7 +38,10 @@ const INDUSTRIES = ["e-commerce", "real-estate", "services", "consulting", "saas
 const CHANNELS = ["x", "facebook", "instagram", "linkedin", "email", "blog"];
 
 function seedIfEmpty() {
-  if (listings.size) return;
+  const allowSeed =
+    process.env.CCWEB_SEED_GROWTH_SAMPLES === "1" ||
+    (process.env.NODE_ENV !== "production" && process.env.CCWEB_SEED_GROWTH_SAMPLES !== "0");
+  if (!allowSeed || listings.size > 0) return;
   const samples = [
     {
       title: "Fractional CMO — 90-day growth sprint",
@@ -209,7 +212,7 @@ function createOrder({ listingId, buyerId, buyerName }) {
     sellerPendingUsd: +(gross - platformFee).toFixed(2),
     status: "escrow_funded",
     createdAt: new Date().toISOString(),
-    audit: [{ at: new Date().toISOString(), event: "funded_escrow", note: "Simulated payment held until buyer confirms delivery." }],
+    audit: [{ at: new Date().toISOString(), event: "order_created", note: "Development-mode order without Stripe; treat as funded for UI testing only." }],
   };
   orders.set(id, row);
   return row;
@@ -261,7 +264,7 @@ function overview() {
     platformFeePercent: PLATFORM_FEE_PCT,
     leadFeeUsd: LEAD_FEE_USD,
     disclaimer:
-      "Prototype ledger. Escrow and payouts are simulated. Production requires licensed payment + compliance review for each channel and region.",
+      "In-memory ledger for local development only. Configure PostgreSQL + Stripe for real escrow (see payments API).",
     organicPolicy:
       "No unsolicited bulk messaging. Use double opt-in where required. Agent outputs are suggestions — human approval before publish.",
     listingsCount: listings.size,

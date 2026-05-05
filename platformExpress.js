@@ -211,7 +211,7 @@ function createPlatformApp(deps) {
         runId,
         agentId,
         status: "completed",
-        summary: `Simulated run for "${agent.name}" with keys: ${Object.keys(input || {}).join(", ") || "none"}.`,
+        summary: `Sandbox run for "${agent.name}" with keys: ${Object.keys(input || {}).join(", ") || "none"}.`,
         outputPreview: "Configure upstream LLM providers in production.",
         finishedAt: new Date().toISOString(),
       };

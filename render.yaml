@@ -57,3 +57,5 @@ services:
         value: "1"
       - key: CCWEB_SKIP_MIGRATIONS
         value: "0"
+      - key: PG_SSL
+        value: "1"

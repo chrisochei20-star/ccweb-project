@@ -121,6 +121,12 @@ function mountAt(app, basePath) {
 
   app.post(`${p}/register`, async (req, res) => {
     try {
+      const ip = getClientIp(req);
+      const rl = rateLimit.check("register", ip, 15, 60 * 60 * 1000);
+      if (!rl.ok) {
+        res.setHeader("Retry-After", String(rl.retryAfterSec || 60));
+        return res.status(429).json({ error: "Too many registration attempts from this network. Try again later." });
+      }
       const { ccwebUsers, buildUserProfile, sanitizeUser } = getDeps(req);
       const out = await authEngine.registerUser(ccwebUsers, buildUserProfile, req.body || {});
       if (out.error) return res.status(400).json({ error: out.error });
@@ -311,6 +317,12 @@ function mountAt(app, basePath) {
   });
 
   app.post(`${p}/password/reset`, async (req, res) => {
+    const ip = getClientIp(req);
+    const rl = rateLimit.check("pwreset", ip, 20, 60 * 60 * 1000);
+    if (!rl.ok) {
+      res.setHeader("Retry-After", String(rl.retryAfterSec || 60));
+      return res.status(429).json({ error: "Too many reset attempts. Try again later." });
+    }
     const out = await authEngine.completePasswordReset(req.body || {});
     if (out.error) return res.status(400).json(out);
     res.json({ ok: true });

@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
-import { useCallback, useEffect, useState } from "react";
+import { Link, useOutletContext } from "react-router-dom";
+import { http } from "./api/http";
 
 async function j(path, opts = {}) {
   const res = await fetch(`/api/growth${path}`, {
@@ -12,11 +12,13 @@ async function j(path, opts = {}) {
 }
 
 export function GrowthHubPage({ initialTab = "overview" } = {}) {
+  const { user } = useOutletContext() || {};
   const [tab, setTab] = useState(initialTab);
 
   useEffect(() => {
     setTab(initialTab);
   }, [initialTab]);
+
   const [overview, setOverview] = useState(null);
   const [listings, setListings] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -25,35 +27,54 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
   const [suggestions, setSuggestions] = useState(null);
   const [err, setErr] = useState(null);
   const [msg, setMsg] = useState(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(null);
 
-  const [newListing, setNewListing] = useState({ title: "", type: "service", industry: "services", priceUsd: 499, description: "" });
+  const [newListing, setNewListing] = useState({
+    title: "",
+    type: "service",
+    industry: "services",
+    priceUsd: 499,
+    description: "",
+  });
   const [campaignForm, setCampaignForm] = useState({
     name: "Q3 organic pipeline",
     objective: "leads",
     channels: ["linkedin", "blog"],
     industries: ["consulting"],
   });
-  const [leadForm, setLeadForm] = useState({ businessId: "biz-demo-1", industry: "consulting", region: "EU" });
+  const [leadForm, setLeadForm] = useState({ industry: "consulting", region: "EU" });
+
+  const loadOrders = useCallback(async () => {
+    if (!user) {
+      setOrders([]);
+      return;
+    }
+    try {
+      const { data } = await http.get("/api/growth/orders");
+      setOrders(data.orders || []);
+    } catch {
+      setOrders([]);
+    }
+  }, [user]);
 
   const loadAll = useCallback(async () => {
     setErr(null);
     try {
-      const [o, l, ord, cmp] = await Promise.all([
-        j("/overview"),
-        j("/listings"),
-        j("/orders"),
-        j("/campaigns"),
-      ]);
+      const [o, l, cmp] = await Promise.all([j("/overview"), j("/listings"), j("/campaigns")]);
       setOverview(o);
       setListings(l.listings || []);
-      setOrders(ord.orders || []);
       setCampaigns(cmp.campaigns || []);
-      const leadRes = await fetch("/api/growth/leads?businessId=biz-demo-1").then((r) => r.json());
-      setLeads(leadRes.leads || []);
+      await loadOrders();
+      if (user?.id) {
+        const leadRes = await fetch(`/api/growth/leads?businessId=${encodeURIComponent(user.id)}`).then((r) => r.json());
+        setLeads(leadRes.leads || []);
+      } else {
+        setLeads([]);
+      }
     } catch (e) {
       setErr(e.message);
     }
-  }, []);
+  }, [user?.id, loadOrders]);
 
   useEffect(() => {
     loadAll();
@@ -62,52 +83,106 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
   async function createListing() {
     setErr(null);
     setMsg(null);
+    if (!user) {
+      setErr("Sign in to publish a listing.");
+      return;
+    }
+    if (!newListing.title.trim()) {
+      setErr("Title is required.");
+      return;
+    }
     try {
-      await j("/listings", { method: "POST", body: JSON.stringify({ ...newListing, sellerId: "biz-demo-1", sellerName: "Demo Co" }) });
-      setMsg("Listing created.");
+      await http.post("/api/growth/listings", {
+        ...newListing,
+        sellerName: user.displayName || "Seller",
+      });
+      setMsg("Listing published.");
       loadAll();
     } catch (e) {
-      setErr(e.message);
+      setErr(e.response?.data?.error || e.message || "Failed");
     }
   }
 
-  async function fundOrder(listingId) {
+  async function payWithStripe(listingId) {
     setErr(null);
+    setMsg(null);
+    if (!user) {
+      setErr("Sign in to purchase.");
+      return;
+    }
+    setCheckoutLoading(listingId);
     try {
-      const data = await j("/orders", {
-        method: "POST",
-        body: JSON.stringify({ listingId, buyerId: "buyer-demo", buyerName: "Alex Buyer" }),
+      const origin = window.location.origin;
+      const { data } = await http.post("/api/v1/payments/create", {
+        listingId,
+        buyerName: user.displayName || "Customer",
+        successUrl: `${origin}/escrow?paid=1`,
+        cancelUrl: `${origin}/marketplace?cancelled=1`,
       });
-      setMsg(`Order ${data.id} — funds in escrow (simulated).`);
-      loadAll();
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+      setErr(data.error || "Checkout URL not returned.");
     } catch (e) {
-      setErr(e.message);
+      setErr(e.response?.data?.error || e.message || "Checkout failed");
+    } finally {
+      setCheckoutLoading(null);
     }
   }
 
   async function deliverOrder(id) {
-    await j(`/orders/${id}/deliver`, { method: "POST", body: JSON.stringify({}) });
-    setMsg("Marked delivered — awaiting buyer confirm.");
-    loadAll();
+    setErr(null);
+    try {
+      await http.post(`/api/growth/orders/${id}/deliver`, {});
+      setMsg("Marked delivered — awaiting buyer confirmation.");
+      loadAll();
+    } catch (e) {
+      setErr(e.response?.data?.error || e.message || "Failed");
+    }
   }
 
   async function confirmOrder(id) {
-    await j(`/orders/${id}/confirm`, { method: "POST", body: JSON.stringify({}) });
-    setMsg("Payment released (simulated).");
-    loadAll();
+    setErr(null);
+    try {
+      await http.post(`/api/growth/orders/${id}/confirm`, {});
+      setMsg("Payment released (escrow completed).");
+      loadAll();
+    } catch (e) {
+      setErr(e.response?.data?.error || e.message || "Failed");
+    }
   }
 
   async function createLead() {
-    await j("/leads", { method: "POST", body: JSON.stringify(leadForm) });
+    if (!user) {
+      setErr("Sign in to generate leads.");
+      return;
+    }
+    await http.post("/api/growth/leads", {
+      ...leadForm,
+      businessId: user.id,
+    });
     loadAll();
   }
 
   async function createCampaign() {
-    const c = await j("/campaigns", { method: "POST", body: JSON.stringify({ ...campaignForm, businessId: "biz-demo-1" }) });
-    setMsg(`Campaign ${c.id} created.`);
-    loadAll();
-    const s = await j(`/campaigns/${c.id}/suggestions`);
-    setSuggestions(s);
+    if (!user) {
+      setErr("Sign in to create campaigns.");
+      return;
+    }
+    setErr(null);
+    try {
+      const { data: c } = await http.post("/api/growth/campaigns", {
+        ...campaignForm,
+        businessId: user.id,
+      });
+      setMsg(`Campaign ${c.id} created.`);
+      loadAll();
+      const s = await j(`/campaigns/${c.id}/suggestions`);
+      setSuggestions(s);
+    } catch (e) {
+      setErr(e.response?.data?.error || e.message || "Failed");
+    }
   }
 
   return (
@@ -116,8 +191,8 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
         <p className="text-xs font-semibold uppercase tracking-widest text-ccweb-cyan">Build · Business Automation</p>
         <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">Global Marketing Agent &amp; Growth Hub</h1>
         <p className="mt-2 max-w-3xl text-sm text-ccweb-muted">
-          Organic-first marketing workspace: research, channel suggestions, lead scoring, marketplace listings, and escrow-style
-          pay-on-delivery flows. No bulk spam — human approval before publish; follow each network&apos;s rules.
+          Organic-first workspace: listings, Stripe-backed escrow when PostgreSQL and Stripe are configured, campaigns, and lead scoring.
+          Follow each network&apos;s rules — agent outputs need human approval before publish.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {["overview", "marketplace", "escrow", "campaigns", "leads"].map((t) => (
@@ -134,6 +209,15 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
           ))}
         </div>
       </header>
+
+      {!user && (
+        <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          <Link to="/login" className="font-medium text-ccweb-cyan underline">
+            Sign in
+          </Link>{" "}
+          to publish listings, purchase with Stripe escrow, and manage your orders.
+        </p>
+      )}
 
       {err && <p className="text-sm text-rose-400">{err}</p>}
       {msg && <p className="text-sm text-emerald-300">{msg}</p>}
@@ -154,7 +238,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
           <div className="rounded-2xl border border-ccweb-border bg-ccweb-card p-4 backdrop-blur-xl sm:col-span-2">
             <p className="text-xs text-ccweb-muted">Platform fee</p>
             <p className="text-lg font-semibold text-ccweb-cyan">{overview.platformFeePercent}% on successful sales</p>
-            <p className="mt-2 text-xs text-ccweb-muted">Lead fee (prototype): ${overview.leadFeeUsd} + fee share on convert</p>
+            <p className="mt-2 text-xs text-ccweb-muted">Lead fee: ${overview.leadFeeUsd}</p>
             <p className="mt-3 text-xs text-ccweb-muted">{overview.organicPolicy}</p>
           </div>
         </div>
@@ -173,29 +257,63 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
                       <p className="text-xs text-ccweb-muted">
                         {l.type} · {l.industry} · ${l.priceUsd}
                       </p>
+                      <p className="mt-1 text-xs text-ccweb-muted">Seller: {l.sellerName}</p>
                     </div>
-                    <button type="button" className="rounded-lg bg-ccweb-green/90 px-3 py-1 text-xs font-semibold text-[#061329]" onClick={() => fundOrder(l.id)}>
-                      Buy (escrow)
+                    <button
+                      type="button"
+                      disabled={!user || checkoutLoading === l.id || l.sellerId === user?.id}
+                      className="rounded-lg bg-ccweb-green/90 px-3 py-1 text-xs font-semibold text-[#061329] disabled:opacity-40"
+                      onClick={() => payWithStripe(l.id)}
+                      title={l.sellerId === user?.id ? "You cannot buy your own listing" : ""}
+                    >
+                      {checkoutLoading === l.id ? "Redirecting…" : "Pay with card (Stripe)"}
                     </button>
                   </div>
                 </li>
               ))}
             </ul>
+            <p className="mt-4 text-xs text-ccweb-muted">
+              Requires <code className="text-ccweb-cyan">DATABASE_URL</code>, <code className="text-ccweb-cyan">STRIPE_SECRET_KEY</code>, and a signed-in buyer.
+            </p>
           </section>
           <section className="rounded-2xl border border-ccweb-border bg-ccweb-card p-5 backdrop-blur-xl">
             <h2 className="text-lg font-semibold text-white">List a product or service</h2>
             <div className="mt-4 space-y-2">
-              <input className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Title" value={newListing.title} onChange={(e) => setNewListing({ ...newListing, title: e.target.value })} />
-              <select className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" value={newListing.industry} onChange={(e) => setNewListing({ ...newListing, industry: e.target.value })}>
+              <input
+                className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white"
+                placeholder="Title"
+                value={newListing.title}
+                onChange={(e) => setNewListing({ ...newListing, title: e.target.value })}
+              />
+              <select
+                className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white"
+                value={newListing.industry}
+                onChange={(e) => setNewListing({ ...newListing, industry: e.target.value })}
+              >
                 {["e-commerce", "real-estate", "services", "consulting", "saas", "local-retail"].map((i) => (
                   <option key={i} value={i}>
                     {i}
                   </option>
                 ))}
               </select>
-              <input type="number" className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" value={newListing.priceUsd} onChange={(e) => setNewListing({ ...newListing, priceUsd: Number(e.target.value) })} />
-              <textarea className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" rows={3} placeholder="Description" value={newListing.description} onChange={(e) => setNewListing({ ...newListing, description: e.target.value })} />
-              <button type="button" className="rounded-xl bg-gradient-to-r from-ccweb-cyan to-ccweb-violet px-4 py-2 text-sm font-semibold text-[#061329]" onClick={createListing}>
+              <input
+                type="number"
+                className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white"
+                value={newListing.priceUsd}
+                onChange={(e) => setNewListing({ ...newListing, priceUsd: Number(e.target.value) })}
+              />
+              <textarea
+                className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white"
+                rows={3}
+                placeholder="Description"
+                value={newListing.description}
+                onChange={(e) => setNewListing({ ...newListing, description: e.target.value })}
+              />
+              <button
+                type="button"
+                className="rounded-xl bg-gradient-to-r from-ccweb-cyan to-ccweb-violet px-4 py-2 text-sm font-semibold text-[#061329]"
+                onClick={createListing}
+              >
                 Publish listing
               </button>
             </div>
@@ -205,11 +323,13 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
 
       {tab === "escrow" && (
         <section className="rounded-2xl border border-ccweb-border bg-ccweb-card p-5 backdrop-blur-xl">
-          <h2 className="text-lg font-semibold text-white">Escrow flow (simulated)</h2>
+          <h2 className="text-lg font-semibold text-white">Escrow</h2>
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-ccweb-muted">
-            <li>Customer pays → order status <code className="text-ccweb-cyan">escrow_funded</code></li>
-            <li>Business delivers → <strong className="text-white">Mark delivered</strong></li>
-            <li>Customer confirms → <strong className="text-white">Release payment</strong> (CCWEB fee deducted)</li>
+            <li>
+              Buyer pays via Stripe → order moves to <code className="text-ccweb-cyan">escrow_funded</code> when checkout completes
+            </li>
+            <li>Seller delivers → Mark delivered</li>
+            <li>Buyer confirms → Release payment (platform fee retained)</li>
           </ol>
           <ul className="mt-6 space-y-3">
             {orders.map((o) => (
@@ -222,13 +342,22 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    {o.status === "escrow_funded" && (
-                      <button type="button" className="rounded-lg border border-white/20 px-3 py-1 text-xs text-white" onClick={() => deliverOrder(o.id)}>
+                    {o.status === "pending_payment" && <span className="text-xs text-amber-200">Awaiting Stripe payment</span>}
+                    {o.status === "escrow_funded" && user?.id === o.sellerId && (
+                      <button
+                        type="button"
+                        className="rounded-lg border border-white/20 px-3 py-1 text-xs text-white"
+                        onClick={() => deliverOrder(o.id)}
+                      >
                         Mark delivered
                       </button>
                     )}
-                    {o.status === "delivered_pending_confirm" && (
-                      <button type="button" className="rounded-lg bg-ccweb-green/90 px-3 py-1 text-xs font-semibold text-[#061329]" onClick={() => confirmOrder(o.id)}>
+                    {o.status === "delivered_pending_confirm" && user?.id === o.buyerId && (
+                      <button
+                        type="button"
+                        className="rounded-lg bg-ccweb-green/90 px-3 py-1 text-xs font-semibold text-[#061329]"
+                        onClick={() => confirmOrder(o.id)}
+                      >
                         Confirm &amp; release
                       </button>
                     )}
@@ -237,6 +366,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
               </li>
             ))}
           </ul>
+          {user && orders.length === 0 && <p className="mt-4 text-sm text-ccweb-muted">No orders yet.</p>}
         </section>
       )}
 
@@ -244,9 +374,17 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="rounded-2xl border border-ccweb-border bg-ccweb-card p-5 backdrop-blur-xl">
             <h2 className="text-lg font-semibold text-white">Marketing agent campaign</h2>
-            <p className="mt-1 text-xs text-ccweb-muted">Channels: X, Facebook, Instagram, LinkedIn — suggestions only; comply with each platform.</p>
-            <input className="mt-3 w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" value={campaignForm.name} onChange={(e) => setCampaignForm({ ...campaignForm, name: e.target.value })} />
-            <button type="button" className="mt-3 rounded-xl bg-gradient-to-r from-ccweb-cyan to-ccweb-violet px-4 py-2 text-sm font-semibold text-[#061329]" onClick={createCampaign}>
+            <p className="mt-1 text-xs text-ccweb-muted">Channels: X, Facebook, Instagram, LinkedIn — suggestions only.</p>
+            <input
+              className="mt-3 w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white"
+              value={campaignForm.name}
+              onChange={(e) => setCampaignForm({ ...campaignForm, name: e.target.value })}
+            />
+            <button
+              type="button"
+              className="mt-3 rounded-xl bg-gradient-to-r from-ccweb-cyan to-ccweb-violet px-4 py-2 text-sm font-semibold text-[#061329]"
+              onClick={createCampaign}
+            >
               Create &amp; get AI suggestions
             </button>
           </section>
@@ -271,7 +409,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
           <h2 className="text-lg font-semibold text-white">Lead generation</h2>
           <div className="mt-4 flex flex-wrap gap-2">
             <button type="button" className="rounded-xl border border-white/20 px-4 py-2 text-sm" onClick={createLead}>
-              Simulate qualified lead
+              Generate qualified lead
             </button>
           </div>
           <ul className="mt-4 space-y-2 text-sm text-ccweb-muted">

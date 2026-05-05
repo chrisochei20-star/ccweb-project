@@ -6,9 +6,25 @@ const express = require("express");
 const { applyExpressSecurity } = require("./security/expressHardDefaults");
 const hub = require("./businessGrowthHub");
 const pg = require("./db/persistenceGrowth");
+const authEngine = require("./auth/authEngine");
 
 function usePg() {
   return pg.usePostgres();
+}
+
+function getBearerUserId(req) {
+  const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) return null;
+  return authEngine.getUserIdFromAccess(token);
+}
+
+function requireUser(req, res) {
+  const uid = getBearerUserId(req);
+  if (!uid) {
+    res.status(401).json({ error: "Authentication required." });
+    return null;
+  }
+  return uid;
 }
 
 function createGrowthApp() {
@@ -37,7 +53,14 @@ function createGrowthApp() {
 
   app.post("/listings", async (req, res) => {
     try {
-      const row = usePg() ? await pg.createListing(req.body || {}) : hub.createListing(req.body || {});
+      const uid = requireUser(req, res);
+      if (!uid) return;
+      const body = { ...(req.body || {}) };
+      body.sellerId = uid;
+      if (!body.sellerName || !String(body.sellerName).trim()) {
+        body.sellerName = body.sellerDisplayName || "Seller";
+      }
+      const row = usePg() ? await pg.createListing(body) : hub.createListing(body);
       res.status(201).json(row);
     } catch (e) {
       res.status(500).json({ error: e.message || "Server error" });
@@ -56,7 +79,13 @@ function createGrowthApp() {
 
   app.post("/orders", async (req, res) => {
     try {
-      const out = usePg() ? await pg.createOrder(req.body || {}) : hub.createOrder(req.body || {});
+      const uid = requireUser(req, res);
+      if (!uid) return;
+      const body = { ...(req.body || {}), buyerId: uid };
+      if (!body.buyerName || !String(body.buyerName).trim()) {
+        body.buyerName = body.buyerDisplayName || "Buyer";
+      }
+      const out = usePg() ? await pg.createOrder(body) : hub.createOrder(body);
       if (out.error) return res.status(400).json(out);
       res.status(201).json(out);
     } catch (e) {
@@ -66,6 +95,13 @@ function createGrowthApp() {
 
   app.post("/orders/:id/deliver", async (req, res) => {
     try {
+      const uid = requireUser(req, res);
+      if (!uid) return;
+      let order = null;
+      if (usePg()) order = await pg.getOrder(req.params.id);
+      else order = hub.orders.get(req.params.id);
+      if (!order) return res.status(404).json({ error: "Order not found." });
+      if (order.sellerId !== uid) return res.status(403).json({ error: "Only the seller can mark delivered." });
       const out = usePg() ? await pg.markDelivered(req.params.id) : hub.markDelivered(req.params.id);
       if (out.error) return res.status(400).json(out);
       res.json(out);
@@ -76,6 +112,13 @@ function createGrowthApp() {
 
   app.post("/orders/:id/confirm", async (req, res) => {
     try {
+      const uid = requireUser(req, res);
+      if (!uid) return;
+      let order = null;
+      if (usePg()) order = await pg.getOrder(req.params.id);
+      else order = hub.orders.get(req.params.id);
+      if (!order) return res.status(404).json({ error: "Order not found." });
+      if (order.buyerId !== uid) return res.status(403).json({ error: "Only the buyer can confirm release." });
       const out = usePg() ? await pg.confirmOrder(req.params.id) : hub.confirmOrder(req.params.id);
       if (out.error) return res.status(400).json(out);
       res.json(out);
@@ -86,6 +129,11 @@ function createGrowthApp() {
 
   app.get("/orders", async (req, res) => {
     try {
+      const uid = getBearerUserId(req);
+      if (uid) {
+        const list = usePg() ? await pg.listOrdersForParticipant(uid) : [...hub.orders.values()].filter((o) => o.sellerId === uid || o.buyerId === uid);
+        return res.json({ count: list.length, orders: list });
+      }
       const seller = (req.query.sellerId || "").toString();
       const list = usePg() ? await pg.listOrders(seller) : (hub.seedIfEmpty(), [...hub.orders.values()].filter((o) => !seller || o.sellerId === seller));
       res.json({ count: list.length, orders: list });
@@ -106,7 +154,10 @@ function createGrowthApp() {
 
   app.post("/leads", async (req, res) => {
     try {
-      const row = usePg() ? await pg.createLead(req.body || {}) : hub.createLead(req.body || {});
+      const uid = requireUser(req, res);
+      if (!uid) return;
+      const body = { ...(req.body || {}), businessId: (req.body && req.body.businessId) || uid };
+      const row = usePg() ? await pg.createLead(body) : hub.createLead(body);
       res.status(201).json({ ...row, leadFeeUsd: hub.LEAD_FEE_USD, note: "Pay-per-qualified lead: settle in production via payment provider." });
     } catch (e) {
       res.status(500).json({ error: e.message || "Server error" });
@@ -138,7 +189,10 @@ function createGrowthApp() {
 
   app.post("/campaigns", async (req, res) => {
     try {
-      const row = usePg() ? await pg.createCampaign(req.body || {}) : hub.createCampaign(req.body || {});
+      const uid = requireUser(req, res);
+      if (!uid) return;
+      const body = { ...(req.body || {}), businessId: (req.body && req.body.businessId) || uid };
+      const row = usePg() ? await pg.createCampaign(body) : hub.createCampaign(body);
       res.status(201).json(row);
     } catch (e) {
       res.status(500).json({ error: e.message || "Server error" });

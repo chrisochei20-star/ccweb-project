@@ -12,6 +12,22 @@ services:
     preDeployCommand: node db/migrate.js
     startCommand: npm start
     healthCheckPath: /health
+    # Optional: only rebuild API when backend paths change (uncomment after validating globs for your repo)
+    # buildFilter:
+    #   paths:
+    #     - server.js
+    #     - package.json
+    #     - package-lock.json
+    #     - auth/**
+    #     - db/**
+    #     - payments/**
+    #     - security/**
+    #     - services/**
+    #     - "*.js"
+    #   ignoredPaths:
+    #     - src/**
+    #     - e2e/**
+    #     - docs/**
     envVars:
       - key: NODE_ENV
         value: production

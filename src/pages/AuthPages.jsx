@@ -261,6 +261,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Your name"
                   autoComplete="name"
+                  data-ccweb-e2e="signup-display-name"
                 />
               </label>
             )}
@@ -273,6 +274,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@company.com"
                 autoComplete="email"
+                data-ccweb-e2e="auth-email"
               />
             </label>
             <label className="mt-4 block">
@@ -284,12 +286,13 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Min 8 characters"
                 autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                data-ccweb-e2e="auth-password"
               />
             </label>
 
             {error && <p className="mt-4 text-sm text-rose-300">{error}</p>}
 
-            <button type="button" className="mt-6 w-full ccweb-gradient-btn" disabled={loading} onClick={submitPassword}>
+            <button type="button" className="mt-6 w-full ccweb-gradient-btn" disabled={loading} onClick={submitPassword} data-ccweb-e2e="auth-submit">
               {loading ? "Please wait…" : action}
             </button>
 

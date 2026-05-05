@@ -70,6 +70,7 @@ This repo cannot create **your** live URLs. Follow these steps in **Render** (or
 - [ ] Network tab: API calls go to `VITE_API_BASE_URL`, not `localhost`.
 - [ ] `GET /api/v1/config` returns `publicAppUrl` and `apiPublicUrl` as expected.
 - [ ] Stripe test payment in test mode (then switch to live keys when ready).
+- [ ] **QA checklist & Playwright:** see [QA_PRODUCTION_CHECKLIST.md](./QA_PRODUCTION_CHECKLIST.md), [QA_REPORT_TEMPLATE.md](./QA_REPORT_TEMPLATE.md), and `npm run test:e2e:production`.
 
 ## 6. Custom domains (optional)
 

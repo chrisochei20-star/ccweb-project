@@ -1,3 +1,11 @@
+# Netlify: Site settings → Build & deploy (or rely on these defaults)
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

@@ -594,6 +594,31 @@ async function handleLearningMe(requestUrl, res) {
   sendJson(res, 200, { postgres: true, profile });
 }
 
+async function handleLearningSessionsList(requestUrl, res) {
+  const status = (requestUrl.searchParams.get("status") || "all").trim();
+  const limitRaw = requestUrl.searchParams.get("limit") || "50";
+  const limit = Number(limitRaw);
+  if (!learningPg.usePostgres()) {
+    sendJson(res, 200, {
+      postgres: false,
+      count: 0,
+      sessions: [],
+      note: "Set DATABASE_URL to persist learning sessions and revenue analytics.",
+    });
+    return;
+  }
+  try {
+    const sessions = await learningPg.listLearningSessions({
+      status,
+      limit: Number.isFinite(limit) ? limit : 50,
+    });
+    sendJson(res, 200, { postgres: true, count: sessions.length, sessions });
+  } catch (e) {
+    logger.error({ msg: "learning_sessions_list_fail", err: e.message });
+    sendJson(res, 500, { error: e.message || "Failed to list sessions." });
+  }
+}
+
 async function handleLearningAdminAnalytics(req, res) {
   if (!checkLearningAdmin(req)) {
     sendJson(res, 403, { error: "Admin key required (X-CCWEB-Admin)." });
@@ -3683,6 +3708,11 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === "/api/learning/me" && req.method === "GET") {
     await handleLearningMe(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/learning/sessions" && req.method === "GET") {
+    await handleLearningSessionsList(requestUrl, res);
     return;
   }
 

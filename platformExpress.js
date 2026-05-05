@@ -12,8 +12,10 @@ const { mountAt, mountWalletFlat } = require("./auth/authExpress");
 const learningPg = require("./db/persistenceLearning");
 const pgGrowth = require("./db/persistenceGrowth");
 const growthEngine = require("./db/persistenceGrowthEngine");
+const monPg = require("./db/persistenceMonetization");
 const { expressStripeEscrowCheckout } = require("./payments/stripeCheckout");
 const aiExecute = require("./services/aiExecute");
+const monetizationEngine = require("./services/monetizationEngine");
 
 function getClientIp(req) {
   return (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "";
@@ -204,12 +206,21 @@ function createPlatformApp(deps) {
 
   agentsRouter.post("/run", authJwtMiddleware, async (req, res, next) => {
     try {
+      const gate = await monetizationEngine.enforcePaywall(req.ccwebUserId, "ai_platform");
+      if (!gate.ok) {
+        return res.status(402).json({
+          error: "AI agent run limit reached for your plan.",
+          code: "MON_LIMIT",
+          monetization: gate,
+        });
+      }
       const agentId = (req.body?.agentId || "").toString().trim();
       const input = req.body?.input || {};
       const agent = catalogAgents.find((x) => x.id === agentId);
       if (!agent) return res.status(404).json({ error: "Agent not found." });
       const runId = `run_${crypto.randomBytes(8).toString("hex")}`;
       const ai = await aiExecute.runAgent(agent, input);
+      await monetizationEngine.afterSuccessfulUse(req.ccwebUserId, "ai_platform");
       if (learningPg.usePostgres()) {
         try {
           await learningPg.addXpDelta(req.ccwebUserId, 12);
@@ -227,6 +238,7 @@ function createPlatformApp(deps) {
         provider: ai.provider,
         model: ai.model,
         usage: ai.usage,
+        monetization: gate.payPerUse ? { chargedCreditsCents: gate.chargedCreditsCents } : { included: true },
         finishedAt: new Date().toISOString(),
       };
       agentRuns.unshift({ ...result, userId: req.ccwebUserId });
@@ -309,6 +321,57 @@ function createPlatformApp(deps) {
   });
 
   v1.use("/growth", apiRateShort, growthRouter);
+
+  const monetizationRouter = express.Router();
+
+  monetizationRouter.get("/status", authJwtMiddleware, async (req, res, next) => {
+    try {
+      if (!learningPg.usePostgres()) {
+        return res.json({
+          postgres: false,
+          note: "DATABASE_URL enables metering and credit wallets.",
+        });
+      }
+      const tier = await monPg.getEffectiveTier(req.ccwebUserId);
+      const limits = monetizationEngine.tierLimits(tier);
+      const usageRow = await monPg.getUsageRow(req.ccwebUserId);
+      const profile = await learningPg.userLearningProfile(req.ccwebUserId);
+      const scans = usageRow?.scan_count ?? 0;
+      const intel = usageRow?.intelligence_calls ?? 0;
+      const aiRuns = usageRow?.ai_platform_runs ?? 0;
+      const scanQuote = await monetizationEngine.quotePayPerUse("scan");
+      const intelQuote = await monetizationEngine.quotePayPerUse("intelligence");
+      const aiQuote = await monetizationEngine.quotePayPerUse("ai_platform");
+      res.json({
+        tier,
+        limits,
+        usageThisMonth: {
+          scans,
+          intelligenceCalls: intel,
+          aiPlatformRuns: aiRuns,
+          hubAgentRuns: usageRow?.hub_agent_runs ?? 0,
+          hubWorkflowRuns: usageRow?.hub_workflow_runs ?? 0,
+        },
+        wallet: { creditsCents: profile?.creditsCents ?? 0 },
+        subscription: profile?.subscription ?? null,
+        quotes: {
+          demandMultiplier: scanQuote.multiplier,
+          scanOverageCreditsCents: monetizationEngine.creditCentsFor("scan"),
+          intelligenceOverageCreditsCents: monetizationEngine.creditCentsFor("intelligence"),
+          aiPlatformOverageCreditsCents: monetizationEngine.creditCentsFor("ai_platform"),
+          indicativeUsd: {
+            scan: scanQuote.priceUsd,
+            intelligence: intelQuote.priceUsd,
+            aiPlatform: aiQuote.priceUsd,
+          },
+        },
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  v1.use("/monetization", apiRateShort, monetizationRouter);
 
   const marketplaceRouter = express.Router();
 
@@ -482,7 +545,23 @@ function createPlatformApp(deps) {
       const growthOverview = pgGrowth.usePostgres() ? await pgGrowth.overview() : null;
       const growthViral = await growthEngine.growthAnalyticsSummary();
       const leaderboards = await growthEngine.leaderboards(30);
-      res.json({ learning: summary, growthHub: growthOverview, growthViral, leaderboards });
+      const monPg = require("./db/persistenceMonetization");
+      const revenueOverview = await monPg.adminRevenueOverview({
+        meteringDays: Number(req.query.meteringDays) || 90,
+        trendDays: Number(req.query.trendDays) || 14,
+      });
+      const pricing = await monetizationEngine.quotePayPerUse("scan");
+      res.json({
+        learning: summary,
+        growthHub: growthOverview,
+        growthViral,
+        leaderboards,
+        monetization: {
+          revenueOverview,
+          dynamicPricingSample: pricing,
+          tierDefaults: monetizationEngine.tierLimits("free"),
+        },
+      });
     } catch (e) {
       next(e);
     }

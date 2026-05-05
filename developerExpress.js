@@ -10,6 +10,7 @@ const dp = require("./developerPlatform");
 const liveIntel = require("./intel/liveCryptoIntel");
 const aiExecute = require("./services/aiExecute");
 const revenuePg = require("./db/persistenceRevenue");
+const monetizationEngine = require("./services/monetizationEngine");
 
 function getClientIp(req) {
   return (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "";
@@ -264,6 +265,15 @@ function createDeveloperApp(opts) {
 
   v1.post("/agents/:id/execute", async (req, res, next) => {
     try {
+      const hubBill = await monetizationEngine.hubAutomationCharge(req.ccwebProjectId, "hub_agent");
+      if (!hubBill.ok) {
+        res.status(402).json({
+          error: hubBill.reason || "Automation quota exceeded.",
+          code: "HUB_LIMIT",
+          monetization: hubBill,
+        });
+        return;
+      }
       const out = await aiExecute.runAgent({ id: req.params.id, name: "CCWEB agent", description: "Public API agent" }, req.body);
       const runId = `run_${crypto.randomBytes(6).toString("hex")}`;
       dp.emitWebhook(req.ccwebProjectId, "agent.execution.completed", {
@@ -291,6 +301,15 @@ function createDeveloperApp(opts) {
   });
 
   v1.post("/workflows/:id/run", async (req, res) => {
+    const hubBill = await monetizationEngine.hubAutomationCharge(req.ccwebProjectId, "hub_workflow");
+    if (!hubBill.ok) {
+      res.status(402).json({
+        error: hubBill.reason || "Automation quota exceeded.",
+        code: "HUB_LIMIT",
+        monetization: hubBill,
+      });
+      return;
+    }
     const out = await dp.runWorkflow(req.ccwebProjectId, req.params.id, req.body || {});
     if (out.error) {
       const code = out.code === "AI_NOT_CONFIGURED" ? 503 : out.status || 404;

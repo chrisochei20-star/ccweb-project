@@ -222,6 +222,24 @@ async function debitCreditsForMinutes(userId, minutes, hourlyUsd) {
   return { ok: true, chargedCents: cents };
 }
 
+/** Debit wallet credits for generic metered features (pay-per-use over quota). */
+async function debitCreditsGeneric(userId, cents, reason = "metered") {
+  if (!usePostgres()) return { ok: false, reason: "no_database" };
+  const n = Math.round(Number(cents) || 0);
+  if (n <= 0) return { ok: true, chargedCents: 0 };
+  const bal = await getCreditBalanceCents(userId);
+  if (bal < n) return { ok: false, neededCents: n, balanceCents: bal };
+  await query(`UPDATE learning_user_wallet SET credits_cents = credits_cents - $1, updated_at = NOW() WHERE user_id = $2`, [
+    n,
+    userId,
+  ]);
+  await query(
+    `INSERT INTO learning_tutor_events (id, user_id, event_type, metadata) VALUES ($1,$2,'credit_debit', $3::jsonb)`,
+    [newId("tut"), userId, JSON.stringify({ cents: n, reason })]
+  );
+  return { ok: true, chargedCents: n };
+}
+
 async function getActiveSubscription(userId) {
   const { rows } = await query(
     `SELECT tier, status, current_period_end FROM learning_subscriptions WHERE user_id = $1 AND status = 'active' ORDER BY current_period_end DESC NULLS LAST LIMIT 1`,
@@ -264,6 +282,7 @@ async function analyticsSummary() {
        (SELECT COUNT(*)::int FROM learning_sessions WHERE status = 'live') AS active_sessions,
        (SELECT COALESCE(SUM(total_gross_usd),0) FROM learning_sessions) AS lifetime_gross,
        (SELECT COALESCE(SUM(total_platform_usd),0) FROM learning_sessions) AS lifetime_platform,
+       (SELECT COALESCE(SUM(total_creator_usd),0) FROM learning_sessions) AS lifetime_creator,
        (SELECT COUNT(*)::int FROM learning_revenue_ledger) AS ledger_rows`
   );
   return s.rows[0];
@@ -386,6 +405,7 @@ module.exports = {
   addXpDelta,
   getCreditBalanceCents,
   debitCreditsForMinutes,
+  debitCreditsGeneric,
   getActiveSubscription,
   setSubscriptionActive,
   recordTutorEvent,

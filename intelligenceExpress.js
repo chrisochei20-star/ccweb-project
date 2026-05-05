@@ -7,6 +7,30 @@ const { applyExpressSecurity } = require("./security/expressHardDefaults");
 const earlySignalsEngine = require("./earlySignalsEngine");
 const intelligenceDb = require("./intelligenceDb");
 const { buildTokenDetail } = require("./tokenDetailLive");
+const authEngine = require("./auth/authEngine");
+const monetization = require("./services/monetizationEngine");
+
+function bearerUserId(req) {
+  const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "").trim();
+  return authEngine.getUserIdFromAccess(token);
+}
+
+/** Meter signed-in users only; anonymous traffic stays unrestricted for acquisition. */
+async function gateIntel(req, res) {
+  const uid = bearerUserId(req);
+  if (!uid) return true;
+  const gate = await monetization.enforcePaywall(uid, "intelligence");
+  if (!gate.ok) {
+    res.status(402).json({
+      error: "Advanced analytics allowance exhausted.",
+      code: "MON_LIMIT",
+      monetization: gate,
+    });
+    return false;
+  }
+  await monetization.afterSuccessfulUse(uid, "intelligence");
+  return true;
+}
 
 function normalizeAddress(addr) {
   const a = String(addr || "").trim().toLowerCase();
@@ -19,6 +43,7 @@ function createIntelligenceRouter() {
 
   router.get("/dashboard", async (req, res) => {
     try {
+      if (!(await gateIntel(req, res))) return;
       const tracked = await intelligenceDb.listTrackedWallets();
       const data = await earlySignalsEngine.buildDashboardPayload(tracked);
       res.json(data);
@@ -29,6 +54,7 @@ function createIntelligenceRouter() {
 
   router.get("/feed", async (req, res) => {
     try {
+      if (!(await gateIntel(req, res))) return;
       const items = await earlySignalsEngine.buildFeedItems();
       res.json({
         items,
@@ -42,6 +68,7 @@ function createIntelligenceRouter() {
 
   router.get("/narratives", async (req, res, next) => {
     try {
+      if (!(await gateIntel(req, res))) return;
       const data = await earlySignalsEngine.buildNarrativeTrends();
       res.json(data);
     } catch (e) {
@@ -51,6 +78,7 @@ function createIntelligenceRouter() {
 
   router.get("/smart-money", async (req, res) => {
     try {
+      if (!(await gateIntel(req, res))) return;
       const tracked = await intelligenceDb.listTrackedWallets();
       const data = await earlySignalsEngine.buildDashboardPayload(tracked);
       res.json(data.smartMoney);
@@ -61,6 +89,7 @@ function createIntelligenceRouter() {
 
   router.get("/risk-alerts", async (req, res) => {
     try {
+      if (!(await gateIntel(req, res))) return;
       const items = await earlySignalsEngine.buildFeedItems();
       const alerts = earlySignalsEngine.buildRiskAlerts(items);
       res.json({
@@ -117,6 +146,7 @@ function createIntelligenceRouter() {
 
   router.get("/token/:slug", async (req, res) => {
     try {
+      if (!(await gateIntel(req, res))) return;
       const slug = decodeURIComponent(req.params.slug || "");
       if (!slug) {
         res.status(400).json({ error: "Token slug required." });

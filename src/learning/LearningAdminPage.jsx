@@ -58,6 +58,56 @@ export function LearningAdminPage() {
         {error && <p className="error-text">{error}</p>}
       </article>
 
+      {data?.monetization && (
+        <div className="learning-grid" style={{ marginTop: "1.25rem", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
+          <article className="panel learning-glass">
+            <h4>Stripe captured (all-time)</h4>
+            <p className="learning-timer" style={{ fontSize: "1.35rem", margin: 0 }}>
+              ${Number(data.monetization.stripe?.capturedGrossUsd ?? 0).toFixed(2)}
+            </p>
+            <p className="muted" style={{ margin: "0.35rem 0 0", fontSize: "0.85rem" }}>
+              {data.monetization.stripe?.transactionCount ?? 0} transactions · escrow $
+              {Number(data.monetization.stripe?.escrowUsd ?? 0).toFixed(2)} · learning checkout $
+              {Number(data.monetization.stripe?.learningCheckoutUsd ?? 0).toFixed(2)}
+            </p>
+          </article>
+          <article className="panel learning-glass">
+            <h4>AI streaming (sessions)</h4>
+            <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
+              Gross ${Number(data.monetization.aiStreaming?.sessionsLifetimeGrossUsd ?? 0).toFixed(2)} · Platform $
+              {Number(data.monetization.aiStreaming?.sessionsLifetimePlatformUsd ?? 0).toFixed(2)} · Creator $
+              {Number(data.monetization.aiStreaming?.sessionsLifetimeCreatorUsd ?? 0).toFixed(2)}
+            </p>
+          </article>
+          <article className="panel learning-glass">
+            <h4>Credit metering ({data.monetization.creditMetering?.windowDays ?? 90}d)</h4>
+            <ul className="list" style={{ fontSize: "0.8rem", margin: 0 }}>
+              {(data.monetization.creditMetering?.byKind || []).slice(0, 6).map((r) => (
+                <li key={r.kind}>
+                  {r.kind}: ${Number(r.grossUsd).toFixed(2)}
+                </li>
+              ))}
+              {(data.monetization.creditMetering?.byKind || []).length === 0 && (
+                <li className="muted">No overage metering rows yet.</li>
+              )}
+            </ul>
+          </article>
+        </div>
+      )}
+
+      {data?.monetization?.topPayingUsers?.length > 0 && (
+        <article className="panel learning-glass" style={{ marginTop: "1.25rem" }}>
+          <h3>Top payers (Stripe, userId in metadata)</h3>
+          <ul className="list">
+            {data.monetization.topPayingUsers.map((r) => (
+              <li key={r.userId}>
+                <code>{(r.userId || "").slice(0, 12)}…</code> — ${Number(r.totalUsd).toFixed(2)} ({r.transactionCount} tx)
+              </li>
+            ))}
+          </ul>
+        </article>
+      )}
+
       {data?.summary && (
         <div className="learning-grid" style={{ marginTop: "1.25rem", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
           <article className="panel learning-glass">

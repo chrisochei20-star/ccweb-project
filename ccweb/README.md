@@ -33,3 +33,13 @@ This repository ships as a **single deployable app**: Node serves `/api` and sta
 - **Learning (persistent):** `GET /api/learning/sessions`, `GET /api/learning/access/quote`, `POST /api/payments/stripe/checkout/learning`, tutor + SSE channel under `/api/learning/sessions/:streamRoomId/*`
 
 Deploy: build frontend (`npm run build`), run API (`npm start` or `node server.js`), point DNS + HTTPS terminator (Render/Fly/nginx) at the Node process.
+
+### Build from this folder
+
+From repo root, `npm run build` produces `dist/`. From **`ccweb/`** you can run the same scripts via `ccweb/package.json`:
+
+```bash
+cd ccweb && npm run build
+```
+
+That delegates to the parent package so CI or docs can use a `ccweb/` working directory without duplicating code.

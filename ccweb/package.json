@@ -1,0 +1,13 @@
+{
+  "name": "ccweb",
+  "private": true,
+  "description": "Thin entry point — real app root is the repository parent (Vite + Node in one tree)",
+  "scripts": {
+    "postinstall": "echo \"CCWEB: deps live in repo root; run npm install from ..\"",
+    "build": "npm run build --prefix ..",
+    "start": "npm start --prefix ..",
+    "dev": "npm run dev --prefix ..",
+    "dev:api": "npm run dev:api --prefix ..",
+    "test": "npm test --prefix .."
+  }
+}

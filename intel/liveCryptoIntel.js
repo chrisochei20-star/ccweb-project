@@ -6,11 +6,16 @@
 const { cacheGetJson, cacheSetJson, cacheKey } = require("../services/redisCache");
 
 const DISCLAIMER =
-  "Signals use third-party APIs (DexScreener, Etherscan). Data may be incomplete or delayed. Crypto is volatile; this is not financial advice.";
+  "Signals use third-party APIs (DexScreener; Etherscan for EVM contract verification). Data may be incomplete or delayed. Crypto is volatile; this is not financial advice.";
 
 function isEvmAddress(a) {
   const s = String(a || "").trim();
   return /^0x[a-fA-F0-9]{40}$/.test(s);
+}
+
+function isSolMint(a) {
+  const s = String(a || "").trim();
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s);
 }
 
 async function fetchJson(url, opts = {}) {
@@ -88,6 +93,138 @@ function deriveRiskFromDex(pair, verified) {
   return { score, flags, rugPullRisk };
 }
 
+async function buildSolanaTokenScan(sym, mint) {
+  const dex = await dexPairsForToken(mint);
+  const pairs = dex.pairs || [];
+  const best =
+    pairs.reduce((a, b) => (Number(a?.liquidity?.usd || 0) >= Number(b?.liquidity?.usd || 0) ? a : b), pairs[0]) ||
+    null;
+
+  if (!best && pairs.length === 0) {
+    const err = new Error("No DexScreener liquidity pairs found for this mint.");
+    err.status = 404;
+    throw err;
+  }
+
+  const verified = false;
+  const { score, flags, rugPullRisk } = deriveRiskFromDex(best, verified);
+
+  const liquidityUsd = Number(best?.liquidity?.usd || 0);
+  const volume24 = Number(best?.volume?.h24 || 0);
+  const priceUsd = Number(best?.priceUsd || 0);
+  const fdv = Number(best?.fdv || 0);
+
+  const security = {
+    contractVerified: verified,
+    liquidityLocked: liquidityUsd >= 100_000,
+    ownershipStatus: "unknown",
+    mintBurnFunctions: "unknown",
+    hiddenTaxEstimatePercent: 0,
+    riskScore: score,
+    riskBand: score >= 70 ? "safe" : score >= 40 ? "medium" : "high",
+    rugPullSignals: [
+      {
+        type: "solana_mint",
+        confidence: 0.65,
+        note: "Solana token verification uses DexScreener market depth only; use Solscan + RugCheck for bytecode.",
+      },
+      {
+        type: "liquidity_depth",
+        confidence: 0.7,
+        note: `Aggregate DEX liquidity ~ $${Math.round(liquidityUsd).toLocaleString()} (DexScreener).`,
+      },
+    ],
+  };
+
+  const discovery = {
+    newContractProbability: 0,
+    earlyLiquidityScore: Math.min(100, Math.round(Math.log10(Math.max(liquidityUsd, 1)) * 25)),
+    volumeMomentumScore: Math.min(100, Math.round(Math.log10(Math.max(volume24, 1)) * 12)),
+    holderGrowthRate: "n/a (configure Solana holder indexer)",
+    socialSignals: {
+      twitterX: { mentionVelocity: 0, trendingKeywords: [] },
+      telegram: { channelCountEstimate: 0, spikeProbability: 0 },
+      reddit: { postVelocity: 0, subreddits: [] },
+    },
+    influencerCorrelation: {
+      trackedHandlesSample: [],
+      postToPriceCorrelation: 0,
+      note: "Social velocity requires X/Reddit API credentials.",
+    },
+  };
+
+  const momentum = discovery.volumeMomentumScore;
+  const oppScore = Math.min(100, Math.round((100 - score) * 0.45 + momentum * 0.35));
+
+  const aiInsightEngine = {
+    insights: [
+      {
+        id: "sol-1",
+        text: `Solana pair snapshot: price ~ $${priceUsd || "—"}, 24h volume ~ $${Math.round(volume24).toLocaleString()}, liquidity ~ $${Math.round(liquidityUsd).toLocaleString()} (DexScreener).`,
+        confidence: 0.72,
+      },
+      {
+        id: "sol-2",
+        text: "Review mint authority and liquidity on Solscan; DexScreener does not prove token safety.",
+        confidence: 0.7,
+      },
+    ],
+    opportunityScore: oppScore,
+    riskVsReward: oppScore / Math.max(1, 100 - score) < 0.8 ? "skewed_risk" : "balanced",
+    disclaimer: DISCLAIMER,
+  };
+
+  return {
+    token: best?.baseToken?.symbol || sym || "?",
+    name: best?.baseToken?.name || `Token ${mint.slice(0, 8)}…`,
+    network: best?.chainId === "solana" ? "solana" : String(best?.chainId || "solana"),
+    contractAddress: mint,
+    contractVerified: verified,
+    liquidityLocked: security.liquidityLocked,
+    ownershipRenounced: false,
+    mintBurnPresent: false,
+    hiddenTaxEstimate: 0,
+    honeypotRisk: score < 30 ? "high" : score < 55 ? "medium" : "low",
+    rugPullRisk,
+    score,
+    flags,
+    modules: {
+      security,
+      onChainIntelligence: {
+        smartMoney: { walletsBuyingEarly: 0, note: "Indexer not configured." },
+        whaleActivity: {
+          largeBuys24h: 0,
+          largeSells24h: 0,
+          suddenAccumulationProbability: volume24 > 1e6 ? 0.35 : 0.15,
+        },
+        walletClustering: { relatedWalletGroups: 0, coordinatedActivityScore: 0 },
+        tokenFlow: { sources: [], sinks: [], note: "Solana flow analytics require RPC indexer." },
+      },
+      earlyDiscovery: discovery,
+      aiInsightEngine,
+      market: {
+        dexId: best?.dexId || null,
+        pairAddress: best?.pairAddress || null,
+        priceUsd,
+        volumeUsd24h: volume24,
+        liquidityUsd,
+        fdv,
+        url: best?.url || null,
+        source: "dexscreener",
+      },
+    },
+    alertsPreview: [],
+    methodology: {
+      riskScoreFormula: "riskScore from DexScreener liquidity depth (Solana — no Etherscan verification).",
+      opportunityScoreFormula: "derived from inverse risk and reported 24h volume momentum.",
+      notGuarantee: true,
+    },
+    scannedAt: new Date().toISOString(),
+    disclaimer: DISCLAIMER,
+    dataSources: ["dexscreener.com"],
+  };
+}
+
 async function buildTokenScan(token, address) {
   const addr = (address || "").trim();
   const sym = (token || "").trim().toUpperCase();
@@ -98,9 +235,13 @@ async function buildTokenScan(token, address) {
     throw err;
   }
 
+  if (isSolMint(addr)) {
+    return buildSolanaTokenScan(sym, addr);
+  }
+
   if (!isEvmAddress(addr)) {
     const err = new Error(
-      "Live scan requires an EVM contract address (0x…). Symbol-only lookups are disabled in production."
+      "Live scan requires an EVM contract address (0x…) or a Solana mint. Symbol-only lookups are disabled."
     );
     err.status = 400;
     throw err;
@@ -254,7 +395,7 @@ async function buildTokenScan(token, address) {
     },
     alertsPreview: [],
     methodology: {
-      riskScoreFormula: "riskScore from liquidity depth + contract verification via DexScreener & Etherscan.",
+      riskScoreFormula: "riskScore from liquidity depth + EVM contract verification via DexScreener & Etherscan.",
       opportunityScoreFormula: "derived from inverse risk and reported 24h volume momentum.",
       notGuarantee: true,
     },
@@ -264,14 +405,45 @@ async function buildTokenScan(token, address) {
   };
 }
 
+async function buildSolanaWalletScan(mint) {
+  const dex = await dexPairsForToken(mint).catch(() => ({ pairs: [] }));
+  const unusual = Array.isArray(dex.pairs) && dex.pairs.length > 0;
+  const walletRiskScore = unusual ? Math.min(72, 48) : 40;
+
+  return {
+    address: mint,
+    chain: "solana",
+    label: unusual ? "Solana pool-associated address" : "Solana wallet / mint",
+    scamLinkedProbability: null,
+    suspiciousPatterns: unusual
+      ? [{ type: "dex_pair_associated", probability: 0.35, note: "Appears in DexScreener pairs for this mint." }]
+      : [],
+    cluster: { id: `sol-${mint.slice(0, 12)}`, relatedWalletsEstimate: 0 },
+    walletRiskScore,
+    safetyTier: walletRiskScore < 45 ? "safe" : walletRiskScore < 65 ? "medium" : "high",
+    profitableHistoryScore: null,
+    coordinatedActivityScore: null,
+    scannedAt: new Date().toISOString(),
+    disclaimer: DISCLAIMER,
+    txCountHint: null,
+    dataSources: ["dexscreener"],
+  };
+}
+
 async function buildWalletScan(address) {
-  const norm = String(address || "").trim().toLowerCase();
+  const raw = String(address || "").trim();
+  const norm = raw.toLowerCase();
+
+  if (isSolMint(raw)) {
+    return buildSolanaWalletScan(raw);
+  }
+
   if (!isEvmAddress(norm)) {
-    return { error: "Invalid wallet address. Provide a 0x-prefixed EVM address." };
+    return { error: "Invalid wallet address. Provide a 0x-prefixed EVM address or a Solana mint." };
   }
 
   if (!(process.env.ETHERSCAN_API_KEY || "").trim()) {
-    return { error: "ETHERSCAN_API_KEY is required for live wallet analysis." };
+    return { error: "ETHERSCAN_API_KEY is required for live EVM wallet analysis." };
   }
 
   const nonce = await etherscanTxCount(norm);
@@ -290,6 +462,7 @@ async function buildWalletScan(address) {
 
   return {
     address: norm,
+    chain: "evm",
     label: unusual ? "Tagged liquidity participant" : "Wallet",
     scamLinkedProbability: null,
     suspiciousPatterns,

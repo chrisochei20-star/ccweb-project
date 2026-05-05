@@ -40,8 +40,13 @@ function createIntelligenceRouter() {
     }
   });
 
-  router.get("/narratives", (req, res) => {
-    res.json(earlySignalsEngine.buildNarrativeTrends());
+  router.get("/narratives", async (req, res, next) => {
+    try {
+      const data = await earlySignalsEngine.buildNarrativeTrends();
+      res.json(data);
+    } catch (e) {
+      next(e);
+    }
   });
 
   router.get("/smart-money", async (req, res) => {

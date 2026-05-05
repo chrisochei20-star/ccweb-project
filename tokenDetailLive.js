@@ -9,6 +9,7 @@ const EXPLORER_TOKEN = {
   ethereum: "https://etherscan.io/token/",
   base: "https://basescan.org/token/",
   arbitrum: "https://arbiscan.io/token/",
+  solana: "https://solscan.io/token/",
 };
 
 function clamp(n, lo, hi) {
@@ -29,25 +30,26 @@ function normalizeSlug(raw) {
 }
 
 function explorerUrlFor(network, contractAddress) {
-  if (!contractAddress || !contractAddress.startsWith("0x")) return null;
+  if (!contractAddress) return null;
+  const addr = String(contractAddress).trim();
+  if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)) {
+    return `${EXPLORER_TOKEN.solana}${addr}`;
+  }
+  if (!/^0x[a-fA-F0-9]{40}$/i.test(addr)) return null;
   const n = String(network || "").toLowerCase();
-  if (n.includes("base")) return `${EXPLORER_TOKEN.base}${contractAddress}`;
-  if (n.includes("arb")) return `${EXPLORER_TOKEN.arbitrum}${contractAddress}`;
-  return `${EXPLORER_TOKEN.ethereum}${contractAddress}`;
+  if (n.includes("base")) return `${EXPLORER_TOKEN.base}${addr}`;
+  if (n.includes("arb")) return `${EXPLORER_TOKEN.arbitrum}${addr}`;
+  return `${EXPLORER_TOKEN.ethereum}${addr}`;
 }
 
 async function buildTokenDetail(slug) {
   const { symbol: symIn, address: addrIn, solMint } = normalizeSlug(slug);
 
-  if (solMint) {
-    throw new Error("Solana mint detail requires a Solana indexer integration.");
-  }
-
-  const addr = addrIn;
+  let addr = addrIn || solMint;
   const symbol = symIn;
 
-  if (!addr || !addr.startsWith("0x")) {
-    throw new Error("Token detail requires a 0x contract address in the URL path.");
+  if (!addr) {
+    throw new Error("Token detail requires a contract address or Solana mint in the URL path.");
   }
 
   const scan = await liveIntel.buildTokenScan(symbol, addr);

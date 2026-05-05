@@ -5,6 +5,7 @@
 
 const crypto = require("crypto");
 const liveIntel = require("./intel/liveCryptoIntel");
+const { buildNarrativeKeywords } = require("./intel/socialNarratives");
 
 const DISCLAIMER =
   "Signals combine heuristics and optional third-party APIs. Scores are not predictions. Crypto is highly volatile. Verify independently. Not financial advice.";
@@ -135,28 +136,38 @@ function enrichDiscoverRow(row) {
   };
 }
 
-function buildNarrativeTrends() {
+async function buildNarrativeTrends() {
+  let keywords = [];
+  try {
+    keywords = await buildNarrativeKeywords();
+  } catch {
+    keywords = [];
+  }
   return {
     updatedAt: new Date().toISOString(),
     channels: {
       twitter: {
         label: "X (Twitter)",
         note: process.env.TWITTER_BEARER_TOKEN
-          ? "Bearer token configured — extend earlySignalsEngine to query recent posts."
-          : "Set TWITTER_BEARER_TOKEN for live narrative velocity.",
+          ? "Recent search query results (configurable via CCWEB_TWITTER_SEARCH_QUERY)."
+          : "Set TWITTER_BEARER_TOKEN for live keyword velocity from X API v2.",
       },
       reddit: {
         label: "Reddit",
-        note: "Reddit API credentials not configured in this deployment.",
+        note: process.env.CCWEB_REDDIT_SUBS
+          ? `Subs: ${process.env.CCWEB_REDDIT_SUBS}`
+          : "Public JSON from CCWEB_REDDIT_SUBS (default cryptocurrency,ethereum,solana).",
       },
       telegram: {
         label: "Telegram",
         note: "Telegram Bot API not configured.",
       },
     },
-    keywords: [],
+    keywords,
     disclaimer:
-      "Narrative keyword momentum is disabled until social API credentials are configured. Discovery feed uses live DEX data.",
+      keywords.length === 0
+        ? "No narrative keywords yet — add TWITTER_BEARER_TOKEN and/or configure Reddit subs."
+        : "Keyword momentum is informational only; high momentum often coincides with scams.",
   };
 }
 
@@ -250,7 +261,7 @@ async function buildSmartMoneySection(trackedFromDb) {
 
 async function buildDashboardPayload(trackedFromDb) {
   const feedItems = await buildFeedItems();
-  const narratives = buildNarrativeTrends();
+  const narratives = await buildNarrativeTrends();
   const riskAlerts = buildRiskAlerts(feedItems);
   const smartMoney = await buildSmartMoneySection(trackedFromDb);
 

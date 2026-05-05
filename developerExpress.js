@@ -9,7 +9,7 @@ const crypto = require("crypto");
 const dp = require("./developerPlatform");
 const liveIntel = require("./intel/liveCryptoIntel");
 const aiExecute = require("./services/aiExecute");
-const pgGrowth = require("./db/persistenceGrowth");
+const revenuePg = require("./db/persistenceRevenue");
 
 function getClientIp(req) {
   return (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "";
@@ -215,18 +215,26 @@ function createDeveloperApp(opts) {
     res.json({ count: users.length, users });
   });
 
-  v1.get("/revenue", (req, res) => {
-    if (!pgGrowth.usePostgres()) {
-      return res.status(503).json({
-        error: "Revenue API requires PostgreSQL (DATABASE_URL) and recorded transactions.",
-        code: "NOT_CONFIGURED",
+  v1.get("/revenue", async (req, res, next) => {
+    try {
+      if (!revenuePg.usePostgres()) {
+        return res.status(503).json({
+          error: "Revenue API requires PostgreSQL (DATABASE_URL) and recorded transactions.",
+          code: "NOT_CONFIGURED",
+        });
+      }
+      const agg = await revenuePg.sumCapturedForProject(req.ccwebProjectId);
+      const platformTotal = await revenuePg.sumAllCaptured();
+      res.json({
+        projectId: req.ccwebProjectId,
+        period: "all_time",
+        ...agg,
+        platformTransactionsUsd: platformTotal?.grossUsd ?? null,
+        note: "Attributed rows include metadata.projectId or metadata.ccwebProjectId set at Stripe checkout (escrow supports ccwebProjectId on payment/create).",
       });
+    } catch (e) {
+      next(e);
     }
-    return res.status(501).json({
-      error: "Connect billing tables or Stripe reports; aggregate not implemented in this build.",
-      code: "USE_STRIPE_DASHBOARD",
-      hint: "Use Stripe Dashboard + learning/growth ledger exports until unified revenue query ships.",
-    });
   });
 
   v1.get("/analytics", (req, res) => {
@@ -316,10 +324,20 @@ function createDeveloperApp(opts) {
       return res.json({ data: { sessions: { count: rooms.length, nodes: rooms.slice(0, 20) } } });
     }
     if (/revenue/i.test(q)) {
-      return res.json({
-        data: { revenue: { note: "Use PostgreSQL + Stripe for revenue; see /v1/revenue" } },
-        errors: [{ message: "Revenue field not implemented; use billing integration." }],
-      });
+      try {
+        const agg = await revenuePg.sumCapturedForProject(req.ccwebProjectId);
+        return res.json({
+          data: {
+            revenue: {
+              grossUsd: agg.grossUsd,
+              netUsd: agg.netUsd,
+              platformFeeUsd: agg.platformFeeUsd,
+            },
+          },
+        });
+      } catch (e) {
+        return next(e);
+      }
     }
     if (/agents/i.test(q)) {
       try {

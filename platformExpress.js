@@ -18,6 +18,10 @@ const aiExecute = require("./services/aiExecute");
 const monetizationEngine = require("./services/monetizationEngine");
 const betaPg = require("./db/persistenceBeta");
 const { publicAppBaseUrl, trimOrigin } = require("./services/deploymentOrigins");
+const {
+  stripeCheckoutOperational,
+  stripeWebhookOperational,
+} = require("./payments/stripeConfig");
 
 function getClientIp(req) {
   return (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "";
@@ -79,6 +83,10 @@ function createPlatformApp(deps) {
       publicAppUrl: publicApp || null,
       apiPublicUrl: apiPublic || null,
       environment: process.env.NODE_ENV === "production" ? "production" : "development",
+      payments: {
+        stripeCheckoutEnabled: stripeCheckoutOperational(),
+        stripeWebhooksEnabled: stripeWebhookOperational(),
+      },
     });
   });
   const authRouter = express.Router();

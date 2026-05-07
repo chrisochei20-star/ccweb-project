@@ -2,6 +2,7 @@ const { logger } = require("../logging/logger");
 const pgGrowth = require("../db/persistenceGrowth");
 const learningPg = require("../db/persistenceLearning");
 const revenuePg = require("../db/persistenceRevenue");
+const { stripeWebhookOperational, stripeDisabledPayload } = require("./stripeConfig");
 
 async function recordStripeCapture(kind, session, extraMeta = {}) {
   const cents = session.amount_total;
@@ -28,14 +29,14 @@ async function readRawBody(req) {
 }
 
 async function handleStripeWebhook(req, res) {
+  if (!stripeWebhookOperational()) {
+    res.writeHead(503, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify(stripeDisabledPayload));
+    return;
+  }
   const Stripe = require("stripe");
   const key = (process.env.STRIPE_SECRET_KEY || "").trim();
   const whSecret = (process.env.STRIPE_WEBHOOK_SECRET || "").trim();
-  if (!key || !whSecret) {
-    res.writeHead(503, { "Content-Type": "text/plain" });
-    res.end("Stripe not configured");
-    return;
-  }
   const stripe = new Stripe(key, { apiVersion: "2024-11-20.acacia" });
   const sig = req.headers["stripe-signature"];
   let raw;

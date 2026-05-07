@@ -1,6 +1,7 @@
 const { logger } = require("../logging/logger");
 const { publicAppBaseUrl } = require("../services/deploymentOrigins");
 const pgGrowth = require("../db/persistenceGrowth");
+const { stripeCheckoutOperational, stripeDisabledPayload } = require("./stripeConfig");
 
 async function handleStripeCheckoutEscrow(req, res, readJsonBody, sendJson) {
   let body = {};
@@ -11,12 +12,12 @@ async function handleStripeCheckoutEscrow(req, res, readJsonBody, sendJson) {
     return;
   }
   try {
-    const Stripe = require("stripe");
-    const key = (process.env.STRIPE_SECRET_KEY || "").trim();
-    if (!key) {
-      sendJson(res, 503, { error: "STRIPE_SECRET_KEY not set." });
+    if (!stripeCheckoutOperational()) {
+      sendJson(res, 503, stripeDisabledPayload);
       return;
     }
+    const Stripe = require("stripe");
+    const key = (process.env.STRIPE_SECRET_KEY || "").trim();
     if (!pgGrowth.usePostgres()) {
       sendJson(res, 503, { error: "PostgreSQL required for Stripe escrow checkout." });
       return;

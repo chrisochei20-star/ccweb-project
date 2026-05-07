@@ -1,6 +1,7 @@
 const { logger } = require("../logging/logger");
 const { publicAppBaseUrl } = require("../services/deploymentOrigins");
 const learningPg = require("../db/persistenceLearning");
+const { stripeCheckoutOperational, stripeDisabledPayload } = require("./stripeConfig");
 
 const STANDARD_USD = Number(process.env.CCWEB_SUBSCRIPTION_STANDARD_USD || 19);
 const PREMIUM_USD = Number(process.env.CCWEB_SUBSCRIPTION_PREMIUM_USD || 49);
@@ -18,12 +19,12 @@ async function handleLearningStripeCheckout(req, res, readJsonBody, sendJson) {
     sendJson(res, 503, { error: "PostgreSQL required for paid learning features." });
     return;
   }
-  const Stripe = require("stripe");
-  const key = (process.env.STRIPE_SECRET_KEY || "").trim();
-  if (!key) {
-    sendJson(res, 503, { error: "STRIPE_SECRET_KEY not set." });
+  if (!stripeCheckoutOperational()) {
+    sendJson(res, 503, stripeDisabledPayload);
     return;
   }
+  const Stripe = require("stripe");
+  const key = (process.env.STRIPE_SECRET_KEY || "").trim();
   const stripe = new Stripe(key, { apiVersion: "2024-11-20.acacia" });
   const kind = (body.kind || "").toString();
   const userId = (body.userId || "").toString().trim();

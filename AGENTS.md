@@ -3,7 +3,7 @@
 ## Cursor Cloud specific instructions
 
 ### Overview
-This is a React 19 + Vite 7 frontend with a Node.js backend (`server.js`). **Optional PostgreSQL** (`DATABASE_URL`): when set, the server runs `db/schema.sql` migrations on boot (skip with `CCWEB_SKIP_MIGRATIONS=1`) and persists auth users, growth hub (marketplace/escrow), and community data. Without it, those areas fall back to in-memory (or MongoDB for auth when `MONGODB_URI` is set). Explorer API keys (`ETHERSCAN_API_KEY`, etc.) power live contract checks.
+This is a React 19 + Vite 7 frontend with a Node.js backend (`server.js`). **Optional PostgreSQL** (`DATABASE_URL`): when set, the server runs `db/schema.sql` migrations on boot (skip with `CCWEB_SKIP_MIGRATIONS=1`) and persists auth users, growth hub (marketplace/escrow), and community data. Without it, those areas fall back to in-memory (or MongoDB for auth when `MONGODB_URI` is set). **`OPENAI_API_KEY`** / **`ETHERSCAN_API_KEY`** are optional in production: AI agents/workflows use **mock** completions and EVM wallet scans **degrade** to DexScreener-only until keys are set (use **`CCWEB_REQUIRE_OPENAI=1`** to hard-require OpenAI).
 
 ### Production-oriented backend
 - **Logging:** `pino` via `logging/logger.js` (set `LOG_LEVEL`).

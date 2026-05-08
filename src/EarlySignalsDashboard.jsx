@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { API_BASE_URL, apiUrl } from "./config/env";
+import { apiUrl } from "./config/env";
 
 const trendLabel = {
   warming: "Warming",
@@ -48,7 +48,7 @@ export function EarlySignalsDashboard() {
 
   useEffect(() => {
     if (typeof EventSource === "undefined") return;
-    const streamUrl = API_BASE_URL ? `${API_BASE_URL}/api/intelligence/stream` : "/api/intelligence/stream";
+    const streamUrl = apiUrl("/api/intelligence/stream");
     const es = new EventSource(streamUrl);
     es.addEventListener("snapshot", () => {
       load();

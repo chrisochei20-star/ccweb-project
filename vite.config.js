@@ -7,6 +7,7 @@ export default defineConfig(({ mode }) => {
   const apiProxy = (env.VITE_DEV_API_PROXY_TARGET || "http://127.0.0.1:3000").replace(/\/$/, "");
 
   return {
+    base: "/",
     plugins: [react(), tailwindcss()],
     server: {
       proxy: {

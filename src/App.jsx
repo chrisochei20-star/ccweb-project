@@ -96,7 +96,7 @@ function App() {
           <Route path="contact" element={<ContactPage />} />
           <Route path="privacy" element={<PrivacyPage />} />
           <Route path="terms" element={<TermsPage />} />
-          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="dashboard" element={<Navigate to="/" replace />} />
           <Route path="forgot-password" element={<ForgotPasswordPage />} />
           <Route path="welcome" element={<HomePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -1174,86 +1174,6 @@ function ContactPage() {
           </button>
         </article>
       </div>
-    </section>
-  );
-}
-
-function DashboardPage() {
-  const { user } = useOutletContext();
-  if (!user) {
-    return (
-      <section>
-        <header className="page-header">
-          <h1 className="section-title">Dashboard</h1>
-          <p className="muted">Sign in to see your personalized overview.</p>
-        </header>
-        <Link to="/login" className="btn btn-primary">
-          Sign in
-        </Link>
-      </section>
-    );
-  }
-
-  return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">Dashboard</h1>
-        <p className="muted">
-          Welcome back, <strong>{user.displayName}</strong>. Here&apos;s your learning overview (prototype data).
-        </p>
-      </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>Plan</h3>
-          <p>Free Plan</p>
-          <p className="muted">Upgrade now</p>
-        </article>
-        <article className="panel">
-          <h3>Courses Enrolled</h3>
-          <p>5</p>
-          <p className="muted">+1 this month</p>
-        </article>
-        <article className="panel">
-          <h3>Tokens Earned</h3>
-          <p>1,250</p>
-          <p className="muted">+180 this week</p>
-        </article>
-        <article className="panel">
-          <h3>Referrals</h3>
-          <p>12</p>
-          <p className="muted">+3 this month</p>
-        </article>
-        <article className="panel">
-          <h3>Affiliate Revenue</h3>
-          <p>$340</p>
-          <p className="muted">+$85 this week</p>
-        </article>
-      </div>
-      <section className="panel" style={{ marginTop: "1rem" }}>
-        <h3>Continue Learning</h3>
-        <p className="muted">Blockchain Fundamentals · 9/12 lessons · 75%</p>
-        <p className="muted">AI Basics · 4/10 lessons · 40%</p>
-      </section>
-      <section className="panel" style={{ marginTop: "1rem" }}>
-        <h3>Pillars quick links</h3>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
-          <Link to="/courses" className="btn btn-outline">
-            Learn
-          </Link>
-          <Link to="/find" className="btn btn-outline">
-            Find
-          </Link>
-          <Link to="/dapp-builder" className="btn btn-outline">
-            Build
-          </Link>
-          <Link to="/earn" className="btn btn-outline">
-            Earn
-          </Link>
-          <Link to="/ai-streaming" className="btn btn-outline">
-            AI Streaming
-          </Link>
-        </div>
-      </section>
     </section>
   );
 }

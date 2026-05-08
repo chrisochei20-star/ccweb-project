@@ -1,5 +1,5 @@
 -- CCWEB production schema (PostgreSQL 14+)
--- Run via: node db/migrate.js (or CCWEB_RUN_MIGRATIONS=1 on server start)
+-- Applied via `npm run db:migrate` → db/schema.sql then db/migrations/*.sql (see db/migrations/README.md)
 
 CREATE TABLE IF NOT EXISTS ccweb_auth_users (
   id TEXT PRIMARY KEY,

@@ -41,7 +41,18 @@ function getPool() {
 async function query(text, params) {
   const p = getPool();
   if (!p) throw new Error("DATABASE_URL is not configured.");
-  return p.query(text, params);
+  try {
+    return await p.query(text, params);
+  } catch (err) {
+    if (err && err.code === "42P01") {
+      logger.error({
+        msg: "postgres_undefined_table",
+        hint: "Run npm run db:migrate (see db/schema.sql).",
+        pgMessage: err.message,
+      });
+    }
+    throw err;
+  }
 }
 
 module.exports = { getPool, query };

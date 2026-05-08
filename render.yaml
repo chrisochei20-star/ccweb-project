@@ -8,8 +8,8 @@ services:
     name: ccweb-api
     plan: starter
     region: oregon
-    buildCommand: npm ci && npm run db:migrate
-    preDeployCommand: npm run db:migrate
+    buildCommand: npm ci && npm run migrate
+    preDeployCommand: npm run migrate
     startCommand: npm start
     healthCheckPath: /health
     # Optional: only rebuild API when backend paths change (uncomment after validating globs for your repo)

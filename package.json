@@ -12,6 +12,7 @@
     "build:client": "vite build",
     "preview": "vite preview",
     "start": "node server.js",
+    "migrate": "node db/migrate.js",
     "db:migrate": "node db/migrate.js",
     "db:verify": "node db/verifySchema.js",
     "verify:deploy": "node scripts/verify-deployment.js",

@@ -105,7 +105,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
               const access = data.accessToken || data.token;
               setSession(access, data.user, data.refreshToken);
               setUser(data.user);
-              navigate("/");
+              navigate("/", { replace: true });
             } catch (e) {
               setError(e.message || "Google sign-in failed");
             } finally {
@@ -167,7 +167,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
       const access = data.accessToken || data.token;
       setSession(access, data.user, data.refreshToken);
       setUser(data.user);
-      navigate("/");
+      navigate("/", { replace: true });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -190,7 +190,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
       const access = data.accessToken || data.token;
       setSession(access, data.user, data.refreshToken);
       setUser(data.user);
-      navigate("/");
+      navigate("/", { replace: true });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -236,7 +236,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
       const access = data.accessToken || data.token;
       setSession(access, data.user, data.refreshToken);
       setUser(data.user);
-      navigate("/");
+      navigate("/", { replace: true });
     } catch (e) {
       setError(e.shortMessage || e.message || "Wallet sign-in failed");
     } finally {

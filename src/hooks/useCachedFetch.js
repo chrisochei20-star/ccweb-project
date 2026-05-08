@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiUrl } from "../config/env";
+import { getSessionToken } from "../session";
 
 const cache = new Map();
 
+function resolveFetchUrl(url) {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return apiUrl(url);
+}
+
 /**
  * GET JSON with simple in-memory TTL cache (per tab session).
+ * Uses apiUrl() so production split CDN + API deploy works; sends Bearer token when present.
  */
 export function useCachedFetch(url, opts = {}) {
   const { ttlMs = 45_000, enabled = true } = opts;
@@ -17,7 +26,8 @@ export function useCachedFetch(url, opts = {}) {
       setLoading(false);
       return null;
     }
-    const key = url;
+    const resolved = resolveFetchUrl(url);
+    const key = resolved;
     const now = Date.now();
     const hit = cache.get(key);
     if (hit && now - hit.at < ttlMs) {
@@ -29,7 +39,10 @@ export function useCachedFetch(url, opts = {}) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(url, { credentials: "include" });
+      const headers = {};
+      const token = getSessionToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(resolved, { credentials: "include", headers });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || res.statusText || "Request failed");
       cache.set(key, { at: Date.now(), json });

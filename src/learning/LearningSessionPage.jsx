@@ -13,6 +13,7 @@ import {
   upsertAttendance,
 } from "../api/learningApi";
 import { useLearningStore } from "../store/learningStore";
+import { apiUrl } from "../config/env";
 
 function formatDuration(totalSeconds) {
   const m = Math.floor(totalSeconds / 60);
@@ -84,7 +85,7 @@ export function LearningSessionPage() {
 
   useEffect(() => {
     if (!roomId || !room) return undefined;
-    const url = `${window.location.origin}/api/learning/sessions/${encodeURIComponent(roomId)}/events`;
+    const url = apiUrl(`/api/learning/sessions/${encodeURIComponent(roomId)}/events`);
     const es = new EventSource(url);
     es.onmessage = (ev) => {
       try {

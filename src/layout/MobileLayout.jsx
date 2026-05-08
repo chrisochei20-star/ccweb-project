@@ -73,6 +73,35 @@ export function MobileLayout() {
         </div>
       </header>
 
+      <nav
+        className="hidden border-b border-white/10 bg-black/30 backdrop-blur-md lg:block"
+        aria-label="Primary sections"
+      >
+        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-center gap-1 px-4 py-2.5 md:max-w-5xl">
+          <NavLink
+            end
+            to="/"
+            className={({ isActive }) =>
+              `rounded-xl px-3 py-2 text-sm font-medium transition-colors ${isActive ? "bg-white/10 text-white" : "text-ccweb-muted hover:text-white"}`
+            }
+          >
+            Home
+          </NavLink>
+          {tabs.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to + label}
+              to={to}
+              className={({ isActive }) =>
+                `flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${isActive ? "bg-white/10 text-white" : "text-ccweb-muted hover:text-white"}`
+              }
+            >
+              <Icon className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+              {label}
+            </NavLink>
+          ))}
+        </div>
+      </nav>
+
       <main className="ccweb-main-pad mx-auto max-w-3xl md:max-w-5xl">
         <Outlet context={{ user, setUser }} />
       </main>

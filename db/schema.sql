@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS ccweb_auth_users (
   oauth_provider TEXT,
   oauth_sub TEXT,
   apple_sub TEXT UNIQUE,
-  referred_by_user_id TEXT REFERENCES ccweb_auth_users(id) ON DELETE SET NULL,
+  referred_by_user_id TEXT,
   acquisition_source TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -33,6 +33,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS ccweb_auth_users_oauth_unique
   WHERE oauth_provider IS NOT NULL AND oauth_sub IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS ccweb_auth_users_email_verify ON ccweb_auth_users (email_verify_token) WHERE email_verify_token IS NOT NULL;
+
+-- Legacy rows may lack referral columns; safe no-op when already present.
+ALTER TABLE ccweb_auth_users ADD COLUMN IF NOT EXISTS referred_by_user_id TEXT;
+ALTER TABLE ccweb_auth_users ADD COLUMN IF NOT EXISTS acquisition_source TEXT;
+
+-- Self-FK: add after table exists (avoid inline REFERENCES during CREATE on strict hosts).
+ALTER TABLE ccweb_auth_users DROP CONSTRAINT IF EXISTS ccweb_auth_users_referred_by_user_id_fkey;
+ALTER TABLE ccweb_auth_users DROP CONSTRAINT IF EXISTS ccweb_auth_users_referred_by_fk;
+ALTER TABLE ccweb_auth_users ADD CONSTRAINT ccweb_auth_users_referred_by_fk FOREIGN KEY (referred_by_user_id) REFERENCES ccweb_auth_users(id) ON DELETE SET NULL NOT VALID;
 
 CREATE INDEX IF NOT EXISTS ccweb_auth_users_referred_by ON ccweb_auth_users (referred_by_user_id) WHERE referred_by_user_id IS NOT NULL;
 
@@ -306,11 +315,6 @@ CREATE TABLE IF NOT EXISTS learning_tutor_events (
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
--- Existing deployments: add referral columns if table predates growth engine
-ALTER TABLE ccweb_auth_users ADD COLUMN IF NOT EXISTS referred_by_user_id TEXT REFERENCES ccweb_auth_users(id) ON DELETE SET NULL;
-ALTER TABLE ccweb_auth_users ADD COLUMN IF NOT EXISTS acquisition_source TEXT;
-CREATE INDEX IF NOT EXISTS ccweb_auth_users_referred_by ON ccweb_auth_users (referred_by_user_id) WHERE referred_by_user_id IS NOT NULL;
 
 -- Monetization: monthly usage counters + metering audit (pay-per-use, upsell, admin analytics)
 CREATE TABLE IF NOT EXISTS ccweb_monetization_usage_monthly (

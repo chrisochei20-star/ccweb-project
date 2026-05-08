@@ -1,21 +1,49 @@
 /**
- * Production AI execution via OpenAI Chat Completions API.
- * Requires OPENAI_API_KEY (or CCWEB_OPENAI_API_KEY).
+ * OpenAI Chat Completions when configured; deterministic mock when keys are missing
+ * (set CCWEB_REQUIRE_OPENAI=1 to fail instead of mock in production).
  */
 
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
+function requireOpenAI() {
+  return process.env.CCWEB_REQUIRE_OPENAI === "1" || process.env.CCWEB_REQUIRE_OPENAI === "true";
+}
 
 function getApiKey() {
   return (process.env.OPENAI_API_KEY || process.env.CCWEB_OPENAI_API_KEY || "").trim();
 }
 
+function mockChatResult(systemPrompt, userPayload) {
+  const inputPreview =
+    typeof userPayload === "string"
+      ? userPayload.slice(0, 500)
+      : JSON.stringify(userPayload, null, 2).slice(0, 1200);
+  const text = [
+    "[CCWEB mock AI — set OPENAI_API_KEY or CCWEB_OPENAI_API_KEY for live OpenAI output]",
+    "",
+    "This response is deterministic and safe for staging when API keys are unavailable.",
+    `Stub summary for agent/workflow input (${inputPreview.length} chars).`,
+  ].join("\n");
+  return {
+    text,
+    model: "mock",
+    usage: null,
+    provider: "mock",
+    mock: true,
+    rawId: null,
+  };
+}
+
 async function chatComplete(systemPrompt, userPayload, opts = {}) {
   const key = getApiKey();
   if (!key) {
-    const err = new Error("OPENAI_API_KEY is not configured.");
-    err.code = "AI_NOT_CONFIGURED";
-    err.status = 503;
-    throw err;
+    if (requireOpenAI()) {
+      const err = new Error("OPENAI_API_KEY is not configured.");
+      err.code = "AI_NOT_CONFIGURED";
+      err.status = 503;
+      throw err;
+    }
+    return mockChatResult(systemPrompt, userPayload);
   }
 
   const model = opts.model || DEFAULT_MODEL;
@@ -79,4 +107,4 @@ async function runWorkflowSteps(steps, input) {
   return chatComplete(system, { steps, input: input || {} }, { maxTokens: 2000 });
 }
 
-module.exports = { chatComplete, runAgent, runWorkflowSteps, getApiKey };
+module.exports = { chatComplete, runAgent, runWorkflowSteps, getApiKey, mockChatResult };

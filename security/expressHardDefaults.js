@@ -8,18 +8,24 @@ const cors = require("cors");
 
 function parseAllowedOrigins() {
   const raw = (process.env.CCWEB_ALLOWED_ORIGINS || "").trim();
+  if (raw === "*" || /^\*(\s*,\s*\*)*$/.test(raw)) {
+    return { mode: "all" };
+  }
   if (raw) {
-    return raw.split(",").map((s) => s.trim()).filter(Boolean);
+    return { mode: "list", origins: raw.split(",").map((s) => s.trim()).filter(Boolean) };
   }
   if (process.env.NODE_ENV === "production") {
-    return [];
+    return { mode: "list", origins: [] };
   }
-  return [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-  ];
+  return {
+    mode: "list",
+    origins: [
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+    ],
+  };
 }
 
 /**
@@ -37,14 +43,19 @@ function applyExpressSecurity(app) {
     })
   );
 
-  const allowed = parseAllowedOrigins();
+  const parsed = parseAllowedOrigins();
+  const allowAll = parsed.mode === "all";
+  const allowed = parsed.mode === "list" ? parsed.origins : [];
+
   app.use(
     cors({
-      origin(origin, cb) {
-        if (!origin) return cb(null, true);
-        if (allowed.includes(origin)) return cb(null, true);
-        return cb(null, false);
-      },
+      origin: allowAll
+        ? true
+        : (origin, cb) => {
+            if (!origin) return cb(null, true);
+            if (allowed.includes(origin)) return cb(null, true);
+            return cb(null, false);
+          },
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization", "CCWEB-API-Key", "Cookie"],

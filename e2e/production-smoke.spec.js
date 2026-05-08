@@ -51,6 +51,13 @@ test.describe("Production smoke", () => {
     expect(res.status()).toBe(401);
   });
 
+  test("auth routes and dashboard alias load", async ({ page }) => {
+    for (const path of ["/login", "/signup", "/dashboard"]) {
+      await page.goto(path, { waitUntil: "domcontentloaded" });
+      await expect(page.locator("main.ccweb-main-pad, main").first()).toBeVisible({ timeout: 25_000 });
+    }
+  });
+
   test("core navigation shells load", async ({ page }) => {
     for (const path of ["/find", "/learn", "/build", "/earn", "/community", "/profile"]) {
       await page.goto(path, { waitUntil: "domcontentloaded" });

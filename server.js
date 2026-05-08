@@ -4320,10 +4320,37 @@ const server = http.createServer(async (req, res) => {
   await serveFile(filePath, res);
 });
 
-server.listen(PORT, () => {
-  logger.info({ msg: "server_listen", port: PORT, env: process.env.NODE_ENV || "development" });
-  validateOrExit();
-  if (getPool() && process.env.CCWEB_SKIP_MIGRATIONS !== "1") {
-    migrate().catch((e) => logger.error({ msg: "migrate_failed", err: e.message }));
+async function bootServer() {
+  if (process.env.NODE_ENV === "production") {
+    validateOrExit();
   }
+
+  if (getPool() && process.env.CCWEB_SKIP_MIGRATIONS !== "1") {
+    try {
+      await migrate();
+      const { runDemoSeed } = require("./db/seed");
+      await runDemoSeed();
+    } catch (e) {
+      logger.error({ msg: "migrate_failed", err: e.message, stack: e.stack });
+      if (process.env.CCWEB_ALLOW_START_WITHOUT_DB === "1") {
+        logger.warn({
+          msg: "starting_without_migrations",
+          detail: "CCWEB_ALLOW_START_WITHOUT_DB=1 — PostgreSQL features may error until db:migrate succeeds.",
+        });
+      } else {
+        process.exit(1);
+      }
+    }
+  } else if (getPool() && process.env.CCWEB_SKIP_MIGRATIONS === "1") {
+    logger.warn({ msg: "migrations_skipped", detail: "CCWEB_SKIP_MIGRATIONS=1" });
+  }
+
+  server.listen(PORT, () => {
+    logger.info({ msg: "server_listen", port: PORT, env: process.env.NODE_ENV || "development" });
+  });
+}
+
+bootServer().catch((e) => {
+  logger.error({ msg: "boot_failed", err: e.message });
+  process.exit(1);
 });

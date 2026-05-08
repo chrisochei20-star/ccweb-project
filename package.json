@@ -14,6 +14,7 @@
     "start": "node server.js",
     "db:migrate": "node db/migrate.js",
     "db:verify": "node db/verifySchema.js",
+    "verify:deploy": "node scripts/verify-deployment.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

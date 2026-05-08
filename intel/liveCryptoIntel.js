@@ -443,7 +443,32 @@ async function buildWalletScan(address) {
   }
 
   if (!(process.env.ETHERSCAN_API_KEY || "").trim()) {
-    return { error: "ETHERSCAN_API_KEY is required for live EVM wallet analysis." };
+    const dex = await dexPairsForToken(norm).catch(() => ({ pairs: [] }));
+    const unusual = Array.isArray(dex.pairs) && dex.pairs.length > 0;
+    const walletRiskScore = unusual ? Math.min(72, 52) : 48;
+    const suspiciousPatterns = unusual
+      ? [{ type: "token_associated_wallet", probability: 0.35, note: "Address appears in DexScreener pair data (no Etherscan tx count)." }]
+      : [];
+
+    return {
+      address: norm,
+      chain: "evm",
+      label: unusual ? "Tagged liquidity participant (partial)" : "Wallet (partial)",
+      scamLinkedProbability: null,
+      suspiciousPatterns,
+      cluster: { id: `addr-${norm.slice(2, 10)}`, relatedWalletsEstimate: 0 },
+      walletRiskScore,
+      safetyTier: walletRiskScore < 45 ? "safe" : walletRiskScore < 65 ? "medium" : "high",
+      profitableHistoryScore: null,
+      coordinatedActivityScore: null,
+      scannedAt: new Date().toISOString(),
+      disclaimer: DISCLAIMER,
+      txCountHint: null,
+      dataSources: ["dexscreener"],
+      degraded: true,
+      degradationReason:
+        "ETHERSCAN_API_KEY not set — transaction count and full EVM explorer checks unavailable. Configure for stronger wallet analysis.",
+    };
   }
 
   const nonce = await etherscanTxCount(norm);

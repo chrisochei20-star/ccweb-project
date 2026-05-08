@@ -1,5 +1,5 @@
 -- CCWEB production schema (PostgreSQL 14+)
--- Order: ccweb_auth_users created first; self-FK on referred_by_user_id added via ALTER (not inline CREATE).
+-- Order: ccweb_auth_users first, then self-FK via ALTER on referred_by_user_id (not inline CREATE).
 -- Applied via `npm run migrate` / `npm run db:migrate` → db/schema.sql then db/migrations/*.sql (see db/migrations/README.md)
 
 CREATE TABLE IF NOT EXISTS ccweb_auth_users (
@@ -35,7 +35,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS ccweb_auth_users_oauth_unique
 
 CREATE INDEX IF NOT EXISTS ccweb_auth_users_email_verify ON ccweb_auth_users (email_verify_token) WHERE email_verify_token IS NOT NULL;
 
--- Legacy rows may lack referral columns; safe no-op when already present.
+-- Legacy rows may lack referral columns — safe no-op when already present.
 ALTER TABLE ccweb_auth_users ADD COLUMN IF NOT EXISTS referred_by_user_id TEXT;
 ALTER TABLE ccweb_auth_users ADD COLUMN IF NOT EXISTS acquisition_source TEXT;
 

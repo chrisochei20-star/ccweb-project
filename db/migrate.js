@@ -16,9 +16,38 @@ function splitSqlStatements(sql) {
   const out = [];
   let cur = "";
   let inStr = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
   for (let i = 0; i < sql.length; i += 1) {
     const c = sql[i];
     const next = sql[i + 1];
+
+    if (inBlockComment) {
+      if (c === "*" && next === "/") {
+        inBlockComment = false;
+        i += 1;
+      }
+      continue;
+    }
+
+    if (inLineComment) {
+      if (c === "\n") inLineComment = false;
+      continue;
+    }
+
+    if (!inStr && c === "/" && next === "*") {
+      inBlockComment = true;
+      i += 1;
+      continue;
+    }
+
+    if (!inStr && c === "-" && next === "-") {
+      inLineComment = true;
+      i += 1;
+      continue;
+    }
+
     if (c === "'" && inStr && next === "'") {
       cur += "''";
       i += 1;
@@ -29,12 +58,14 @@ function splitSqlStatements(sql) {
       cur += c;
       continue;
     }
+
     if (!inStr && c === ";") {
       const s = cur.trim();
       if (s && !s.startsWith("--")) out.push(s);
       cur = "";
       continue;
     }
+
     cur += c;
   }
   const tail = cur.trim();

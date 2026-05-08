@@ -1,5 +1,6 @@
 -- CCWEB production schema (PostgreSQL 14+)
--- Applied via `npm run db:migrate` → db/schema.sql then db/migrations/*.sql (see db/migrations/README.md)
+-- Order: ccweb_auth_users created first; self-FK on referred_by_user_id added via ALTER (not inline CREATE).
+-- Applied via `npm run migrate` / `npm run db:migrate` → db/schema.sql then db/migrations/*.sql (see db/migrations/README.md)
 
 CREATE TABLE IF NOT EXISTS ccweb_auth_users (
   id TEXT PRIMARY KEY,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiUrl } from "../config/env";
+import { apiFetch } from "../lib/apiClient";
 import { getSessionToken } from "../session";
 
 const cache = new Map();
@@ -42,7 +43,7 @@ export function useCachedFetch(url, opts = {}) {
       const headers = {};
       const token = getSessionToken();
       if (token) headers.Authorization = `Bearer ${token}`;
-      const res = await fetch(resolved, { credentials: "include", headers });
+      const res = await apiFetch(resolved, { credentials: "include", headers }, { networkRetries: 2 });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || res.statusText || "Request failed");
       cache.set(key, { at: Date.now(), json });

@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from "./config/env";
+import { apiFetch } from "./lib/apiClient";
 
 const TOKEN_KEY = "ccweb_session_token";
 const USER_KEY = "ccweb_user";
@@ -41,12 +42,16 @@ async function tryRefreshSession() {
   if (!refresh) return null;
   try {
     const apiOrigin = getApiBaseUrl();
-    const r = await fetch(`${apiOrigin}/api/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ refreshToken: refresh }),
-    });
+    const r = await apiFetch(
+      `${apiOrigin}/api/auth/refresh`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ refreshToken: refresh }),
+      },
+      { networkRetries: 1 }
+    );
     const data = await r.json();
     if (!r.ok) return null;
     const access = data.accessToken || data.token;
@@ -68,10 +73,14 @@ export async function fetchMe() {
 
   async function callMe(access) {
     const apiOrigin = getApiBaseUrl();
-    return fetch(`${apiOrigin}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${access}` },
-      credentials: "include",
-    });
+    return apiFetch(
+      `${apiOrigin}/api/auth/me`,
+      {
+        headers: { Authorization: `Bearer ${access}` },
+        credentials: "include",
+      },
+      { networkRetries: 1 }
+    );
   }
 
   if (!token) {
@@ -110,12 +119,16 @@ export async function logoutApi() {
   if (token) {
     try {
       const apiOrigin = getApiBaseUrl();
-      await fetch(`${apiOrigin}/api/auth/logout`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ refreshToken: refresh || undefined }),
-      });
+      await apiFetch(
+        `${apiOrigin}/api/auth/logout`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ refreshToken: refresh || undefined }),
+        },
+        { networkRetries: 1 }
+      );
     } catch {
       /* ignore */
     }

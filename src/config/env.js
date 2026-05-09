@@ -1,4 +1,8 @@
-/** Resolved at build time (VITE_API_BASE_URL) and optionally at runtime via <meta name="ccweb-api-base-url"> for split CDN + API deploys. */
+/**
+ * Production API origin for split deploys (Vercel ↔ Render).
+ * Primary: `import.meta.env.VITE_API_BASE_URL` (set in Vercel or `.env.production` at build time).
+ * Fallback: `<meta name="ccweb-api-base-url">` for emergency overrides without rebuild.
+ */
 
 export function getApiBaseUrl() {
   const fromVite = (import.meta.env.VITE_API_BASE_URL || "").trim().replace(/\/$/, "");
@@ -11,10 +15,10 @@ export function getApiBaseUrl() {
   return "";
 }
 
-/** @deprecated Prefer getApiBaseUrl() — env-only, does not read meta tag */
+/** Snapshot of env-only base (no meta); rare legacy use. */
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").trim().replace(/\/$/, "");
 
-/** Prefix API paths when frontend is on a different origin than the Node API. */
+/** Prefix API paths when the SPA is served from a different origin than the Node API. */
 export function apiUrl(path) {
   const base = getApiBaseUrl();
   const p = String(path || "").startsWith("/") ? path : `/${path}`;

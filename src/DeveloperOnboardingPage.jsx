@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchMe, getStoredUser } from "./session";
-import { API_BASE_URL, apiUrl } from "./config/env";
+import { getApiBaseUrl, apiUrl } from "./config/env";
 
 const LS_KEY = "ccweb_dev_api_key";
 const LS_PROJECT = "ccweb_dev_onboarding_project_id";
@@ -84,8 +84,8 @@ export function DeveloperOnboardingPage() {
   }, [loadProjects]);
 
   const baseUrl = useMemo(() => {
-    const fromEnv = (API_BASE_URL || "").trim();
-    if (fromEnv) return fromEnv;
+    const resolved = getApiBaseUrl();
+    if (resolved) return resolved;
     if (typeof window === "undefined") {
       return "https://api.example.com";
     }

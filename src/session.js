@@ -1,6 +1,4 @@
-import { API_BASE_URL } from "./config/env";
-
-const apiOrigin = API_BASE_URL || "";
+import { getApiBaseUrl } from "./config/env";
 
 const TOKEN_KEY = "ccweb_session_token";
 const USER_KEY = "ccweb_user";
@@ -42,6 +40,7 @@ async function tryRefreshSession() {
   const refresh = getRefreshToken();
   if (!refresh) return null;
   try {
+    const apiOrigin = getApiBaseUrl();
     const r = await fetch(`${apiOrigin}/api/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -68,6 +67,7 @@ export async function fetchMe() {
   const existingRefresh = getRefreshToken();
 
   async function callMe(access) {
+    const apiOrigin = getApiBaseUrl();
     return fetch(`${apiOrigin}/api/auth/me`, {
       headers: { Authorization: `Bearer ${access}` },
       credentials: "include",
@@ -109,6 +109,7 @@ export async function logoutApi() {
   const refresh = getRefreshToken();
   if (token) {
     try {
+      const apiOrigin = getApiBaseUrl();
       await fetch(`${apiOrigin}/api/auth/logout`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

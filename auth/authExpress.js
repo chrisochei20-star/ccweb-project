@@ -10,6 +10,7 @@ const authStore = require("./authStore");
 const { decryptSecret } = require("./cryptoSecret");
 const totpLib = require("./totp");
 const { verifyGoogleIdToken, verifyAppleIdToken } = require("./oauthProviders");
+const { logger } = require("../logging/logger");
 
 function getClientIp(req) {
   return (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "";
@@ -146,6 +147,7 @@ function mountAt(app, basePath) {
         verifyEmailHint: out.verifyEmailHint,
       });
     } catch (e) {
+      logger.error({ msg: "auth_register_failed", err: e?.message, stack: e?.stack });
       res.status(500).json({ error: e.message || "Server error" });
     }
   });
@@ -189,6 +191,7 @@ function mountAt(app, basePath) {
         out.refreshToken
       );
     } catch (e) {
+      logger.error({ msg: "auth_login_failed", err: e?.message, stack: e?.stack });
       res.status(500).json({ error: e.message || "Server error" });
     }
   });

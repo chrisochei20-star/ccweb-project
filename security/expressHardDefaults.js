@@ -58,7 +58,15 @@ function applyExpressSecurity(app) {
           },
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization", "CCWEB-API-Key", "Cookie"],
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "CCWEB-API-Key",
+        "Cookie",
+        "Accept",
+        "Origin",
+        "X-Requested-With",
+      ],
     })
   );
 }

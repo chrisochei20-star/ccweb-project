@@ -3833,11 +3833,14 @@ const server = http.createServer(async (req, res) => {
     (pathname.startsWith("/api") || pathname.startsWith("/v1")) &&
     pathname !== "/api/payments/stripe/webhook"
   ) {
-    const rl = checkApiRateLimit(req);
-    if (!rl.ok) {
-      res.setHeader("Retry-After", String(rl.retryAfterSec));
-      sendJson(res, 429, { error: "Too many requests", retryAfterSec: rl.retryAfterSec });
-      return;
+    // CORS preflight must not consume API rate limit — browsers may send many OPTIONS first.
+    if ((req.method || "GET") !== "OPTIONS") {
+      const rl = checkApiRateLimit(req);
+      if (!rl.ok) {
+        res.setHeader("Retry-After", String(rl.retryAfterSec));
+        sendJson(res, 429, { error: "Too many requests", retryAfterSec: rl.retryAfterSec });
+        return;
+      }
     }
   }
 

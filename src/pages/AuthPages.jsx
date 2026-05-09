@@ -3,7 +3,18 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 import { BrowserProvider, getAddress } from "ethers";
 import { setSession } from "../session";
-import { apiUrl } from "../config/env";
+import { apiUrl, getApiBaseUrl } from "../config/env";
+
+function mapNetworkError(err) {
+  const msg = err?.message || String(err);
+  if (msg === "Failed to fetch" || msg === "Load failed" || /network/i.test(msg)) {
+    return (
+      "Cannot reach the CCWEB API. On Vercel set VITE_API_BASE_URL=https://ccweb-render-main.onrender.com (your Render URL), " +
+      "redeploy the frontend, and on Render set CCWEB_ALLOWED_ORIGINS=* or your exact Vercel origin."
+    );
+  }
+  return msg;
+}
 
 function loadGoogleScript() {
   return new Promise((resolve, reject) => {
@@ -107,7 +118,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
               setUser(data.user);
               navigate("/", { replace: true });
             } catch (e) {
-              setError(e.message || "Google sign-in failed");
+              setError(mapNetworkError(e));
             } finally {
               setLoading(false);
             }
@@ -136,6 +147,11 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
     setError(null);
     setLoading(true);
     try {
+      if (!getApiBaseUrl()) {
+        throw new Error(
+          "API URL is not configured. Set VITE_API_BASE_URL on Vercel to your Render API origin (no trailing slash), or set index.html meta ccweb-api-base-url, then redeploy."
+        );
+      }
       if (mode === "signup") {
         const reg = await fetch(apiUrl("/api/auth/register"), {
           method: "POST",
@@ -148,7 +164,12 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
             utm_source: utmSource || undefined,
           }),
         });
-        const regData = await reg.json();
+        let regData;
+        try {
+          regData = await reg.json();
+        } catch {
+          throw new Error(reg.ok ? "Invalid response from API." : `Registration failed (HTTP ${reg.status}). Check VITE_API_BASE_URL points to Render.`);
+        }
         if (!reg.ok) throw new Error(regData.error || "Registration failed");
       }
       const loginRes = await fetch(apiUrl("/api/auth/login"), {
@@ -157,7 +178,14 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
         credentials: "include",
         body: JSON.stringify({ email, password }),
       });
-      const data = await loginRes.json();
+      let data;
+      try {
+        data = await loginRes.json();
+      } catch {
+        throw new Error(
+          loginRes.ok ? "Invalid response from API." : `Login failed (HTTP ${loginRes.status}). Check VITE_API_BASE_URL and CORS (CCWEB_ALLOWED_ORIGINS).`
+        );
+      }
       if (!loginRes.ok) throw new Error(data.error || "Authentication failed");
       if (data.needsTwoFactor && data.twoFactorToken) {
         setTwoFactorToken(data.twoFactorToken);
@@ -169,7 +197,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
       setUser(data.user);
       navigate("/", { replace: true });
     } catch (e) {
-      setError(e.message);
+      setError(mapNetworkError(e));
     } finally {
       setLoading(false);
     }
@@ -192,7 +220,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
       setUser(data.user);
       navigate("/", { replace: true });
     } catch (e) {
-      setError(e.message);
+      setError(mapNetworkError(e));
     } finally {
       setLoading(false);
     }
@@ -238,7 +266,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
       setUser(data.user);
       navigate("/", { replace: true });
     } catch (e) {
-      setError(e.shortMessage || e.message || "Wallet sign-in failed");
+      setError(e.shortMessage || mapNetworkError(e));
     } finally {
       setLoading(false);
     }

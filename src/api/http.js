@@ -1,17 +1,17 @@
 import axios from "axios";
 import { clearSession, getRefreshToken, getSessionToken, setSession } from "../session";
-import { API_BASE_URL } from "../config/env";
-
-const base = API_BASE_URL;
+import { getApiBaseUrl } from "../config/env";
 
 export const http = axios.create({
-  baseURL: base,
+  baseURL: "",
   timeout: 60000,
   headers: { "Content-Type": "application/json" },
   withCredentials: true,
 });
 
 http.interceptors.request.use((config) => {
+  const base = getApiBaseUrl();
+  if (base) config.baseURL = base;
   const token = getSessionToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -29,8 +29,9 @@ http.interceptors.response.use(
       const refresh = getRefreshToken();
       if (refresh) {
         try {
+          const apiOrigin = getApiBaseUrl();
           const { data } = await axios.post(
-            `${base || ""}/api/auth/refresh`,
+            `${apiOrigin}/api/auth/refresh`,
             { refreshToken: refresh },
             { headers: { "Content-Type": "application/json" }, withCredentials: true }
           );

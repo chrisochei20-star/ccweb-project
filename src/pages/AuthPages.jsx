@@ -8,9 +8,14 @@ import { apiUrl, getApiBaseUrl } from "../config/env";
 function mapNetworkError(err) {
   const msg = err?.message || String(err);
   if (msg === "Failed to fetch" || msg === "Load failed" || /network/i.test(msg)) {
+    const base = getApiBaseUrl();
+    if (base) {
+      return (
+        `Cannot reach ${base}. Confirm Render is up, HTTPS works, and CCWEB_ALLOWED_ORIGINS includes your Vercel origin (or use * for open beta).`
+      );
+    }
     return (
-      "Cannot reach the CCWEB API. On Vercel set VITE_API_BASE_URL=https://ccweb-render-main.onrender.com (your Render URL), " +
-      "redeploy the frontend, and on Render set CCWEB_ALLOWED_ORIGINS=* or your exact Vercel origin."
+      "API URL is missing or unreachable. Set VITE_API_BASE_URL on Vercel to https://ccweb-render-main.onrender.com (or rely on the repo .env.production), redeploy, then verify Render CORS."
     );
   }
   return msg;
@@ -149,13 +154,14 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
     try {
       if (!getApiBaseUrl()) {
         throw new Error(
-          "API URL is not configured. Set VITE_API_BASE_URL on Vercel to your Render API origin (no trailing slash), or set index.html meta ccweb-api-base-url, then redeploy."
+        "API URL is not configured. Production builds use repo `.env.production` or set VITE_API_BASE_URL on Vercel; optional `<meta name=\"ccweb-api-base-url\">` fallback."
         );
       }
       if (mode === "signup") {
         const reg = await fetch(apiUrl("/api/auth/register"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({
             email,
             password,

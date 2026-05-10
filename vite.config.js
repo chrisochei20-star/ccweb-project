@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
         "/api": { target: apiProxy, changeOrigin: true },
         "/v1": { target: apiProxy, changeOrigin: true },
         "/auth": { target: apiProxy, changeOrigin: true },
+        "/socket.io": { target: apiProxy, changeOrigin: true, ws: true },
       },
     },
   };

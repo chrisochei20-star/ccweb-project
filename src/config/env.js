@@ -24,3 +24,11 @@ export function apiUrl(path) {
   const p = String(path || "").startsWith("/") ? path : `/${path}`;
   return base ? `${base}${p}` : p;
 }
+
+/** `/uploads/...` on the API host — full URL for `<img src>`. */
+export function assetsUrl(pathOrUrl) {
+  if (!pathOrUrl) return "";
+  const s = String(pathOrUrl).trim();
+  if (/^https?:\/\//i.test(s)) return s;
+  return apiUrl(s.startsWith("/") ? s : `/${s}`);
+}

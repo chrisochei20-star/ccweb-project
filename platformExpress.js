@@ -12,6 +12,7 @@ const authEngine = require("./auth/authEngine");
 const authStore = require("./auth/authStore");
 const { mountAt, mountWalletFlat } = require("./auth/authExpress");
 const learningPg = require("./db/persistenceLearning");
+const dashboardPg = require("./db/persistenceDashboard");
 const pgGrowth = require("./db/persistenceGrowth");
 const growthEngine = require("./db/persistenceGrowthEngine");
 const monPg = require("./db/persistenceMonetization");
@@ -787,6 +788,7 @@ function createPlatformApp(deps) {
           postgres: false,
           profile: null,
           ordersSample: [],
+          dashboard: null,
           note: "Enable DATABASE_URL for full analytics.",
         });
       }
@@ -827,7 +829,13 @@ function createPlatformApp(deps) {
           growth = null;
         }
       }
-      res.json({ postgres: true, profile, orders: orders.slice(0, 25), growth });
+      let dashboard = null;
+      try {
+        dashboard = await dashboardPg.getDashboardBundle(req.ccwebUserId);
+      } catch {
+        dashboard = null;
+      }
+      res.json({ postgres: true, profile, orders: orders.slice(0, 25), growth, dashboard });
     } catch (e) {
       next(e);
     }

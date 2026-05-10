@@ -19,6 +19,10 @@ const { expressStripeEscrowCheckout } = require("./payments/stripeCheckout");
 const aiExecute = require("./services/aiExecute");
 const monetizationEngine = require("./services/monetizationEngine");
 const betaPg = require("./db/persistenceBeta");
+const socialPg = require("./db/persistenceSocialProfile");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 const { publicAppBaseUrl, trimOrigin } = require("./services/deploymentOrigins");
 const {
   stripeCheckoutOperational,
@@ -163,6 +167,282 @@ function createPlatformApp(deps) {
   });
 
   v1.use("/users", usersRouter);
+
+  const uploadSocialRoot = path.join(__dirname, "public", "uploads", "social");
+  function ensureSocialUploadDir(uid) {
+    const dir = path.join(uploadSocialRoot, uid);
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+  function makeSocialUpload(prefix) {
+    return multer({
+      storage: multer.diskStorage({
+        destination(req, file, cb) {
+          try {
+            cb(null, ensureSocialUploadDir(req.ccwebUserId));
+          } catch (e) {
+            cb(e);
+          }
+        },
+        filename(req, file, cb) {
+          const ext = path.extname(file.originalname || "").slice(0, 10) || ".jpg";
+          cb(null, `${prefix}-${Date.now()}${ext}`);
+        },
+      }),
+      limits: { fileSize: 3 * 1024 * 1024 },
+      fileFilter(req, file, cb) {
+        cb(null, /^image\/(jpeg|jpg|pjpeg|png|webp|gif)$/i.test(file.mimetype));
+      },
+    });
+  }
+  const uploadAvatar = makeSocialUpload("avatar");
+  const uploadBanner = makeSocialUpload("banner");
+
+  function relativeSocialUploadUrl(req, filename) {
+    const uid = req.ccwebUserId;
+    return `/uploads/social/${encodeURIComponent(uid)}/${encodeURIComponent(filename)}`;
+  }
+
+  const socialRouter = express.Router();
+
+  socialRouter.use((req, res, next) => {
+    if (!socialPg.usePostgres()) {
+      return res.status(503).json({ error: "Social features require PostgreSQL.", code: "NO_DATABASE" });
+    }
+    next();
+  });
+
+  socialRouter.get("/by-slug/:slug", optionalJwt, async (req, res, next) => {
+    try {
+      const r = await betaPg.resolveSlug(req.params.slug);
+      if (!r?.userId) return res.status(404).json({ error: "Profile not found." });
+      const profile = await socialPg.getSocialProfileBundle(r.userId, req.ccwebUserId || null);
+      res.json({ profile });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.get("/me", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const profile = await socialPg.getSocialProfileBundle(req.ccwebUserId, req.ccwebUserId);
+      res.json({ profile });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.put("/me", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const profile = await socialPg.updateSocialProfile(req.ccwebUserId, {
+        bio: req.body?.bio,
+        headline: req.body?.headline,
+        websiteUrl: req.body?.websiteUrl,
+        twitterHandle: req.body?.twitterHandle,
+        socialLinks: req.body?.socialLinks,
+      });
+      res.json({ profile });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.post("/me/avatar", authJwtMiddleware, uploadAvatar.single("file"), async (req, res, next) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "Image file required (field name: file)." });
+      const rel = relativeSocialUploadUrl(req, req.file.filename);
+      const profile = await socialPg.setImageUrl(req.ccwebUserId, "avatar", rel);
+      res.json({ profile });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.post("/me/banner", authJwtMiddleware, uploadBanner.single("file"), async (req, res, next) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "Image file required (field name: file)." });
+      const rel = relativeSocialUploadUrl(req, req.file.filename);
+      const profile = await socialPg.setImageUrl(req.ccwebUserId, "banner", rel);
+      res.json({ profile });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.get("/profile/:userId", optionalJwt, async (req, res, next) => {
+    try {
+      const profile = await socialPg.getSocialProfileBundle(req.params.userId, req.ccwebUserId || null);
+      if (!profile) return res.status(404).json({ error: "Not found." });
+      res.json({ profile });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.post("/follow/:userId", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const r = await socialPg.follow(req.ccwebUserId, req.params.userId);
+      if (!r.ok) return res.status(400).json({ error: "Cannot follow." });
+      const profile = await socialPg.getSocialProfileBundle(req.params.userId, req.ccwebUserId);
+      res.json({ ok: true, profile });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.delete("/follow/:userId", authJwtMiddleware, async (req, res, next) => {
+    try {
+      await socialPg.unfollow(req.ccwebUserId, req.params.userId);
+      const profile = await socialPg.getSocialProfileBundle(req.params.userId, req.ccwebUserId);
+      res.json({ ok: true, profile });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.get("/followers/:userId", optionalJwt, async (req, res, next) => {
+    try {
+      const list = await socialPg.listFollowers(req.params.userId, Number(req.query.limit) || 50);
+      res.json({ followers: list });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.get("/following/:userId", optionalJwt, async (req, res, next) => {
+    try {
+      const list = await socialPg.listFollowing(req.params.userId, Number(req.query.limit) || 50);
+      res.json({ following: list });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.get("/posts", optionalJwt, async (req, res, next) => {
+    try {
+      const userId = (req.query.userId || "").toString().trim();
+      if (!userId) return res.status(400).json({ error: "userId query required." });
+      const limit = Math.min(50, Number(req.query.limit) || 25);
+      const before = req.query.before ? String(req.query.before) : undefined;
+      const posts = await socialPg.listPosts(userId, req.ccwebUserId || null, { limit, before });
+      res.json({ posts });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.post("/posts", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const post = await socialPg.createPost(req.ccwebUserId, {
+        title: req.body?.title,
+        body: req.body?.body,
+      });
+      res.status(201).json({ post });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.get("/posts/:postId", optionalJwt, async (req, res, next) => {
+    try {
+      const post = await socialPg.getPost(req.params.postId, req.ccwebUserId || null);
+      if (!post) return res.status(404).json({ error: "Post not found." });
+      res.json({ post });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.get("/posts/:postId/comments", optionalJwt, async (req, res, next) => {
+    try {
+      const comments = await socialPg.listComments(req.params.postId, Number(req.query.limit) || 80);
+      res.json({ comments });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.post("/posts/:postId/comments", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const comment = await socialPg.createComment(req.ccwebUserId, req.params.postId, req.body?.body);
+      if (!comment) return res.status(404).json({ error: "Post not found." });
+      res.status(201).json({ comment });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.post("/posts/:postId/like", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const post = await socialPg.toggleLike(req.ccwebUserId, req.params.postId);
+      if (!post) return res.status(404).json({ error: "Post not found." });
+      res.json({ post });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.post("/posts/:postId/save", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const ok = await socialPg.savePost(req.ccwebUserId, req.params.postId);
+      if (!ok) return res.status(404).json({ error: "Post not found." });
+      const post = await socialPg.getPost(req.params.postId, req.ccwebUserId);
+      res.json({ post });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.delete("/posts/:postId/save", authJwtMiddleware, async (req, res, next) => {
+    try {
+      await socialPg.unsavePost(req.ccwebUserId, req.params.postId);
+      const post = await socialPg.getPost(req.params.postId, req.ccwebUserId);
+      res.json({ post });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.post("/posts/:postId/share", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const post = await socialPg.sharePost(req.ccwebUserId, req.params.postId);
+      if (!post) return res.status(404).json({ error: "Post not found." });
+      res.json({ post });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.get("/me/saved", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const limit = Math.min(50, Number(req.query.limit) || 25);
+      const posts = await socialPg.listSavedPosts(req.ccwebUserId, req.ccwebUserId, { limit });
+      res.json({ posts });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.get("/me/notifications", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const limit = Math.min(100, Number(req.query.limit) || 40);
+      const notifications = await socialPg.listNotifications(req.ccwebUserId, { limit });
+      res.json({ notifications });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  socialRouter.post("/me/notifications/read", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const n = await socialPg.markAllNotificationsRead(req.ccwebUserId);
+      res.json({ ok: true, updated: n });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  v1.use("/social", apiRateShort, socialRouter);
 
   const agentRuns = [];
   const catalogAgents = [

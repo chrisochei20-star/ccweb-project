@@ -21,6 +21,7 @@ const REQUIRED_TABLES = [
   "ccweb_communities",
   "ccweb_follows",
   "ccweb_likes",
+  "ccweb_saved_posts",
   "ccweb_referral_codes",
   "ccweb_growth_events",
   "ccweb_user_badges",

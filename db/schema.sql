@@ -421,6 +421,7 @@ CREATE TABLE IF NOT EXISTS ccweb_profiles (
   user_id TEXT PRIMARY KEY REFERENCES ccweb_users(id) ON DELETE CASCADE,
   bio TEXT NOT NULL DEFAULT '',
   avatar_url TEXT,
+  banner_url TEXT,
   headline TEXT,
   website_url TEXT,
   twitter_handle TEXT,
@@ -601,6 +602,15 @@ CREATE TABLE IF NOT EXISTS ccweb_likes (
 );
 
 CREATE INDEX IF NOT EXISTS ccweb_likes_target ON ccweb_likes (target_type, target_id);
+
+CREATE TABLE IF NOT EXISTS ccweb_saved_posts (
+  user_id TEXT NOT NULL REFERENCES ccweb_users(id) ON DELETE CASCADE,
+  post_id TEXT NOT NULL REFERENCES ccweb_posts(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, post_id)
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_saved_posts_user_created ON ccweb_saved_posts (user_id, created_at DESC);
 
 INSERT INTO ccweb_users (id)
 SELECT id FROM ccweb_auth_users

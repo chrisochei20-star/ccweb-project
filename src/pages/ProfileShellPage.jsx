@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { getSessionToken, logoutApi, setSession } from "../session";
 import { apiUrl } from "../config/env";
+import { SocialProfileHub } from "./SocialProfileHub";
 
 export function ProfileShellPage() {
   const { user, setUser } = useOutletContext() || {};
@@ -145,12 +146,14 @@ export function ProfileShellPage() {
     : null;
 
   return (
-    <div className="mx-auto max-w-lg space-y-5 px-3 pb-24 pt-4 md:max-w-xl">
+    <div className="mx-auto max-w-lg space-y-5 px-3 pb-24 pt-4 md:max-w-2xl">
       <header>
         <p className="text-xs font-semibold uppercase tracking-widest text-ccweb-muted">Profile</p>
         <h1 className="mt-1 text-2xl font-bold text-white">Account</h1>
         <p className="mt-1 text-sm text-ccweb-muted">{user.email || "Wallet-only account"}</p>
       </header>
+
+      <SocialProfileHub userId={user.id} isSelf />
 
       <section className="ccweb-glass rounded-2xl p-5">
         <h2 className="flex items-center gap-2 font-semibold text-white">

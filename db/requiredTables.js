@@ -1,10 +1,26 @@
 /**
- * Canonical list of CCWEB tables created by db/schema.sql (+ incremental migrations).
+ * Canonical list of all CCWEB tables created by db/schema.sql (+ incremental migrations).
  * Used by verifySchema for deployment checks.
  */
 const REQUIRED_TABLES = [
   "ccweb_auth_users",
   "ccweb_user_profiles",
+  "ccweb_users",
+  "ccweb_profiles",
+  "ccweb_posts",
+  "ccweb_comments",
+  "ccweb_chats",
+  "ccweb_chat_messages",
+  "ccweb_notifications",
+  "ccweb_courses",
+  "ccweb_lessons",
+  "ccweb_ai_conversations",
+  "ccweb_ai_messages",
+  "ccweb_wallets",
+  "ccweb_earnings",
+  "ccweb_communities",
+  "ccweb_follows",
+  "ccweb_likes",
   "ccweb_referral_codes",
   "ccweb_growth_events",
   "ccweb_user_badges",

@@ -33,6 +33,7 @@ const {
   broadcastInboxRefresh,
   onlineStatusForUserIds,
 } = require("./server/realtime/chatSocket");
+const { createCoursesRouter } = require("./coursesExpress");
 
 function createPlatformApp(deps) {
   const app = express();
@@ -315,6 +316,9 @@ function createPlatformApp(deps) {
   });
 
   v1.use("/chat", apiRateShort, chatRouter);
+
+  const coursesRouter = createCoursesRouter({ authJwtMiddleware, optionalJwt });
+  v1.use("/courses", apiRateShort, coursesRouter);
 
   const agentRuns = [];
   const catalogAgents = [

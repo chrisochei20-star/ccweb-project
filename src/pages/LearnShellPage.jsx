@@ -1,8 +1,8 @@
-import { BookOpen, GraduationCap, Radio } from "lucide-react";
+import { BookOpen, Radio } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { LearningHubPage } from "../learning/LearningHubPage";
-import { CCWEB_COURSES } from "../data/courses";
+import { CourseCatalogPage } from "./CourseCatalogPage";
 
 export function LearnShellPage() {
   const [tab, setTab] = useState("live");
@@ -48,38 +48,13 @@ export function LearnShellPage() {
 
       {tab === "courses" && (
         <section className="space-y-4">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold text-white">Course catalog</h2>
-            <span className="text-xs text-ccweb-muted">Progress ties to your account when signed in</span>
+            <Link to="/courses" className="text-xs font-medium text-ccweb-cyan hover:underline">
+              Full catalog →
+            </Link>
           </div>
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {CCWEB_COURSES.map((c) => (
-              <li key={c.id}>
-                <Link
-                  to={`/courses/${c.id}`}
-                  className="ccweb-glass block rounded-2xl p-4 transition hover:border-ccweb-cyan/40"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5">
-                        <GraduationCap className="h-5 w-5 text-ccweb-cyan" />
-                      </span>
-                      <div>
-                        <p className="font-medium text-white">{c.title}</p>
-                        <p className="text-xs text-ccweb-muted">
-                          {c.category} · {c.level}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="shrink-0 text-xs text-ccweb-green">{c.rating}★</span>
-                  </div>
-                  <p className="mt-2 text-xs text-ccweb-muted">
-                    {c.duration} · {c.students} learners
-                  </p>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <CourseCatalogPage compact />
         </section>
       )}
     </div>

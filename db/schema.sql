@@ -506,12 +506,17 @@ CREATE TABLE IF NOT EXISTS ccweb_courses (
   slug TEXT NOT NULL UNIQUE,
   title TEXT NOT NULL,
   summary TEXT NOT NULL DEFAULT '',
+  category_slug TEXT NOT NULL DEFAULT 'general',
+  level TEXT NOT NULL DEFAULT 'beginner',
+  published BOOLEAN NOT NULL DEFAULT TRUE,
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS ccweb_courses_slug_lower ON ccweb_courses (lower(slug));
+CREATE INDEX IF NOT EXISTS ccweb_courses_category ON ccweb_courses (category_slug);
+CREATE INDEX IF NOT EXISTS ccweb_courses_published ON ccweb_courses (published) WHERE published = TRUE;
 
 CREATE TABLE IF NOT EXISTS ccweb_lessons (
   id TEXT PRIMARY KEY,
@@ -525,6 +530,73 @@ CREATE TABLE IF NOT EXISTS ccweb_lessons (
 );
 
 CREATE INDEX IF NOT EXISTS ccweb_lessons_course_pos ON ccweb_lessons (course_id, position);
+
+CREATE TABLE IF NOT EXISTS ccweb_course_categories (
+  slug TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ccweb_course_enrollment (
+  user_id TEXT NOT NULL REFERENCES ccweb_users(id) ON DELETE CASCADE,
+  course_id TEXT NOT NULL REFERENCES ccweb_courses(id) ON DELETE CASCADE,
+  progress_pct REAL NOT NULL DEFAULT 0,
+  last_lesson_id TEXT REFERENCES ccweb_lessons(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, course_id)
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_course_enrollment_course ON ccweb_course_enrollment (course_id);
+
+CREATE TABLE IF NOT EXISTS ccweb_lesson_completion (
+  user_id TEXT NOT NULL REFERENCES ccweb_users(id) ON DELETE CASCADE,
+  lesson_id TEXT NOT NULL REFERENCES ccweb_lessons(id) ON DELETE CASCADE,
+  completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, lesson_id)
+);
+
+CREATE TABLE IF NOT EXISTS ccweb_quizzes (
+  id TEXT PRIMARY KEY,
+  lesson_id TEXT NOT NULL REFERENCES ccweb_lessons(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT 'Quiz',
+  questions JSONB NOT NULL DEFAULT '[]'::jsonb,
+  pass_pct REAL NOT NULL DEFAULT 70,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_quizzes_lesson ON ccweb_quizzes (lesson_id);
+
+CREATE TABLE IF NOT EXISTS ccweb_quiz_attempts (
+  id TEXT PRIMARY KEY,
+  quiz_id TEXT NOT NULL REFERENCES ccweb_quizzes(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES ccweb_users(id) ON DELETE CASCADE,
+  score_pct REAL NOT NULL,
+  passed BOOLEAN NOT NULL,
+  answers JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_quiz_attempts_user ON ccweb_quiz_attempts (user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS ccweb_certificates (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES ccweb_users(id) ON DELETE CASCADE,
+  course_id TEXT NOT NULL REFERENCES ccweb_courses(id) ON DELETE CASCADE,
+  code TEXT NOT NULL UNIQUE,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, course_id)
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_certificates_user ON ccweb_certificates (user_id);
+
+CREATE TABLE IF NOT EXISTS ccweb_course_bookmarks (
+  user_id TEXT NOT NULL REFERENCES ccweb_users(id) ON DELETE CASCADE,
+  course_id TEXT NOT NULL REFERENCES ccweb_courses(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, course_id)
+);
 
 CREATE TABLE IF NOT EXISTS ccweb_ai_conversations (
   id TEXT PRIMARY KEY,

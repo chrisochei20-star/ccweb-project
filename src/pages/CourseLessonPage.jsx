@@ -4,6 +4,8 @@ import { Link, useNavigate, useOutletContext, useParams } from "react-router-dom
 import {
   fetchCourseDetail,
   fetchLessonQuiz,
+  fetchTutorMessages,
+  ensureTutorConversation,
   postLessonComplete,
   postQuizSubmit,
   streamTutor,
@@ -23,8 +25,9 @@ export function CourseLessonPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
   const [tutorMsg, setTutorMsg] = useState("");
-  const [tutorOut, setTutorOut] = useState("");
   const [tutorBusy, setTutorBusy] = useState(false);
+  const [tutorConvId, setTutorConvId] = useState(null);
+  const [tutorMessages, setTutorMessages] = useState([]);
 
   useEffect(() => {
     let c = false;
@@ -61,6 +64,25 @@ export function CourseLessonPage() {
     };
   }, [slug, lessonId]);
 
+  useEffect(() => {
+    if (!user || !lessonId || !slug) return;
+    let c = false;
+    (async () => {
+      try {
+        const conv = await ensureTutorConversation({ mode: "lesson", courseSlug: slug, lessonId });
+        if (c) return;
+        setTutorConvId(conv.id);
+        const data = await fetchTutorMessages(conv.id);
+        setTutorMessages(data.messages || []);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      c = true;
+    };
+  }, [user?.id, slug, lessonId]);
+
   async function markComplete() {
     if (!user || !lesson) {
       navigate("/login");
@@ -88,17 +110,33 @@ export function CourseLessonPage() {
   }
 
   async function runTutorStream() {
-    if (!tutorMsg.trim()) return;
+    if (!tutorMsg.trim() || !user) return;
     setTutorBusy(true);
-    setTutorOut("");
     setErr(null);
+    const replyId = `tmp_${Date.now()}`;
+    const userLine = tutorMsg.trim();
+    setTutorMsg("");
+    setTutorMessages((prev) => [
+      ...prev,
+      { role: "user", content: userLine, id: `local_${Date.now()}` },
+      { role: "assistant", content: "", id: replyId },
+    ]);
     try {
-      await streamTutor({
-        message: tutorMsg,
+      const out = await streamTutor({
+        message: userLine,
         courseSlug: slug,
         lessonId,
-        onDelta: (_d, full) => setTutorOut(full),
+        mode: "lesson",
+        conversationId: tutorConvId,
+        onDelta: (_d, full) => {
+          setTutorMessages((prev) =>
+            prev.map((m) => (m.id === replyId ? { ...m, content: full } : m))
+          );
+        },
       });
+      if (out.conversationId) setTutorConvId(out.conversationId);
+      const data = await fetchTutorMessages(out.conversationId || tutorConvId);
+      setTutorMessages(data.messages || []);
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -197,19 +235,45 @@ export function CourseLessonPage() {
       <section className="ccweb-glass rounded-2xl p-5">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
           <Sparkles className="h-5 w-5 text-ccweb-violet" />
-          AI tutor (streaming)
+          AI tutor (OpenAI · streaming · saved thread)
         </h2>
         <p className="mt-1 text-xs text-ccweb-muted">
-          Answers use your course &amp; lesson context. Configure <code className="text-ccweb-cyan">OPENAI_API_KEY</code> on the API for live output.
+          Full lesson context, your profile, and long-term memory power replies when{" "}
+          <code className="text-ccweb-cyan">OPENAI_API_KEY</code> and PostgreSQL are set.
         </p>
         {!user && <p className="mt-2 text-sm text-amber-200">Sign in to use the tutor.</p>}
         {user && (
           <>
+            <div className="mt-4 max-h-64 space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-black/30 p-3 text-sm">
+              {tutorMessages.length === 0 && (
+                <p className="text-xs text-ccweb-muted">No messages yet — ask about this lesson.</p>
+              )}
+              {tutorMessages.map((m) => (
+                <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className={
+                      "max-w-[92%] rounded-xl px-3 py-2 whitespace-pre-wrap " +
+                      (m.role === "user"
+                        ? "bg-ccweb-cyan/25 text-white"
+                        : "border border-white/10 bg-white/5 text-white/95")
+                    }
+                  >
+                    {m.content}
+                  </div>
+                </div>
+              ))}
+            </div>
             <textarea
               className="ccweb-input mt-3 min-h-[88px] text-sm"
               placeholder="Ask a question about this lesson…"
               value={tutorMsg}
               onChange={(e) => setTutorMsg(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  runTutorStream();
+                }
+              }}
             />
             <button
               type="button"
@@ -218,13 +282,8 @@ export function CourseLessonPage() {
               onClick={runTutorStream}
             >
               {tutorBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Stream answer
+              Send (stream)
             </button>
-            {tutorOut && (
-              <div className="mt-4 rounded-xl border border-white/10 bg-black/40 p-4 text-sm whitespace-pre-wrap text-white/95">
-                {tutorOut}
-              </div>
-            )}
           </>
         )}
       </section>

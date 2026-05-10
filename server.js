@@ -289,6 +289,10 @@ function buildUserProfile(input, existing = null) {
   const id = (input.id || input.userId || fallbackId).toString().trim();
   const displayName = (input.displayName || existing?.displayName || id).toString().trim();
   const email = (input.email !== undefined ? input.email : existing?.email) || null;
+  const avatarUrl =
+    input.avatarUrl !== undefined ? input.avatarUrl || null : existing?.avatarUrl ?? null;
+  const bannerUrl =
+    input.bannerUrl !== undefined ? input.bannerUrl || null : existing?.bannerUrl ?? null;
   return {
     id,
     email: email ? String(email).trim().toLowerCase() : null,
@@ -296,6 +300,8 @@ function buildUserProfile(input, existing = null) {
     isOrganic: input.isOrganic === undefined ? existing?.isOrganic ?? true : Boolean(input.isOrganic),
     roles: Array.isArray(input.roles) && input.roles.length ? input.roles : existing?.roles || ["member"],
     pushEnabled: input.pushEnabled === undefined ? existing?.pushEnabled ?? true : Boolean(input.pushEnabled),
+    avatarUrl,
+    bannerUrl,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
   };
@@ -309,6 +315,8 @@ function sanitizeUser(user) {
     isOrganic: user.isOrganic,
     roles: user.roles,
     pushEnabled: user.pushEnabled,
+    avatarUrl: user.avatarUrl || null,
+    bannerUrl: user.bannerUrl || null,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };

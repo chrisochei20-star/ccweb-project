@@ -1,8 +1,10 @@
 import { KeyRound, LogOut, Shield, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
+import { uploadProfileAvatar, uploadProfileBanner } from "../api/uploadsApi";
+import { assetsUrl, apiUrl } from "../config/env";
+import { ImageDropZone } from "../components/uploads/ImageDropZone";
 import { getSessionToken, logoutApi, setSession } from "../session";
-import { apiUrl } from "../config/env";
 
 export function ProfileShellPage() {
   const { user, setUser } = useOutletContext() || {};
@@ -18,6 +20,7 @@ export function ProfileShellPage() {
   const [backupCodes, setBackupCodes] = useState(null);
 
   const [betaSlug, setBetaSlug] = useState("");
+  const [mediaBusy, setMediaBusy] = useState({ avatar: false, banner: false });
 
   useEffect(() => {
     if (user) {
@@ -151,6 +154,68 @@ export function ProfileShellPage() {
         <h1 className="mt-1 text-2xl font-bold text-white">Account</h1>
         <p className="mt-1 text-sm text-ccweb-muted">{user.email || "Wallet-only account"}</p>
       </header>
+
+      <section className="ccweb-glass rounded-2xl p-5">
+        <h2 className="font-semibold text-white">Profile appearance</h2>
+        <p className="mt-1 text-sm text-ccweb-muted">
+          Banner and avatar are stored securely (Cloudinary when configured, otherwise the API host). JPEG/PNG/WebP/GIF —
+          validated on the server.
+        </p>
+        <div className="mt-4 space-y-5">
+          <ImageDropZone
+            label="Banner"
+            hint="Wide image · drag & drop or tap"
+            busy={mediaBusy.banner}
+            aspectClass="aspect-[21/9] max-h-40"
+            previewUrl={user.bannerUrl ? assetsUrl(user.bannerUrl) : null}
+            onFile={async (file) => {
+              setErr(null);
+              setMsg(null);
+              const token = getSessionToken();
+              setMediaBusy((m) => ({ ...m, banner: true }));
+              try {
+                const data = await uploadProfileBanner(file, token);
+                setUser(data.user);
+                setSession(token, data.user, undefined);
+                setMsg("Banner updated.");
+              } catch (e) {
+                setErr(e.message);
+              } finally {
+                setMediaBusy((m) => ({ ...m, banner: false }));
+              }
+            }}
+          >
+            Upload banner
+          </ImageDropZone>
+          <div className="max-w-[160px]">
+            <ImageDropZone
+              label="Avatar"
+              hint="Square · compressed before upload"
+              busy={mediaBusy.avatar}
+              aspectClass="aspect-square max-w-[160px]"
+              previewUrl={user.avatarUrl ? assetsUrl(user.avatarUrl) : null}
+              onFile={async (file) => {
+                setErr(null);
+                setMsg(null);
+                const token = getSessionToken();
+                setMediaBusy((m) => ({ ...m, avatar: true }));
+                try {
+                  const data = await uploadProfileAvatar(file, token);
+                  setUser(data.user);
+                  setSession(token, data.user, undefined);
+                  setMsg("Profile photo updated.");
+                } catch (e) {
+                  setErr(e.message);
+                } finally {
+                  setMediaBusy((m) => ({ ...m, avatar: false }));
+                }
+              }}
+            >
+              Upload avatar
+            </ImageDropZone>
+          </div>
+        </div>
+      </section>
 
       <section className="ccweb-glass rounded-2xl p-5">
         <h2 className="flex items-center gap-2 font-semibold text-white">

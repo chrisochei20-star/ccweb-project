@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS ccweb_user_profiles (
   roles JSONB NOT NULL DEFAULT '["member"]'::jsonb,
   is_organic BOOLEAN NOT NULL DEFAULT TRUE,
   push_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  avatar_url TEXT,
+  banner_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -509,6 +511,7 @@ CREATE TABLE IF NOT EXISTS ccweb_courses (
   category_slug TEXT NOT NULL DEFAULT 'general',
   level TEXT NOT NULL DEFAULT 'beginner',
   published BOOLEAN NOT NULL DEFAULT TRUE,
+  thumbnail_url TEXT,
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

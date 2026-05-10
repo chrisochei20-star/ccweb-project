@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { apiUrl, assetsUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
+import { compressImageFile } from "../lib/imageCompress";
 import { createChatSocket } from "../lib/chatSocket";
 import { getSessionToken } from "../session";
 
@@ -226,8 +227,14 @@ export function ChatPage() {
 
   async function uploadImage(file) {
     if (!activeId || !file) return;
+    let prepared = file;
+    try {
+      prepared = await compressImageFile(file, { maxWidth: 2048, maxHeight: 2048 });
+    } catch {
+      prepared = file;
+    }
     const fd = new FormData();
-    fd.append("file", file);
+    fd.append("file", prepared);
     try {
       const res = await fetch(apiUrl(`/api/v1/chat/${encodeURIComponent(activeId)}/upload`), {
         method: "POST",

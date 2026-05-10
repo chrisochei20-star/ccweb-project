@@ -38,7 +38,7 @@ describe("authEngine", () => {
   it("rejects wrong password", async () => {
     const email = `badpw${Date.now()}@b.com`;
     await registerUser(users, buildUserProfile, { email, password: "correctpass1", displayName: "C" });
-    const login = await loginPasswordStep(users, { email, password: "wrongpassword", ip: "10.0.0.1" });
+    const login = await loginPasswordStep(users, buildUserProfile, { email, password: "wrongpassword", ip: "10.0.0.1" });
     expect(login.error).toMatch(/Invalid email or password/i);
     expect(login.accessToken).toBeFalsy();
   });
@@ -52,14 +52,14 @@ describe("authEngine", () => {
     });
     expect(reg.error).toBeUndefined();
     expect(reg.user).toBeTruthy();
-    const login = await loginPasswordStep(users, { email, password: "password1x", ip: "127.0.0.1" });
+    const login = await loginPasswordStep(users, buildUserProfile, { email, password: "password1x", ip: "127.0.0.1" });
     expect(login.accessToken).toBeTruthy();
   });
 
   it("login issues JWT access token", async () => {
     const email = `jwt${Date.now()}@b.com`;
     await registerUser(users, buildUserProfile, { email, password: "longpass12", displayName: "J" });
-    const out = await loginPasswordStep(users, { email, password: "longpass12", ip: "127.0.0.1" });
+    const out = await loginPasswordStep(users, buildUserProfile, { email, password: "longpass12", ip: "127.0.0.1" });
     expect(out.needsTwoFactor).toBeFalsy();
     expect(out.accessToken).toBeTruthy();
     expect(out.refreshToken).toBeTruthy();
@@ -73,18 +73,29 @@ describe("authEngine", () => {
     expect(reg.user?.id).toBeTruthy();
     const uid = reg.user.id;
 
-    const login = await loginPasswordStep(users, { email, password: "sessionpass1", ip: "192.168.1.5" });
+    const login = await loginPasswordStep(users, buildUserProfile, { email, password: "sessionpass1", ip: "192.168.1.5" });
     expect(login.refreshToken).toBeTruthy();
     expect(getUserIdFromAccess(login.accessToken)).toBe(uid);
 
-    const ref1 = await refreshTokens(users, login.refreshToken);
+    const ref1 = await refreshTokens(users, buildUserProfile, login.refreshToken);
     expect(ref1.error).toBeUndefined();
     expect(ref1.accessToken).toBeTruthy();
     expect(ref1.refreshToken).toBeTruthy();
 
     await logoutAccessToken(ref1.accessToken, ref1.refreshToken);
-    const ref2 = await refreshTokens(users, ref1.refreshToken);
+    const ref2 = await refreshTokens(users, buildUserProfile, ref1.refreshToken);
     expect(ref2.error).toMatch(/Invalid|revoked/i);
+  });
+
+  it("login rebuilds profile after in-memory map cleared (PostgreSQL-style persistence)", async () => {
+    const map = new Map();
+    const email = `rehyd${Date.now()}@b.com`;
+    await registerUser(map, buildUserProfile, { email, password: "rehydpass12", displayName: "R" });
+    map.clear();
+    const login = await loginPasswordStep(map, buildUserProfile, { email, password: "rehydpass12", ip: "127.0.0.1" });
+    expect(login.error).toBeUndefined();
+    expect(login.accessToken).toBeTruthy();
+    expect(map.size).toBeGreaterThan(0);
   });
 
   it("wallet nonce and EVM verify roundtrip (memory store)", async () => {

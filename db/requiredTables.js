@@ -4,6 +4,7 @@
  */
 const REQUIRED_TABLES = [
   "ccweb_auth_users",
+  "ccweb_user_profiles",
   "ccweb_referral_codes",
   "ccweb_growth_events",
   "ccweb_user_badges",

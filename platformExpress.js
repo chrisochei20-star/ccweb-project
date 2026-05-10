@@ -104,9 +104,9 @@ function createPlatformApp(deps) {
 
   usersRouter.get("/me", authJwtMiddleware, async (req, res, next) => {
     try {
-      const { ccwebUsers, sanitizeUser } = deps;
-      const user = ccwebUsers.get(req.ccwebUserId);
-      if (!user) return res.status(401).json({ error: "Session invalid." });
+      const { ccwebUsers, sanitizeUser, buildUserProfile } = deps;
+      const user = await authEngine.ensureUserProfile(ccwebUsers, buildUserProfile, req.ccwebUserId);
+      if (!user) return res.status(401).json({ error: "Session invalid.", code: "USER_NOT_FOUND" });
       let betaSlug = null;
       try {
         betaSlug = await betaPg.getSlugForUser(req.ccwebUserId);
@@ -147,6 +147,7 @@ function createPlatformApp(deps) {
         existingInMem || null
       );
       ccwebUsers.set(req.ccwebUserId, merged);
+      await authEngine.persistNewUserProfile(req.ccwebUserId, merged);
       await authStore.saveUser({
         ...row,
         email: row.email || merged.email || null,

@@ -6,11 +6,13 @@ import {
   Routes,
   useOutletContext,
   useParams,
+  useSearchParams,
 } from "react-router-dom";
 import { Suspense, lazy, useEffect, useState } from "react";
 import { GrowthHubPage } from "./GrowthHubPage";
 import { CCWEB_COURSES } from "./data/courses";
 import { MobileLayout } from "./layout/MobileLayout";
+import { ProtectedLayout } from "./layout/ProtectedLayout";
 import { LoginPage, SignupPage } from "./pages/AuthPages";
 import { BuildHubPage } from "./pages/BuildHubPage";
 import { CommunityShellPage } from "./pages/CommunityShellPage";
@@ -61,7 +63,6 @@ function App() {
           <Route index element={<MobileDashboardPage />} />
           <Route path="learn" element={<LearnShellPage />} />
           <Route path="learn/session/:roomId" element={<LearningSessionPage />} />
-          <Route path="learn/admin" element={<LearningAdminPage />} />
           <Route path="find" element={<FindPage />} />
           <Route path="crypto-scanner" element={<FindPage initialTab="scanner" />} />
           <Route path="crypto/trending" element={<FindPage initialTab="trending" />} />
@@ -70,7 +71,10 @@ function App() {
           <Route path="build" element={<BuildHubPage />} />
           <Route path="earn" element={<EarnShellPage />} />
           <Route path="community" element={<CommunityShellPage />} />
-          <Route path="profile" element={<ProfileShellPage />} />
+          <Route element={<ProtectedLayout />}>
+            <Route path="profile" element={<ProfileShellPage />} />
+            <Route path="learn/admin" element={<LearningAdminPage />} />
+          </Route>
           <Route path="marketplace" element={<GrowthHubPage initialTab="marketplace" />} />
           <Route path="escrow" element={<GrowthHubPage initialTab="escrow" />} />
           <Route path="courses" element={<CoursesPage />} />
@@ -97,6 +101,7 @@ function App() {
           <Route path="privacy" element={<PrivacyPage />} />
           <Route path="terms" element={<TermsPage />} />
           <Route path="dashboard" element={<Navigate to="/" replace />} />
+          <Route path="verify-email" element={<VerifyEmailPage />} />
           <Route path="forgot-password" element={<ForgotPasswordPage />} />
           <Route path="welcome" element={<HomePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -1054,6 +1059,51 @@ function FaqPage() {
   );
 }
 
+function VerifyEmailPage() {
+  const [searchParams] = useSearchParams();
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+  const [pending, setPending] = useState(true);
+  const token = searchParams.get("token") || searchParams.get("t");
+
+  useEffect(() => {
+    if (!token) {
+      setErr("Missing verification token. Open the full link from your email.");
+      setPending(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(apiUrl(`/api/auth/verify-email?token=${encodeURIComponent(token)}`));
+        const data = await res.json();
+        if (cancelled) return;
+        if (res.ok) setMsg("Your email is verified. You can continue using the app.");
+        else setErr(data.error || "Verification failed.");
+      } catch (e) {
+        if (!cancelled) setErr(e.message || "Request failed.");
+      } finally {
+        if (!cancelled) setPending(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  return (
+    <section className="auth-card">
+      <h1 className="section-title">Email verification</h1>
+      {pending && !err && <p className="muted">Verifying…</p>}
+      {msg && <p style={{ color: "#4ade80" }}>{msg}</p>}
+      {err && <p style={{ color: "#f87171" }}>{err}</p>}
+      <p className="muted" style={{ marginTop: "1rem" }}>
+        <Link to="/login">Back to sign in</Link>
+      </p>
+    </section>
+  );
+}
+
 function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [token, setToken] = useState("");
@@ -1102,8 +1152,8 @@ function ForgotPasswordPage() {
     <section className="auth-card">
       <h1 className="section-title">Reset password</h1>
       <p className="muted">
-        Prototype flow: request a reset, then complete with the token (set{" "}
-        <code>AUTH_DEBUG=1</code> on the API to return a dev token in the response).
+        Request a secure reset for your account. If <code>AUTH_DEBUG=1</code> is enabled on the API, the
+        response may include a dev token for the next step.
       </p>
       <div className="auth-row">
         <label htmlFor="re-email">Email</label>
@@ -1117,7 +1167,7 @@ function ForgotPasswordPage() {
       </div>
       {step === "request" && (
         <button type="button" className="btn btn-primary" onClick={requestReset}>
-          Send reset link (prototype)
+          Send reset request
         </button>
       )}
       {step === "reset" && (

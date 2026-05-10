@@ -154,15 +154,15 @@ function mountAt(app, basePath) {
 
   app.post(`${p}/login`, async (req, res) => {
     try {
-      const { ccwebUsers, sanitizeUser } = getDeps(req);
+      const { ccwebUsers, sanitizeUser, buildUserProfile } = getDeps(req);
       const ip = getClientIp(req);
-      const out = await authEngine.loginPasswordStep(ccwebUsers, { ...req.body, ip });
+      const out = await authEngine.loginPasswordStep(ccwebUsers, buildUserProfile, { ...req.body, ip });
       if (out.status === 429) {
         res.setHeader("Retry-After", String(out.retryAfterSec || 60));
-        return res.status(429).json({ error: out.error });
+        return res.status(429).json({ error: out.error, code: "RATE_LIMITED" });
       }
-      if (out.status === 423) return res.status(423).json({ error: out.error });
-      if (out.error) return res.status(401).json({ error: out.error });
+      if (out.status === 423) return res.status(423).json({ error: out.error, code: "ACCOUNT_LOCKED" });
+      if (out.error) return res.status(401).json({ error: out.error, code: out.code || "AUTH_FAILED" });
       if (out.needsTwoFactor) {
         return res.status(200).json({
           needsTwoFactor: true,
@@ -198,14 +198,14 @@ function mountAt(app, basePath) {
 
   app.post(`${p}/login/2fa`, async (req, res) => {
     try {
-      const { ccwebUsers, sanitizeUser } = getDeps(req);
+      const { ccwebUsers, sanitizeUser, buildUserProfile } = getDeps(req);
       const ip = getClientIp(req);
-      const out = await authEngine.verifyTwoFactorLogin(ccwebUsers, { ...req.body, ip });
+      const out = await authEngine.verifyTwoFactorLogin(ccwebUsers, buildUserProfile, { ...req.body, ip });
       if (out.status === 429) {
         res.setHeader("Retry-After", String(out.retryAfterSec || 60));
-        return res.status(429).json({ error: out.error });
+        return res.status(429).json({ error: out.error, code: "RATE_LIMITED" });
       }
-      if (out.error) return res.status(401).json({ error: out.error });
+      if (out.error) return res.status(401).json({ error: out.error, code: out.code || "AUTH_FAILED" });
       if (out.user?.id) {
         try {
           const growthEngine = require("../db/persistenceGrowthEngine");
@@ -233,11 +233,11 @@ function mountAt(app, basePath) {
 
   app.post(`${p}/refresh`, async (req, res) => {
     try {
-      const { ccwebUsers, sanitizeUser } = getDeps(req);
+      const { ccwebUsers, sanitizeUser, buildUserProfile } = getDeps(req);
       const refresh = req.body?.refreshToken || req.cookies?.ccweb_refresh;
-      if (!refresh) return res.status(400).json({ error: "refreshToken required (body or ccweb_refresh cookie)." });
-      const out = await authEngine.refreshTokens(ccwebUsers, refresh);
-      if (out.error) return res.status(401).json({ error: out.error });
+      if (!refresh) return res.status(400).json({ error: "refreshToken required (body or ccweb_refresh cookie).", code: "REFRESH_REQUIRED" });
+      const out = await authEngine.refreshTokens(ccwebUsers, buildUserProfile, refresh);
+      if (out.error) return res.status(401).json({ error: out.error, code: out.code || "INVALID_REFRESH" });
       sendTokens(
         res,
         200,
@@ -263,14 +263,18 @@ function mountAt(app, basePath) {
     res.json({ ok: true });
   });
 
-  app.get(`${p}/me`, (req, res) => {
-    const { ccwebUsers, sanitizeUser } = getDeps(req);
-    const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "").trim();
-    const userId = authEngine.getUserIdFromAccess(token);
-    if (!userId) return res.status(401).json({ error: "Unauthorized." });
-    const user = ccwebUsers.get(userId);
-    if (!user) return res.status(401).json({ error: "Session invalid." });
-    res.json({ user: sanitizeUser(user) });
+  app.get(`${p}/me`, async (req, res) => {
+    try {
+      const { ccwebUsers, sanitizeUser, buildUserProfile } = getDeps(req);
+      const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "").trim();
+      const userId = authEngine.getUserIdFromAccess(token);
+      if (!userId) return res.status(401).json({ error: "Unauthorized.", code: "INVALID_TOKEN" });
+      const user = await authEngine.ensureUserProfile(ccwebUsers, buildUserProfile, userId);
+      if (!user) return res.status(401).json({ error: "Session invalid.", code: "USER_NOT_FOUND" });
+      res.json({ user: sanitizeUser(user) });
+    } catch (e) {
+      res.status(500).json({ error: e.message || "Server error", code: "SERVER_ERROR" });
+    }
   });
 
   app.get(`${p}/verify-email`, async (req, res) => {

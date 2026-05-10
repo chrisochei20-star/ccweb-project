@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  font-family: "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-family: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif;
   --bg: #040a1a;
   --bg-soft: #0a1122;
   --card: #0a1328;

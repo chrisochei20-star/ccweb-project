@@ -25,6 +25,7 @@ import { CourseCatalogPage } from "./pages/CourseCatalogPage";
 import { CourseDetailPage } from "./pages/CourseDetailPage";
 import { CourseLessonPage } from "./pages/CourseLessonPage";
 import { AiTutorPage } from "./pages/AiTutorPage";
+import { Skeleton } from "./components/ui/Skeleton";
 import { getSessionToken, setSession } from "./session";
 import { LearningAdminPage } from "./learning/LearningAdminPage";
 import { LearningSessionPage } from "./learning/LearningSessionPage";
@@ -48,10 +49,17 @@ const TokenDetailPage = lazy(() => import("./TokenDetailPage").then((m) => ({ de
 
 function RouteFallback() {
   return (
-    <div className="flex min-h-[45vh] items-center justify-center px-4">
-      <p className="rounded-2xl border border-white/10 bg-black/30 px-8 py-6 text-sm text-ccweb-muted backdrop-blur-md">
-        Loading…
-      </p>
+    <div className="mx-auto flex min-h-[50vh] max-w-lg flex-col items-center justify-center gap-5 px-4 py-16">
+      <div className="ccweb-glass ccweb-card-premium w-full max-w-sm rounded-3xl p-8">
+        <Skeleton className="mx-auto h-11 w-11 rounded-2xl" />
+        <Skeleton className="mx-auto mt-5 h-6 w-44 rounded-lg" />
+        <Skeleton className="mx-auto mt-3 h-3 w-full max-w-[220px] rounded-md" />
+        <div className="mt-6 space-y-2">
+          <Skeleton className="h-3 w-full rounded-md" />
+          <Skeleton className="h-3 w-[88%] rounded-md" />
+        </div>
+      </div>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-ccweb-muted">Loading experience…</p>
     </div>
   );
 }

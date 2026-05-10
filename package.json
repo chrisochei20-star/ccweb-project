@@ -16,6 +16,7 @@
     "db:migrate": "node db/migrate.js",
     "db:verify": "node db/verifySchema.js",
     "verify:deploy": "node scripts/verify-deployment.js",
+    "verify:imports": "node scripts/check-import-deps.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

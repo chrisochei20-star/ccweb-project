@@ -1,8 +1,5 @@
 /**
- * @example
- * import { createClient, createAgentHelpers } from "@ccweb/sdk";
- * const ccweb = createClient({ apiKey: process.env.CCWEB_API_KEY, baseUrl: process.env.CCWEB_API_PUBLIC_URL });
- * const sessions = await ccweb.sessions.list();
+ * Example (after `npm link` / workspace setup): createClient({ apiKey, baseUrl })
  */
 export function createClient({ apiKey, baseUrl }) {
   if (!apiKey) throw new Error("apiKey is required");

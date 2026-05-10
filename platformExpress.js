@@ -2,12 +2,14 @@
  * Unified REST API under /api/v1 — Express Router composition with JWT middleware.
  */
 
+const { requireBearerJwt: authJwtMiddleware, optionalBearerJwt: optionalJwt } = require("./server/http/middleware/auth");
+const { apiRateLimitV1: apiRateShort, getClientIp } = require("./server/http/middleware/expressRateLimit");
+const { errorHandler } = require("./server/http/middleware/errors");
 const express = require("express");
 const crypto = require("crypto");
 const { applyExpressSecurity } = require("./security/expressHardDefaults");
 const authEngine = require("./auth/authEngine");
 const authStore = require("./auth/authStore");
-const rateLimitAuth = require("./auth/rateLimit");
 const { mountAt, mountWalletFlat } = require("./auth/authExpress");
 const learningPg = require("./db/persistenceLearning");
 const pgGrowth = require("./db/persistenceGrowth");
@@ -22,48 +24,6 @@ const {
   stripeCheckoutOperational,
   stripeWebhookOperational,
 } = require("./payments/stripeConfig");
-
-function getClientIp(req) {
-  return (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "";
-}
-
-function apiRateShort(req, res, next) {
-  const ip = getClientIp(req);
-  const rl = rateLimitAuth.check("api_v1", ip, 120, 60 * 1000);
-  if (!rl.ok) {
-    res.setHeader("Retry-After", String(rl.retryAfterSec || 60));
-    return res.status(429).json({ error: "Too many requests." });
-  }
-  next();
-}
-
-function authJwtMiddleware(req, res, next) {
-  const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "").trim();
-  const userId = authEngine.getUserIdFromAccess(token);
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized.", code: "INVALID_TOKEN" });
-  }
-  req.ccwebUserId = userId;
-  next();
-}
-
-function optionalJwt(req, res, next) {
-  const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "").trim();
-  req.ccwebUserId = authEngine.getUserIdFromAccess(token) || null;
-  next();
-}
-
-function errorHandler(err, req, res, next) {
-  if (res.headersSent) {
-    next(err);
-    return;
-  }
-  const status = err.status || err.statusCode || 500;
-  res.status(status).json({
-    error: err.message || "Internal server error",
-    code: err.code || "SERVER_ERROR",
-  });
-}
 
 function createPlatformApp(deps) {
   const app = express();

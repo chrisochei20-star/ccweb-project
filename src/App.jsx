@@ -10,7 +10,6 @@ import {
 } from "react-router-dom";
 import { Suspense, lazy, useEffect, useState } from "react";
 import { GrowthHubPage } from "./GrowthHubPage";
-import { CCWEB_COURSES } from "./data/courses";
 import { MobileLayout } from "./layout/MobileLayout";
 import { ProtectedLayout } from "./layout/ProtectedLayout";
 import { LoginPage, SignupPage } from "./pages/AuthPages";
@@ -21,6 +20,10 @@ import { LearnShellPage } from "./pages/LearnShellPage";
 import { MobileDashboardPage } from "./pages/MobileDashboardPage";
 import { ProfileShellPage } from "./pages/ProfileShellPage";
 import { ChatPage } from "./pages/ChatPage";
+import { CourseAdminDashboard } from "./pages/CourseAdminDashboard";
+import { CourseCatalogPage } from "./pages/CourseCatalogPage";
+import { CourseDetailPage } from "./pages/CourseDetailPage";
+import { CourseLessonPage } from "./pages/CourseLessonPage";
 import { getSessionToken, setSession } from "./session";
 import { LearningAdminPage } from "./learning/LearningAdminPage";
 import { LearningSessionPage } from "./learning/LearningSessionPage";
@@ -76,11 +79,13 @@ function App() {
             <Route path="profile" element={<ProfileShellPage />} />
             <Route path="messages" element={<ChatPage />} />
             <Route path="learn/admin" element={<LearningAdminPage />} />
+            <Route path="learn/admin/courses" element={<CourseAdminDashboard />} />
           </Route>
           <Route path="marketplace" element={<GrowthHubPage initialTab="marketplace" />} />
           <Route path="escrow" element={<GrowthHubPage initialTab="escrow" />} />
-          <Route path="courses" element={<CoursesPage />} />
-          <Route path="courses/:id" element={<CourseNotFoundPage />} />
+          <Route path="courses" element={<CourseCatalogPage />} />
+          <Route path="courses/:slug/lesson/:lessonId" element={<CourseLessonPage />} />
+          <Route path="courses/:slug" element={<CourseDetailPage />} />
           <Route path="ai-tutor" element={<AiTutorPage />} />
           <Route path="ai-streaming" element={<AiStreamingPage />} />
           <Route path="early-signals" element={<EarlySignalsDashboard />} />
@@ -186,59 +191,6 @@ function StatCard({ value, label }) {
       <div className="stat-value">{value}</div>
       <div className="muted">{label}</div>
     </article>
-  );
-}
-
-function CoursesPage() {
-  return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">Course Library</h1>
-        <p className="muted">Master crypto and AI at your own pace.</p>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          {["All", "Crypto", "AI", "Trading", "Web3"].map((tag) => (
-            <span key={tag} className="badge">
-              {tag}
-            </span>
-          ))}
-        </div>
-      </header>
-      <div className="course-grid">
-        {CCWEB_COURSES.map((course) => (
-          <article key={course.id} className="course-card">
-            <span className="badge">{course.category}</span>
-            <h3>{course.title}</h3>
-            <p className="muted">
-              {course.level} · {course.duration}
-            </p>
-            <p className="muted">
-              {course.students} students · {course.rating} rating
-            </p>
-            <Link to={`/courses/${course.id}`} className="btn btn-outline">
-              View Course
-            </Link>
-          </article>
-        ))}
-      </div>
-      <p className="muted" style={{ marginTop: "1rem" }}>
-        No courses in this category yet.
-      </p>
-    </section>
-  );
-}
-
-function CourseNotFoundPage() {
-  const { id } = useParams();
-  return (
-    <section className="panel">
-      <h1 className="section-title">Course Not Found</h1>
-      <p className="muted">
-        Course {id ? `#${id}` : ""} doesn&apos;t exist or has been removed.
-      </p>
-      <Link to="/courses" className="btn btn-primary">
-        Browse Courses
-      </Link>
-    </section>
   );
 }
 

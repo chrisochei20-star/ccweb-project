@@ -107,4 +107,74 @@ async function runWorkflowSteps(steps, input) {
   return chatComplete(system, { steps, input: input || {} }, { maxTokens: 2000 });
 }
 
-module.exports = { chatComplete, runAgent, runWorkflowSteps, getApiKey, mockChatResult };
+/**
+ * Stream plain-text deltas from OpenAI Chat Completions (streaming).
+ * Yields string chunks; yields full mock text in small slices when no API key.
+ */
+async function* streamChatComplete(systemPrompt, userMessage, opts = {}) {
+  const key = getApiKey();
+  const model = opts.model || DEFAULT_MODEL;
+  const userContent =
+    typeof userMessage === "string" ? userMessage : JSON.stringify(userMessage, null, 2);
+
+  if (!key) {
+    if (requireOpenAI()) {
+      throw Object.assign(new Error("OPENAI_API_KEY is not configured."), { code: "AI_NOT_CONFIGURED", status: 503 });
+    }
+    const mock = mockChatResult(systemPrompt, userMessage);
+    const parts = mock.text.split(/(\s+)/);
+    for (const p of parts) {
+      if (p) yield p;
+    }
+    return;
+  }
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      temperature: opts.temperature ?? 0.35,
+      max_tokens: opts.maxTokens ?? 1800,
+      stream: true,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent },
+      ],
+    }),
+  });
+
+  if (!res.ok || !res.body) {
+    const errText = await res.text().catch(() => "");
+    const err = new Error(errText.slice(0, 400) || res.statusText || "OpenAI stream failed");
+    err.status = res.status >= 400 && res.status < 500 ? res.status : 502;
+    throw err;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop() || "";
+    for (const line of lines) {
+      const s = line.replace(/^data:\s*/, "").trim();
+      if (!s || s === "[DONE]") continue;
+      try {
+        const j = JSON.parse(s);
+        const delta = j.choices?.[0]?.delta?.content;
+        if (delta) yield delta;
+      } catch {
+        /* ignore partial JSON lines */
+      }
+    }
+  }
+}
+
+module.exports = { chatComplete, streamChatComplete, runAgent, runWorkflowSteps, getApiKey, mockChatResult };

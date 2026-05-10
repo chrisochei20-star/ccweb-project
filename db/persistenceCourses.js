@@ -91,6 +91,7 @@ function mapCourseRow(r) {
     categorySlug: r.category_slug,
     level: r.level,
     published: r.published,
+    thumbnailUrl: r.thumbnail_url || meta.thumbnailUrl || null,
     metadata: meta,
     enrollmentCount: Number(r.enrollment_count ?? 0),
     updatedAt: r.updated_at,
@@ -365,9 +366,13 @@ async function adminUpsertCourse(payload) {
   const level = String(payload.level || "beginner").slice(0, 32);
   const published = payload.published !== false;
   const meta = typeof payload.metadata === "object" ? payload.metadata : {};
+  const thumb =
+    payload.thumbnailUrl != null && String(payload.thumbnailUrl).trim()
+      ? String(payload.thumbnailUrl).trim().slice(0, 2000)
+      : null;
   await query(
-    `INSERT INTO ccweb_courses (id, slug, title, summary, metadata, category_slug, level, published, updated_at)
-     VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,NOW())
+    `INSERT INTO ccweb_courses (id, slug, title, summary, metadata, category_slug, level, published, thumbnail_url, updated_at)
+     VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,NOW())
      ON CONFLICT (slug) DO UPDATE SET
        title = EXCLUDED.title,
        summary = EXCLUDED.summary,
@@ -375,12 +380,24 @@ async function adminUpsertCourse(payload) {
        category_slug = EXCLUDED.category_slug,
        level = EXCLUDED.level,
        published = EXCLUDED.published,
+       thumbnail_url = COALESCE(EXCLUDED.thumbnail_url, ccweb_courses.thumbnail_url),
        updated_at = NOW()
      RETURNING id`,
-    [id, slug, title, summary, JSON.stringify(meta), categorySlug, level, published]
+    [id, slug, title, summary, JSON.stringify(meta), categorySlug, level, published, thumb]
   );
   const { rows } = await query(`SELECT id FROM ccweb_courses WHERE slug = $1`, [slug]);
   return rows[0]?.id || id;
+}
+
+async function updateCourseThumbnail(courseId, thumbnailUrl) {
+  if (!usePostgres() || !courseId) return false;
+  const url = String(thumbnailUrl || "").trim().slice(0, 2000);
+  if (!url) return false;
+  const { rowCount } = await query(
+    `UPDATE ccweb_courses SET thumbnail_url = $2, updated_at = NOW() WHERE id = $1`,
+    [courseId, url]
+  );
+  return rowCount > 0;
 }
 
 function normalizeSlug(s) {
@@ -471,4 +488,5 @@ module.exports = {
   adminUpsertLesson,
   adminUpsertQuiz,
   adminUpsertCategory,
+  updateCourseThumbnail,
 };

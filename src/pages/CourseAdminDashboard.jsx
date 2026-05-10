@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { uploadCourseThumbnail } from "../api/uploadsApi";
 import { apiUrl } from "../config/env";
+import { ImageDropZone } from "../components/uploads/ImageDropZone";
 
 /**
  * Admin tools for categories, courses, lessons, quizzes (requires CCWEB_ADMIN_KEY + X-CCWEB-Admin).
@@ -22,6 +24,9 @@ export function CourseAdminDashboard() {
   const [lessonTitle, setLessonTitle] = useState("Lesson 1");
   const [lessonContent, setLessonContent] = useState("# Hello\n\nLesson body (markdown-style plain text).");
   const [lessonPos, setLessonPos] = useState(0);
+
+  const [thumbCourseId, setThumbCourseId] = useState("");
+  const [thumbBusy, setThumbBusy] = useState(false);
 
   const [quizLessonId, setQuizLessonId] = useState("");
   const [quizJson, setQuizJson] = useState(
@@ -87,7 +92,10 @@ export function CourseAdminDashboard() {
         published: true,
       });
       setMsg(`Course saved. id: ${data.courseId}`);
-      if (data.courseId) setLessonCourseId(data.courseId);
+      if (data.courseId) {
+        setLessonCourseId(data.courseId);
+        setThumbCourseId(data.courseId);
+      }
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -203,6 +211,45 @@ export function CourseAdminDashboard() {
             Upsert course
           </button>
         </form>
+
+        <div className="panel learning-glass space-y-3">
+          <h3 className="text-lg font-semibold text-white">Course thumbnail</h3>
+          <p className="text-xs text-ccweb-muted">
+            Uploads to Cloudinary when configured on the API; otherwise stored under <code className="text-ccweb-cyan">/public/uploads</code>.
+          </p>
+          <input
+            className="ccweb-input font-mono text-sm"
+            placeholder="course id"
+            value={thumbCourseId}
+            onChange={(e) => setThumbCourseId(e.target.value)}
+          />
+          <ImageDropZone
+            aspectClass="aspect-video max-h-48"
+            disabled={!thumbCourseId.trim()}
+            busy={thumbBusy}
+            hint="Admin key above is sent as X-CCWEB-Admin"
+            onFile={async (file) => {
+              const id = thumbCourseId.trim();
+              if (!id || !key.trim()) {
+                setErr("Set admin key and course id.");
+                return;
+              }
+              setThumbBusy(true);
+              setErr(null);
+              setMsg(null);
+              try {
+                const out = await uploadCourseThumbnail(id, file, key);
+                setMsg(`Thumbnail saved: ${out.thumbnailUrl?.slice(0, 48)}…`);
+              } catch (e) {
+                setErr(e.message);
+              } finally {
+                setThumbBusy(false);
+              }
+            }}
+          >
+            Drop thumbnail or tap to upload
+          </ImageDropZone>
+        </div>
 
         <form onSubmit={saveLesson} className="panel learning-glass space-y-2">
           <h3 className="text-lg font-semibold text-white">Lesson</h3>

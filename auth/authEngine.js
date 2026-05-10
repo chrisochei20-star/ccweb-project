@@ -55,6 +55,9 @@ async function ensureUserProfile(ccwebUsers, buildUserProfile, userId) {
   let isOrganic = true;
   let pushEnabled = true;
 
+  let avatarUrl = null;
+  let bannerUrl = null;
+
   if ((process.env.DATABASE_URL || "").trim()) {
     try {
       const pgUserProfile = require("../db/pgUserProfile");
@@ -64,6 +67,8 @@ async function ensureUserProfile(ccwebUsers, buildUserProfile, userId) {
         roles = pgUserProfile.parseRoles(prof.roles);
         isOrganic = prof.is_organic !== false;
         pushEnabled = prof.push_enabled !== false;
+        avatarUrl = prof.avatar_url || null;
+        bannerUrl = prof.banner_url || null;
       }
     } catch (e) {
       logger.warn({ msg: "profile_row_load_failed", userId, err: e.message });
@@ -78,6 +83,8 @@ async function ensureUserProfile(ccwebUsers, buildUserProfile, userId) {
       roles,
       isOrganic,
       pushEnabled,
+      avatarUrl,
+      bannerUrl,
     },
     null
   );

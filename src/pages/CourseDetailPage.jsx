@@ -7,6 +7,7 @@ import {
   fetchMyBookmarks,
   postBookmark,
 } from "../api/coursesApi";
+import { assetsUrl } from "../config/env";
 
 export function CourseDetailPage() {
   const { slug } = useParams();
@@ -91,6 +92,15 @@ export function CourseDetailPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-3 pb-20 pt-4">
+      {course.thumbnailUrl ? (
+        <div className="overflow-hidden rounded-2xl border border-white/10">
+          <img
+            src={assetsUrl(course.thumbnailUrl)}
+            alt=""
+            className="aspect-[21/9] max-h-56 w-full object-cover md:max-h-72"
+          />
+        </div>
+      ) : null}
       <div className="ccweb-glass rounded-2xl p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

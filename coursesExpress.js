@@ -7,7 +7,9 @@ const coursesPg = require("./db/persistenceCourses");
 const tutorPg = require("./db/persistenceAiTutor");
 const pgUserProfile = require("./db/pgUserProfile");
 const aiExecute = require("./services/aiExecute");
-const { buildTutorSystemPrompt, normalizeMode } = require("./services/tutorPrompt");
+const { validateImageBuffer } = require("./services/imageMagic");
+const { saveUploadedImage } = require("./services/imageStorage");
+const { imageMulter } = require("./uploadsExpress");
 
 function requireAdmin(req, res, next) {
   const key = (req.headers["x-ccweb-admin"] || "").toString().trim();
@@ -382,6 +384,34 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
       next(e);
     }
   });
+
+  const courseThumbUpload = imageMulter();
+  router.post(
+    "/admin/courses/:courseId/thumbnail",
+    requireAdmin,
+    courseThumbUpload.single("file"),
+    async (req, res, next) => {
+      try {
+        if (!req.file?.buffer) return res.status(400).json({ error: "Image file required (field name: file)." });
+        const courseId = req.params.courseId;
+        const course = await coursesPg.getCourseById(courseId);
+        if (!course) return res.status(404).json({ error: "Course not found." });
+        const v = validateImageBuffer(req.file.buffer);
+        if (!v.ok) return res.status(400).json({ error: v.error });
+        const saved = await saveUploadedImage(req.file.buffer, {
+          mimetype: req.file.mimetype,
+          originalName: req.file.originalname,
+          userId: "course",
+          kind: "course_thumb",
+        });
+        const ok = await coursesPg.updateCourseThumbnail(courseId, saved.url);
+        if (!ok) return res.status(500).json({ error: "Could not save thumbnail." });
+        res.json({ ok: true, thumbnailUrl: saved.url, storage: saved.storage, courseId });
+      } catch (e) {
+        next(e);
+      }
+    }
+  );
 
   return router;
 }

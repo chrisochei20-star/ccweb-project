@@ -18,7 +18,7 @@ function parseRoles(raw) {
 
 async function findByUserId(userId) {
   const { rows } = await query(
-    `SELECT user_id, display_name, roles, is_organic, push_enabled, created_at, updated_at
+    `SELECT user_id, display_name, roles, is_organic, push_enabled, avatar_url, banner_url, created_at, updated_at
      FROM ccweb_user_profiles WHERE user_id = $1`,
     [userId]
   );
@@ -40,4 +40,30 @@ async function upsert({ userId, displayName, roles, isOrganic, pushEnabled }) {
   );
 }
 
-module.exports = { findByUserId, upsert, parseRoles };
+async function patchProfileMedia(userId, patch = {}) {
+  const avatarUrl = patch.avatarUrl !== undefined ? patch.avatarUrl : undefined;
+  const bannerUrl = patch.bannerUrl !== undefined ? patch.bannerUrl : undefined;
+  if (!userId || (avatarUrl === undefined && bannerUrl === undefined)) return;
+  const sets = [];
+  const params = [];
+  let i = 0;
+  if (avatarUrl !== undefined) {
+    i += 1;
+    params.push(avatarUrl);
+    sets.push(`avatar_url = $${i}`);
+  }
+  if (bannerUrl !== undefined) {
+    i += 1;
+    params.push(bannerUrl);
+    sets.push(`banner_url = $${i}`);
+  }
+  if (!sets.length) return;
+  i += 1;
+  params.push(userId);
+  await query(
+    `UPDATE ccweb_user_profiles SET ${sets.join(", ")}, updated_at = NOW() WHERE user_id = $${i}`,
+    params
+  );
+}
+
+module.exports = { findByUserId, upsert, parseRoles, patchProfileMedia };

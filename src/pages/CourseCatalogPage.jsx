@@ -2,6 +2,7 @@ import { BookOpen, GraduationCap, Loader2, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchCourseCatalog, fetchCourseCategories, fetchRecommendedCourses } from "../api/coursesApi";
+import { assetsUrl } from "../config/env";
 
 export function CourseCatalogPage({ compact = false }) {
   const [categories, setCategories] = useState([]);
@@ -94,11 +95,23 @@ export function CourseCatalogPage({ compact = false }) {
               <li key={c.id}>
                 <Link
                   to={`/courses/${encodeURIComponent(c.slug)}`}
-                  className="ccweb-glass block rounded-2xl p-4 transition hover:border-ccweb-cyan/40"
+                  className="ccweb-glass block overflow-hidden rounded-2xl transition hover:border-ccweb-cyan/40"
                 >
-                  <span className="text-[10px] uppercase tracking-wide text-ccweb-muted">{c.categorySlug}</span>
-                  <p className="mt-1 font-medium text-white">{c.title}</p>
-                  <p className="mt-1 line-clamp-2 text-xs text-ccweb-muted">{c.summary}</p>
+                  {c.thumbnailUrl ? (
+                    <div className="aspect-[16/9] w-full overflow-hidden border-b border-white/10">
+                      <img
+                        src={assetsUrl(c.thumbnailUrl)}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : null}
+                  <div className="p-4">
+                    <span className="text-[10px] uppercase tracking-wide text-ccweb-muted">{c.categorySlug}</span>
+                    <p className="mt-1 font-medium text-white">{c.title}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-ccweb-muted">{c.summary}</p>
+                  </div>
                 </Link>
               </li>
             ))}
@@ -140,27 +153,41 @@ export function CourseCatalogPage({ compact = false }) {
           <li key={c.id}>
             <Link
               to={`/courses/${encodeURIComponent(c.slug)}`}
-              className="ccweb-glass block rounded-2xl p-4 transition hover:border-ccweb-cyan/40"
+              className="ccweb-glass block overflow-hidden rounded-2xl transition hover:border-ccweb-cyan/40"
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5">
-                    <GraduationCap className="h-5 w-5 text-ccweb-cyan" />
-                  </span>
-                  <div>
-                    <p className="font-medium text-white">{c.title}</p>
-                    <p className="text-xs text-ccweb-muted">
-                      {c.categorySlug} · {c.level}
-                    </p>
-                  </div>
+              {c.thumbnailUrl ? (
+                <div className="aspect-[16/9] w-full overflow-hidden border-b border-white/10">
+                  <img
+                    src={assetsUrl(c.thumbnailUrl)}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
                 </div>
-                <BookOpen className="h-4 w-4 shrink-0 text-ccweb-muted" />
+              ) : null}
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    {!c.thumbnailUrl ? (
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5">
+                        <GraduationCap className="h-5 w-5 text-ccweb-cyan" />
+                      </span>
+                    ) : null}
+                    <div>
+                      <p className="font-medium text-white">{c.title}</p>
+                      <p className="text-xs text-ccweb-muted">
+                        {c.categorySlug} · {c.level}
+                      </p>
+                    </div>
+                  </div>
+                  <BookOpen className="h-4 w-4 shrink-0 text-ccweb-muted" />
+                </div>
+                <p className="mt-2 line-clamp-2 text-xs text-ccweb-muted">{c.summary}</p>
+                <p className="mt-2 text-[10px] text-ccweb-muted">
+                  {c.enrollmentCount ?? 0} learners enrolled · updated{" "}
+                  {c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : "—"}
+                </p>
               </div>
-              <p className="mt-2 line-clamp-2 text-xs text-ccweb-muted">{c.summary}</p>
-              <p className="mt-2 text-[10px] text-ccweb-muted">
-                {c.enrollmentCount ?? 0} learners enrolled · updated{" "}
-                {c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : "—"}
-              </p>
             </Link>
           </li>
         ))}

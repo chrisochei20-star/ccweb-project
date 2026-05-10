@@ -21,9 +21,10 @@ const aiExecute = require("./services/aiExecute");
 const monetizationEngine = require("./services/monetizationEngine");
 const betaPg = require("./db/persistenceBeta");
 const chatPg = require("./db/persistenceChat");
-const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
+const { validateImageBuffer } = require("./services/imageMagic");
+const { saveUploadedImage } = require("./services/imageStorage");
+const { isCloudinaryConfigured } = require("./services/cloudinaryUpload");
+const { imageMulter, createUploadsRouter, MAX_BYTES } = require("./uploadsExpress");
 const { publicAppBaseUrl, trimOrigin } = require("./services/deploymentOrigins");
 const {
   stripeCheckoutOperational,
@@ -61,6 +62,13 @@ function createPlatformApp(deps) {
       payments: {
         stripeCheckoutEnabled: stripeCheckoutOperational(),
         stripeWebhooksEnabled: stripeWebhookOperational(),
+      },
+      uploads: {
+        cloudinary: isCloudinaryConfigured(),
+        maxBytes: MAX_BYTES,
+        profile: true,
+        chat: true,
+        courseThumbnail: Boolean((process.env.CCWEB_ADMIN_KEY || "").trim()),
       },
     });
   });
@@ -179,36 +187,9 @@ function createPlatformApp(deps) {
 
   v1.use("/users", usersRouter);
 
+  v1.use("/uploads", apiRateShort, createUploadsRouter(deps));
 
-  const uploadChatRoot = path.join(__dirname, "public", "uploads", "chat");
-  function ensureChatUploadDir(uid) {
-    const dir = path.join(uploadChatRoot, uid);
-    fs.mkdirSync(dir, { recursive: true });
-    return dir;
-  }
-  const chatImageUpload = multer({
-    storage: multer.diskStorage({
-      destination(req, file, cb) {
-        try {
-          cb(null, ensureChatUploadDir(req.ccwebUserId));
-        } catch (e) {
-          cb(e);
-        }
-      },
-      filename(req, file, cb) {
-        const ext = path.extname(file.originalname || "").slice(0, 10) || ".jpg";
-        cb(null, `chat-${Date.now()}${ext}`);
-      },
-    }),
-    limits: { fileSize: 5 * 1024 * 1024 },
-    fileFilter(req, file, cb) {
-      cb(null, /^image\/(jpeg|jpg|pjpeg|png|webp|gif)$/i.test(file.mimetype));
-    },
-  });
-
-  function relativeChatUploadUrl(req, filename) {
-    return `/uploads/chat/${encodeURIComponent(req.ccwebUserId)}/${encodeURIComponent(filename)}`;
-  }
+  const chatImageUpload = imageMulter();
 
   const chatRouter = express.Router();
 
@@ -297,20 +278,28 @@ function createPlatformApp(deps) {
 
   chatRouter.post("/:chatId/upload", authJwtMiddleware, chatImageUpload.single("file"), async (req, res, next) => {
     try {
-      if (!req.file) return res.status(400).json({ error: "Image file required (field name: file)." });
+      if (!req.file?.buffer) return res.status(400).json({ error: "Image file required (field name: file)." });
       const chatId = req.params.chatId;
       const ok = await chatPg.verifyMember(chatId, req.ccwebUserId);
       if (!ok) return res.status(403).json({ error: "Forbidden." });
-      const rel = relativeChatUploadUrl(req, req.file.filename);
+      const v = validateImageBuffer(req.file.buffer);
+      if (!v.ok) return res.status(400).json({ error: v.error });
+      const saved = await saveUploadedImage(req.file.buffer, {
+        mimetype: req.file.mimetype,
+        originalName: req.file.originalname,
+        userId: req.ccwebUserId,
+        kind: "chat",
+      });
+      const imageUrl = saved.url;
       const message = await chatPg.appendMessage(chatId, req.ccwebUserId, "📷", {
         type: "image",
-        url: rel,
+        url: imageUrl,
       });
       broadcastChatMessage(chatId, message);
       broadcastInboxRefresh(req.ccwebUserId, chatId);
       const other = await chatPg.getOtherMember(chatId, req.ccwebUserId);
       if (other) broadcastInboxRefresh(other, chatId);
-      res.status(201).json({ message });
+      res.status(201).json({ message, url: imageUrl, storage: saved.storage });
     } catch (e) {
       next(e);
     }

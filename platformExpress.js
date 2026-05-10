@@ -19,11 +19,20 @@ const { expressStripeEscrowCheckout } = require("./payments/stripeCheckout");
 const aiExecute = require("./services/aiExecute");
 const monetizationEngine = require("./services/monetizationEngine");
 const betaPg = require("./db/persistenceBeta");
+const chatPg = require("./db/persistenceChat");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 const { publicAppBaseUrl, trimOrigin } = require("./services/deploymentOrigins");
 const {
   stripeCheckoutOperational,
   stripeWebhookOperational,
 } = require("./payments/stripeConfig");
+const {
+  broadcastChatMessage,
+  broadcastInboxRefresh,
+  onlineStatusForUserIds,
+} = require("./server/realtime/chatSocket");
 
 function createPlatformApp(deps) {
   const app = express();
@@ -43,6 +52,10 @@ function createPlatformApp(deps) {
       publicAppUrl: publicApp || null,
       apiPublicUrl: apiPublic || null,
       environment: process.env.NODE_ENV === "production" ? "production" : "development",
+      realtime: {
+        socketPath: "/socket.io",
+        transports: ["websocket", "polling"],
+      },
       payments: {
         stripeCheckoutEnabled: stripeCheckoutOperational(),
         stripeWebhooksEnabled: stripeWebhookOperational(),
@@ -163,6 +176,145 @@ function createPlatformApp(deps) {
   });
 
   v1.use("/users", usersRouter);
+
+
+  const uploadChatRoot = path.join(__dirname, "public", "uploads", "chat");
+  function ensureChatUploadDir(uid) {
+    const dir = path.join(uploadChatRoot, uid);
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+  const chatImageUpload = multer({
+    storage: multer.diskStorage({
+      destination(req, file, cb) {
+        try {
+          cb(null, ensureChatUploadDir(req.ccwebUserId));
+        } catch (e) {
+          cb(e);
+        }
+      },
+      filename(req, file, cb) {
+        const ext = path.extname(file.originalname || "").slice(0, 10) || ".jpg";
+        cb(null, `chat-${Date.now()}${ext}`);
+      },
+    }),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter(req, file, cb) {
+      cb(null, /^image\/(jpeg|jpg|pjpeg|png|webp|gif)$/i.test(file.mimetype));
+    },
+  });
+
+  function relativeChatUploadUrl(req, filename) {
+    return `/uploads/chat/${encodeURIComponent(req.ccwebUserId)}/${encodeURIComponent(filename)}`;
+  }
+
+  const chatRouter = express.Router();
+
+  chatRouter.use((req, res, next) => {
+    if (!chatPg.usePostgres()) {
+      return res.status(503).json({ error: "Chat requires PostgreSQL.", code: "NO_DATABASE" });
+    }
+    next();
+  });
+
+  chatRouter.get("/conversations", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const conversations = await chatPg.listConversations(req.ccwebUserId);
+      res.json({ conversations });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  chatRouter.get("/presence", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const raw = (req.query.ids || "").toString().trim();
+      const ids = raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 200);
+      const presence = onlineStatusForUserIds(ids);
+      res.json({ presence });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  chatRouter.post("/direct", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const otherUserId = (req.body?.otherUserId || "").toString().trim();
+      if (!otherUserId) return res.status(400).json({ error: "otherUserId required." });
+      const chatId = await chatPg.getOrCreateDirectChat(req.ccwebUserId, otherUserId);
+      if (!chatId) return res.status(400).json({ error: "Cannot open chat." });
+      res.status(201).json({ chatId });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  chatRouter.get("/:chatId/messages", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const limit = Math.min(100, Number(req.query.limit) || 50);
+      const before = req.query.before ? String(req.query.before) : undefined;
+      const messages = await chatPg.getMessages(req.params.chatId, req.ccwebUserId, { limit, before });
+      if (!messages) return res.status(403).json({ error: "Forbidden." });
+      res.json({ messages });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  chatRouter.post("/:chatId/messages", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const body = (req.body?.body ?? "").toString();
+      if (!body.trim()) return res.status(400).json({ error: "body required." });
+      const chatId = req.params.chatId;
+      const ok = await chatPg.verifyMember(chatId, req.ccwebUserId);
+      if (!ok) return res.status(403).json({ error: "Forbidden." });
+      const message = await chatPg.appendMessage(chatId, req.ccwebUserId, body.slice(0, 8000), req.body?.metadata || {});
+      broadcastChatMessage(chatId, message);
+      broadcastInboxRefresh(req.ccwebUserId, chatId);
+      const other = await chatPg.getOtherMember(chatId, req.ccwebUserId);
+      if (other) broadcastInboxRefresh(other, chatId);
+      res.status(201).json({ message });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  chatRouter.post("/:chatId/read", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const ok = await chatPg.markRead(req.params.chatId, req.ccwebUserId);
+      if (!ok) return res.status(403).json({ error: "Forbidden." });
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  chatRouter.post("/:chatId/upload", authJwtMiddleware, chatImageUpload.single("file"), async (req, res, next) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "Image file required (field name: file)." });
+      const chatId = req.params.chatId;
+      const ok = await chatPg.verifyMember(chatId, req.ccwebUserId);
+      if (!ok) return res.status(403).json({ error: "Forbidden." });
+      const rel = relativeChatUploadUrl(req, req.file.filename);
+      const message = await chatPg.appendMessage(chatId, req.ccwebUserId, "📷", {
+        type: "image",
+        url: rel,
+      });
+      broadcastChatMessage(chatId, message);
+      broadcastInboxRefresh(req.ccwebUserId, chatId);
+      const other = await chatPg.getOtherMember(chatId, req.ccwebUserId);
+      if (other) broadcastInboxRefresh(other, chatId);
+      res.status(201).json({ message });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  v1.use("/chat", apiRateShort, chatRouter);
 
   const agentRuns = [];
   const catalogAgents = [

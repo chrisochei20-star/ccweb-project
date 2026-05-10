@@ -11,6 +11,7 @@ const REQUIRED_TABLES = [
   "ccweb_comments",
   "ccweb_chats",
   "ccweb_chat_messages",
+  "ccweb_chat_members",
   "ccweb_notifications",
   "ccweb_courses",
   "ccweb_lessons",

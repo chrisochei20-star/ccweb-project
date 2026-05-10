@@ -1,4 +1,4 @@
-import { BookOpen, Briefcase, Hammer, MessageCircle, Search, User } from "lucide-react";
+import { BookOpen, Briefcase, Hammer, MessageCircle, MessageSquare, Search, User } from "lucide-react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { fetchMe, getStoredUser, logoutApi } from "../session";
@@ -10,6 +10,7 @@ const tabs = [
   { to: "/build", label: "Build", icon: Hammer },
   { to: "/earn", label: "Earn", icon: Briefcase },
   { to: "/community", label: "Community", icon: MessageCircle },
+  { to: "/messages", label: "Chats", icon: MessageSquare },
   { to: "/profile", label: "Profile", icon: User },
 ];
 

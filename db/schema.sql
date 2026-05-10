@@ -477,6 +477,16 @@ CREATE TABLE IF NOT EXISTS ccweb_chat_messages (
 
 CREATE INDEX IF NOT EXISTS ccweb_chat_messages_chat_created ON ccweb_chat_messages (chat_id, created_at);
 
+CREATE TABLE IF NOT EXISTS ccweb_chat_members (
+  chat_id TEXT NOT NULL REFERENCES ccweb_chats(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES ccweb_users(id) ON DELETE CASCADE,
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_read_at TIMESTAMPTZ,
+  PRIMARY KEY (chat_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_chat_members_user ON ccweb_chat_members (user_id);
+
 CREATE TABLE IF NOT EXISTS ccweb_notifications (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES ccweb_users(id) ON DELETE CASCADE,

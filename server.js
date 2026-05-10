@@ -27,6 +27,7 @@ const { handleStripeWebhook } = require("./payments/stripeWebhook");
 const { handleStripeCheckoutEscrow } = require("./payments/stripeCheckout");
 const { createPlatformApp } = require("./platformExpress");
 const { sendRawHealth } = require("./server/http/controllers/health.controller");
+const { attachChatSocket, closeChatSocket } = require("./server/realtime/chatSocket");
 const monetizationEngine = require("./services/monetizationEngine");
 const monPg = require("./db/persistenceMonetization");
 
@@ -4319,6 +4320,8 @@ const server = http.createServer(async (req, res) => {
   await serveFile(filePath, res);
 });
 
+attachChatSocket(server);
+
 async function bootServer() {
   if (process.env.NODE_ENV === "production") {
     validateOrExit();
@@ -4373,6 +4376,7 @@ function gracefulShutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   logger.info({ msg: "shutdown_begin", signal });
+  closeChatSocket();
   server.close(() => {
     logger.info({ msg: "shutdown_complete", signal });
     process.exit(0);

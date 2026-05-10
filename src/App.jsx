@@ -20,6 +20,7 @@ import { EarnShellPage } from "./pages/EarnShellPage";
 import { LearnShellPage } from "./pages/LearnShellPage";
 import { MobileDashboardPage } from "./pages/MobileDashboardPage";
 import { ProfileShellPage } from "./pages/ProfileShellPage";
+import { ChatPage } from "./pages/ChatPage";
 import { getSessionToken, setSession } from "./session";
 import { LearningAdminPage } from "./learning/LearningAdminPage";
 import { LearningSessionPage } from "./learning/LearningSessionPage";
@@ -73,6 +74,7 @@ function App() {
           <Route path="community" element={<CommunityShellPage />} />
           <Route element={<ProtectedLayout />}>
             <Route path="profile" element={<ProfileShellPage />} />
+            <Route path="messages" element={<ChatPage />} />
             <Route path="learn/admin" element={<LearningAdminPage />} />
           </Route>
           <Route path="marketplace" element={<GrowthHubPage initialTab="marketplace" />} />

@@ -29,6 +29,7 @@ function getPool() {
       connectionString: conn,
       max: Number(process.env.PG_POOL_MAX || 20),
       idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: Math.min(120_000, Math.max(2000, Number(process.env.PG_CONNECTION_TIMEOUT_MS || 15_000))),
       ssl: sslOptionFor(conn),
     });
     pool.on("error", (err) => {

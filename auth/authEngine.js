@@ -10,6 +10,7 @@ const totp = require("./totp");
 const { encryptSecret, decryptSecret } = require("./cryptoSecret");
 const { buildSignInMessage, verifyEvmWallet, verifySolanaWallet, randomNonce, normalizeEvmAddress } = require("./walletVerify");
 const rateLimit = require("./rateLimit");
+const { logger } = require("../logging/logger");
 
 const BCRYPT_ROUNDS = 12;
 const MAX_LOGIN_FAILS = 8;
@@ -21,6 +22,67 @@ const walletNonces = new Map();
 
 function hashRefreshToken(token) {
   return crypto.createHash("sha256").update(String(token), "utf8").digest("hex");
+}
+
+async function persistNewUserProfile(userId, profile) {
+  if (!(process.env.DATABASE_URL || "").trim()) return;
+  try {
+    const pgUserProfile = require("../db/pgUserProfile");
+    await pgUserProfile.upsert({
+      userId,
+      displayName: profile.displayName,
+      roles: profile.roles,
+      isOrganic: profile.isOrganic,
+      pushEnabled: profile.pushEnabled,
+    });
+  } catch (e) {
+    logger.warn({ msg: "profile_persist_skipped", userId, err: e.message });
+  }
+}
+
+/**
+ * Load or create the in-memory profile from PostgreSQL (auth row + ccweb_user_profiles).
+ * Required after API restart — ccwebUsers Map alone loses entries while JWT/auth rows persist.
+ */
+async function ensureUserProfile(ccwebUsers, buildUserProfile, userId) {
+  let user = ccwebUsers.get(userId);
+  if (user) return user;
+  const row = await authStore.findById(userId);
+  if (!row) return null;
+
+  let displayName = row.email ? row.email.split("@")[0] : "Member";
+  let roles = ["member"];
+  let isOrganic = true;
+  let pushEnabled = true;
+
+  if ((process.env.DATABASE_URL || "").trim()) {
+    try {
+      const pgUserProfile = require("../db/pgUserProfile");
+      const prof = await pgUserProfile.findByUserId(userId);
+      if (prof) {
+        displayName = prof.display_name || displayName;
+        roles = pgUserProfile.parseRoles(prof.roles);
+        isOrganic = prof.is_organic !== false;
+        pushEnabled = prof.push_enabled !== false;
+      }
+    } catch (e) {
+      logger.warn({ msg: "profile_row_load_failed", userId, err: e.message });
+    }
+  }
+
+  user = buildUserProfile(
+    {
+      userId: row.id,
+      displayName,
+      email: row.email,
+      roles,
+      isOrganic,
+      pushEnabled,
+    },
+    null
+  );
+  ccwebUsers.set(userId, user);
+  return user;
 }
 
 async function issueTokenPair(row, user) {
@@ -81,25 +143,26 @@ async function registerUser(ccwebUsers, buildUserProfile, { email, password, dis
     null
   );
   ccwebUsers.set(userId, profile);
+  await persistNewUserProfile(userId, profile);
 
   return {
     user: profile,
     emailVerificationSent: true,
     verifyEmailHint:
       process.env.AUTH_DEBUG === "1"
-        ? `Dev: open GET /api/auth/verify-email?token=${verifyToken}`
-        : "Verify your email using the link sent by your mailer (configure SMTP in production).",
+        ? `Dev: visit ${String(process.env.PUBLIC_APP_URL || "").replace(/\/$/, "")}/verify-email?token=${verifyToken}`
+        : "Confirm your email via the verification link (configure SMTP for delivery). You can still sign in beforehand.",
   };
 }
 
-async function loginPasswordStep(ccwebUsers, { email, password, ip }) {
+async function loginPasswordStep(ccwebUsers, buildUserProfile, { email, password, ip }) {
   const rl = rateLimit.check("login", ip, 25, 15 * 60 * 1000);
   if (!rl.ok) return { error: "Too many attempts. Try again later.", retryAfterSec: rl.retryAfterSec, status: 429 };
 
   const em = authStore.normalizeEmail(email);
   const row = await authStore.findByEmail(em);
   if (!row || !row.passwordHash) {
-    return { error: "Invalid email or password." };
+    return { error: "Invalid email or password.", code: "INVALID_CREDENTIALS" };
   }
   if (row.lockedUntil && row.lockedUntil > Date.now()) {
     return { error: "Account temporarily locked. Try again later.", status: 423 };
@@ -112,15 +175,15 @@ async function loginPasswordStep(ccwebUsers, { email, password, ip }) {
       row.lockedUntil = Date.now() + LOCKOUT_MS;
     }
     await authStore.saveUser(row);
-    return { error: "Invalid email or password." };
+    return { error: "Invalid email or password.", code: "INVALID_CREDENTIALS" };
   }
 
   row.failedLoginAttempts = 0;
   row.lockedUntil = null;
   await authStore.saveUser(row);
 
-  const user = ccwebUsers.get(row.id);
-  if (!user) return { error: "Account data is inconsistent." };
+  const user = await ensureUserProfile(ccwebUsers, buildUserProfile, row.id);
+  if (!user) return { error: "Unable to load account profile.", code: "PROFILE_MISSING" };
 
   if (row.totpEnabled) {
     const pending = jwtTokens.signTwoFactorPending(row.id);
@@ -130,7 +193,7 @@ async function loginPasswordStep(ccwebUsers, { email, password, ip }) {
   return await issueTokenPair(row, user);
 }
 
-async function verifyTwoFactorLogin(ccwebUsers, { twoFactorToken, code, ip }) {
+async function verifyTwoFactorLogin(ccwebUsers, buildUserProfile, { twoFactorToken, code, ip }) {
   const payload = jwtTokens.verifyTwoFactorPending(twoFactorToken);
   if (!payload) return { error: "Invalid or expired 2FA session." };
 
@@ -157,8 +220,8 @@ async function verifyTwoFactorLogin(ccwebUsers, { twoFactorToken, code, ip }) {
     return { error: "Invalid two-factor code." };
   }
 
-  const user = ccwebUsers.get(row.id);
-  if (!user) return { error: "User missing." };
+  const user = await ensureUserProfile(ccwebUsers, buildUserProfile, row.id);
+  if (!user) return { error: "Unable to load account profile.", code: "PROFILE_MISSING" };
   return await issueTokenPair(row, user);
 }
 
@@ -186,7 +249,7 @@ async function setupTwoFactorConfirm(userId, code) {
   return { ok: true, backupCodes: backupPlain };
 }
 
-async function refreshTokens(ccwebUsers, refreshToken) {
+async function refreshTokens(ccwebUsers, buildUserProfile, refreshToken) {
   const payload = jwtTokens.verifyToken(refreshToken, "refresh");
   if (!payload || !payload.sub) return { error: "Invalid refresh token." };
   const row = await authStore.findById(payload.sub);
@@ -196,8 +259,8 @@ async function refreshTokens(ccwebUsers, refreshToken) {
   if (payload.fid && row.refreshFamilyId && payload.fid !== row.refreshFamilyId) {
     return { error: "Refresh token family mismatch." };
   }
-  const user = ccwebUsers.get(row.id);
-  if (!user) return { error: "User missing." };
+  const user = await ensureUserProfile(ccwebUsers, buildUserProfile, row.id);
+  if (!user) return { error: "Unable to load account profile.", code: "PROFILE_MISSING" };
   return await issueTokenPair(row, user);
 }
 
@@ -370,9 +433,12 @@ async function walletVerify(ccwebUsers, buildUserProfile, body) {
       null
     );
     ccwebUsers.set(userId, profile);
+    await persistNewUserProfile(userId, profile);
   }
 
-  const user = ccwebUsers.get(row.id);
+  const user = await ensureUserProfile(ccwebUsers, buildUserProfile, row.id);
+  if (!user) return { error: "Unable to load account profile.", code: "PROFILE_MISSING" };
+
   try {
     const { applyReferralAttribution } = require("../db/referralAttribution");
     const growthEngine = require("../db/persistenceGrowthEngine");
@@ -454,25 +520,21 @@ async function oauthSignIn(
       null
     );
     ccwebUsers.set(userId, profile);
+    await persistNewUserProfile(userId, profile);
   }
 
+  let user = await ensureUserProfile(ccwebUsers, buildUserProfile, row.id);
+  if (!user) return { error: "Unable to load account profile.", code: "PROFILE_MISSING" };
+
   const emailForProfile = row.email || em;
-  let user = ccwebUsers.get(row.id);
-  if (!user) {
-    user = buildUserProfile(
-      {
-        userId: row.id,
-        displayName: displayName || emailForProfile?.split("@")[0] || "Member",
-        email: emailForProfile,
-        roles: ["member"],
-      },
-      null
-    );
+  if (displayName) {
+    user = { ...user, displayName: displayName.trim(), email: emailForProfile || user.email };
     ccwebUsers.set(row.id, user);
-  } else if (displayName) {
-    user = { ...user, displayName: displayName.trim() };
+  } else if (emailForProfile && user.email !== emailForProfile) {
+    user = { ...user, email: emailForProfile };
     ccwebUsers.set(row.id, user);
   }
+  await persistNewUserProfile(row.id, user);
 
   try {
     const { applyReferralAttribution } = require("../db/referralAttribution");
@@ -503,4 +565,6 @@ module.exports = {
   walletVerify,
   oauthSignIn,
   hashRefreshToken,
+  ensureUserProfile,
+  persistNewUserProfile,
 };

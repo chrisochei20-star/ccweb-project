@@ -26,6 +26,7 @@ const { createSocialApp } = require("./social/socialRouter");
 const { handleStripeWebhook } = require("./payments/stripeWebhook");
 const { handleStripeCheckoutEscrow } = require("./payments/stripeCheckout");
 const { createPlatformApp } = require("./platformExpress");
+const { sendRawHealth } = require("./server/http/controllers/health.controller");
 const monetizationEngine = require("./services/monetizationEngine");
 const monPg = require("./db/persistenceMonetization");
 
@@ -3820,14 +3821,7 @@ const server = http.createServer(async (req, res) => {
   const { pathname } = requestUrl;
 
   if (pathname === "/health" || pathname === "/api/health") {
-    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(
-      JSON.stringify({
-        status: "ok",
-        message: "CCWEB API is running",
-        service: "ccweb-api",
-      })
-    );
+    sendRawHealth(res);
     return;
   }
 

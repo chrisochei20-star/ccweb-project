@@ -83,7 +83,9 @@ function isTransientDbError(err) {
     code === "ECONNREFUSED" ||
     code === "ETIMEDOUT" ||
     code === "ENOTFOUND" ||
-    (typeof err?.message === "string" && /timeout|ECONNRESET/i.test(err.message))
+    code === "ECONNRESET" ||
+    code === "EPIPE" ||
+    (typeof err?.message === "string" && /timeout|ECONNRESET|connection terminated/i.test(err.message))
   );
 }
 

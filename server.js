@@ -60,6 +60,8 @@ function appendLearningChannelMessage(roomId, msg) {
 }
 
 const PORT = Number(process.env.PORT || 3000);
+/** Render / Docker / cloud load balancers require binding all interfaces (not only localhost). */
+const HOST = (process.env.HOST || "0.0.0.0").trim() || "0.0.0.0";
 const CCWEB_ADMIN_KEY = (process.env.CCWEB_ADMIN_KEY || "").trim();
 const intelligenceApp = createIntelligenceApp();
 const growthApp = createGrowthApp();
@@ -4348,10 +4350,44 @@ async function bootServer() {
     logger.warn({ msg: "migrations_skipped", detail: "CCWEB_SKIP_MIGRATIONS=1" });
   }
 
-  server.listen(PORT, () => {
-    logger.info({ msg: "server_listen", port: PORT, env: process.env.NODE_ENV || "development" });
+  server.listen(PORT, HOST, () => {
+    logger.info({
+      msg: "server_listen",
+      host: HOST,
+      port: PORT,
+      env: process.env.NODE_ENV || "development",
+    });
+  });
+
+  server.once("error", (err) => {
+    logger.error({ msg: "server_listen_error", err: err.message });
+    process.exit(1);
   });
 }
+
+process.on("unhandledRejection", (reason) => {
+  const r = reason && typeof reason === "object" ? reason : { message: String(reason) };
+  logger.error({
+    msg: "unhandled_rejection",
+    err: r.message || String(reason),
+    stack: r.stack,
+  });
+});
+
+let shuttingDown = false;
+function gracefulShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info({ msg: "shutdown_begin", signal });
+  server.close(() => {
+    logger.info({ msg: "shutdown_complete", signal });
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 25_000).unref();
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 bootServer().catch((e) => {
   logger.error({ msg: "boot_failed", err: e.message });

@@ -15,6 +15,10 @@ function parseAllowedOrigins() {
     return { mode: "list", origins: raw.split(",").map((s) => s.trim()).filter(Boolean) };
   }
   if (process.env.NODE_ENV === "production") {
+    // Align with productionGate CCWEB_BOOT_WARN_ONLY=1 when origins unset (open dynamic CORS).
+    if (process.env.CCWEB_BOOT_WARN_ONLY === "1") {
+      return { mode: "all" };
+    }
     return { mode: "list", origins: [] };
   }
   return {

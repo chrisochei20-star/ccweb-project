@@ -29,8 +29,8 @@ services:
     #     - e2e/**
     #     - docs/**
     envVars:
-      - key: NODE_ENV
-        value: production
+      - key: HOST
+        value: "0.0.0.0"
       - key: TRUST_PROXY
         value: "1"
       - key: DATABASE_URL

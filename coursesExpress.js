@@ -4,7 +4,10 @@
 
 const express = require("express");
 const coursesPg = require("./db/persistenceCourses");
+const tutorPg = require("./db/persistenceAiTutor");
+const pgUserProfile = require("./db/pgUserProfile");
 const aiExecute = require("./services/aiExecute");
+const { buildTutorSystemPrompt, normalizeMode } = require("./services/tutorPrompt");
 
 function requireAdmin(req, res, next) {
   const key = (req.headers["x-ccweb-admin"] || "").toString().trim();
@@ -168,21 +171,121 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
     }
   });
 
+  router.get("/tutor/conversations", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const conversations = await tutorPg.listConversations(req.ccwebUserId, {
+        limit: Number(req.query.limit) || 40,
+      });
+      res.json({ conversations });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post("/tutor/conversations", authJwtMiddleware, async (req, res, next) => {
+    try {
+      if (req.body?.forceNew === true) {
+        const mode = normalizeMode(req.body?.mode);
+        const conv = await tutorPg.createConversation(req.ccwebUserId, {
+          title: String(req.body?.title || `Chat · ${mode}`).slice(0, 200),
+          metadata: {
+            mode,
+            courseSlug: req.body?.courseSlug ? String(req.body.courseSlug) : "",
+            lessonId: req.body?.lessonId ? String(req.body.lessonId) : "",
+          },
+        });
+        return res.status(201).json({ conversation: conv });
+      }
+      const conv = await resolveConversation(req.ccwebUserId, req.body);
+      res.json({ conversation: conv });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get("/tutor/conversations/:conversationId/messages", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const conv = await tutorPg.findConversationById(req.ccwebUserId, req.params.conversationId);
+      if (!conv) return res.status(404).json({ error: "Conversation not found." });
+      const messages = await tutorPg.listMessages(conv.id, { limit: Number(req.query.limit) || 80 });
+      res.json({ conversation: conv, messages });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.delete("/tutor/conversations/:conversationId", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const ok = await tutorPg.deleteConversation(req.ccwebUserId, req.params.conversationId);
+      if (!ok) return res.status(404).json({ error: "Not found." });
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get("/tutor/memory", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const memory = await tutorPg.getUserMemory(req.ccwebUserId);
+      res.json({ memory });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.put("/tutor/memory", authJwtMiddleware, async (req, res, next) => {
+    try {
+      await tutorPg.setUserMemory(req.ccwebUserId, {
+        summary: req.body?.summary,
+        facts: req.body?.facts,
+      });
+      const memory = await tutorPg.getUserMemory(req.ccwebUserId);
+      res.json({ ok: true, memory });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   router.post("/tutor/chat", authJwtMiddleware, async (req, res, next) => {
     try {
       const message = (req.body?.message || "").toString().slice(0, 12000);
       if (!message.trim()) return res.status(400).json({ error: "message required." });
+      const userId = req.ccwebUserId;
       const ctx = await coursesPg.getTutorContext(req.body?.courseSlug, req.body?.lessonId || null);
-      const system = buildTutorSystemPrompt(ctx);
-      const out = await aiExecute.chatComplete(system, message, { maxTokens: 1800 });
+      const profile = await pgUserProfile.findByUserId(userId);
+      const memory = await tutorPg.getUserMemory(userId);
+      const mode = normalizeMode(req.body?.mode);
+      const conv = await resolveConversation(userId, req.body);
+      const system = buildTutorSystemPrompt({
+        mode,
+        ctx,
+        profile: mapProfileRow(profile),
+        memory,
+      });
+      const history = await tutorPg.listMessages(conv.id, { limit: 24 });
+      const histMsgs = history.map((m) => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: m.content,
+      }));
+      const messages = [{ role: "system", content: system }, ...histMsgs, { role: "user", content: message }];
+      await tutorPg.appendMessage(conv.id, "user", message, { mode });
+      const out = await aiExecute.chatCompleteMessages(messages, { maxTokens: 2200 });
+      await tutorPg.appendMessage(conv.id, "assistant", out.text, { mode });
+      const facts = await aiExecute.extractLearnerFactsFromExchange(message, out.text);
+      if (facts.length) await tutorPg.appendMemoryFacts(userId, facts);
+      if (out.text.length > 80 && ((history?.length || 0) + 2) % 4 === 0) {
+        await tutorPg.mergeRollingAssistantSnippet(userId, out.text);
+      }
       res.json({
         reply: out.text,
+        conversationId: conv.id,
         provider: out.provider,
         model: out.model,
         mock: Boolean(out.mock),
       });
     } catch (e) {
       if (e.code === "AI_NOT_CONFIGURED") return res.status(503).json({ error: e.message, code: e.code });
+      if (e.status === 404) return res.status(404).json({ error: e.message });
       next(e);
     }
   });
@@ -191,18 +294,48 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
     try {
       const message = (req.body?.message || "").toString().slice(0, 12000);
       if (!message.trim()) return res.status(400).json({ error: "message required." });
+      const userId = req.ccwebUserId;
       const ctx = await coursesPg.getTutorContext(req.body?.courseSlug, req.body?.lessonId || null);
-      const system = buildTutorSystemPrompt(ctx);
+      const profile = await pgUserProfile.findByUserId(userId);
+      const memory = await tutorPg.getUserMemory(userId);
+      const mode = normalizeMode(req.body?.mode);
+      const conv = await resolveConversation(userId, req.body);
+      const system = buildTutorSystemPrompt({
+        mode,
+        ctx,
+        profile: mapProfileRow(profile),
+        memory,
+      });
+      const history = await tutorPg.listMessages(conv.id, { limit: 24 });
+      const histMsgs = history.map((m) => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: m.content,
+      }));
+      const messages = [{ role: "system", content: system }, ...histMsgs, { role: "user", content: message }];
+      await tutorPg.appendMessage(conv.id, "user", message, { mode });
+
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.setHeader("Cache-Control", "no-cache, no-transform");
       res.setHeader("X-Accel-Buffering", "no");
-      for await (const chunk of aiExecute.streamChatComplete(system, message, { maxTokens: 2000 })) {
+      res.setHeader("X-CCWEB-Conversation-Id", conv.id);
+
+      let full = "";
+      for await (const chunk of aiExecute.streamChatCompleteMessages(messages, { maxTokens: 2200 })) {
+        full += chunk;
         res.write(chunk);
       }
       res.end();
+
+      await tutorPg.appendMessage(conv.id, "assistant", full, { mode });
+      const facts = await aiExecute.extractLearnerFactsFromExchange(message, full);
+      if (facts.length) await tutorPg.appendMemoryFacts(userId, facts);
+      if (full.length > 80 && ((history?.length || 0) + 2) % 4 === 0) {
+        await tutorPg.mergeRollingAssistantSnippet(userId, full);
+      }
     } catch (e) {
       if (!res.headersSent) {
         if (e.code === "AI_NOT_CONFIGURED") return res.status(503).json({ error: e.message, code: e.code });
+        if (e.status === 404) return res.status(404).json({ error: e.message });
         next(e);
       } else {
         try {
@@ -253,20 +386,40 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
   return router;
 }
 
-function buildTutorSystemPrompt(ctx) {
-  const parts = [
-    "You are an experienced CCWEB course tutor. Explain clearly, use short sections, and give concrete examples.",
-    "Stay grounded in the lesson/course context when provided.",
-  ];
-  if (ctx.course) {
-    parts.push(`Course: ${ctx.course.title}. Summary: ${ctx.course.summary?.slice(0, 1200) || ""}`);
-    parts.push(`Level: ${ctx.course.level || "general"} · Category: ${ctx.course.categorySlug || "general"}`);
+function mapProfileRow(row) {
+  if (!row) return null;
+  return {
+    displayName: row.display_name || "",
+    roles: pgUserProfile.parseRoles(row.roles),
+  };
+}
+
+async function resolveConversation(userId, body) {
+  const cid = body?.conversationId ? String(body.conversationId).trim() : "";
+  if (cid) {
+    const conv = await tutorPg.findConversationById(userId, cid);
+    if (!conv) {
+      const err = new Error("Conversation not found.");
+      err.status = 404;
+      throw err;
+    }
+    return conv;
   }
-  if (ctx.lesson) {
-    parts.push(`Current lesson: ${ctx.lesson.title}`);
-    parts.push(`Lesson content excerpt:\n${(ctx.lesson.content || "").slice(0, 8000)}`);
-  }
-  return parts.join("\n\n");
+  const mode = normalizeMode(body?.mode);
+  const courseSlug = body?.courseSlug ? String(body.courseSlug) : "";
+  const lessonId = body?.lessonId ? String(body.lessonId) : "";
+  const ctx = await coursesPg.getTutorContext(courseSlug || null, lessonId || null);
+  const titleHint =
+    ctx.course?.title && ctx.lesson?.title
+      ? `${ctx.course.title} · ${ctx.lesson.title}`
+      : ctx.course?.title || `CCWEB · ${mode}`;
+  return tutorPg.getOrCreateScopedConversation(userId, {
+    courseSlug,
+    lessonId,
+    mode,
+    titleHint,
+    extraMeta: {},
+  });
 }
 
 module.exports = { createCoursesRouter };

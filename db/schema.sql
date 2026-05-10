@@ -621,6 +621,15 @@ CREATE TABLE IF NOT EXISTS ccweb_ai_messages (
 
 CREATE INDEX IF NOT EXISTS ccweb_ai_messages_conv_created ON ccweb_ai_messages (conversation_id, created_at);
 
+CREATE TABLE IF NOT EXISTS ccweb_user_ai_memory (
+  user_id TEXT PRIMARY KEY REFERENCES ccweb_users(id) ON DELETE CASCADE,
+  summary TEXT NOT NULL DEFAULT '',
+  facts JSONB NOT NULL DEFAULT '[]'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_user_ai_memory_updated ON ccweb_user_ai_memory (updated_at DESC);
+
 CREATE TABLE IF NOT EXISTS ccweb_wallets (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES ccweb_users(id) ON DELETE CASCADE,

@@ -177,4 +177,183 @@ async function* streamChatComplete(systemPrompt, userMessage, opts = {}) {
   }
 }
 
-module.exports = { chatComplete, streamChatComplete, runAgent, runWorkflowSteps, getApiKey, mockChatResult };
+function normalizeChatMessages(messages) {
+  const out = [];
+  for (const m of messages || []) {
+    const role = m.role === "assistant" || m.role === "system" ? m.role : "user";
+    const content = String(m.content ?? "").slice(0, 200000);
+    if (!content && role !== "system") continue;
+    out.push({ role, content });
+  }
+  return out;
+}
+
+async function chatCompleteMessages(messages, opts = {}) {
+  const key = getApiKey();
+  const model = opts.model || DEFAULT_MODEL;
+  const msgs = normalizeChatMessages(messages);
+  if (!msgs.length) {
+    const err = new Error("No messages.");
+    err.status = 400;
+    throw err;
+  }
+
+  if (!key) {
+    if (requireOpenAI()) {
+      throw Object.assign(new Error("OPENAI_API_KEY is not configured."), { code: "AI_NOT_CONFIGURED", status: 503 });
+    }
+    const lastUser = [...msgs].reverse().find((m) => m.role === "user");
+    const mock = mockChatResult("", lastUser?.content || "");
+    return {
+      text: mock.text,
+      model: "mock",
+      usage: null,
+      provider: "mock",
+      mock: true,
+      rawId: null,
+    };
+  }
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      temperature: opts.temperature ?? 0.35,
+      max_tokens: opts.maxTokens ?? 2200,
+      messages: msgs,
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data.error?.message || res.statusText || "OpenAI request failed";
+    const err = new Error(msg);
+    err.status = res.status >= 400 && res.status < 500 ? res.status : 502;
+    throw err;
+  }
+
+  const text = data.choices?.[0]?.message?.content?.trim() || "";
+  return {
+    text,
+    model,
+    usage: data.usage || null,
+    provider: "openai",
+    rawId: data.id,
+  };
+}
+
+async function* streamChatCompleteMessages(messages, opts = {}) {
+  const key = getApiKey();
+  const model = opts.model || DEFAULT_MODEL;
+  const msgs = normalizeChatMessages(messages);
+
+  if (!key) {
+    if (requireOpenAI()) {
+      throw Object.assign(new Error("OPENAI_API_KEY is not configured."), { code: "AI_NOT_CONFIGURED", status: 503 });
+    }
+    const lastUser = [...msgs].reverse().find((m) => m.role === "user");
+    const mock = mockChatResult("", lastUser?.content || "");
+    const parts = mock.text.split(/(\s+)/);
+    for (const p of parts) {
+      if (p) yield p;
+    }
+    return;
+  }
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      temperature: opts.temperature ?? 0.35,
+      max_tokens: opts.maxTokens ?? 2200,
+      stream: true,
+      messages: msgs,
+    }),
+  });
+
+  if (!res.ok || !res.body) {
+    const errText = await res.text().catch(() => "");
+    const err = new Error(errText.slice(0, 400) || res.statusText || "OpenAI stream failed");
+    err.status = res.status >= 400 && res.status < 500 ? res.status : 502;
+    throw err;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop() || "";
+    for (const line of lines) {
+      const s = line.replace(/^data:\s*/, "").trim();
+      if (!s || s === "[DONE]") continue;
+      try {
+        const j = JSON.parse(s);
+        const delta = j.choices?.[0]?.delta?.content;
+        if (delta) yield delta;
+      } catch {
+        /* ignore partial JSON lines */
+      }
+    }
+  }
+}
+
+/**
+ * Extract 0–4 durable learner facts from one exchange (second OpenAI call).
+ */
+async function extractLearnerFactsFromExchange(userMessage, assistantReply) {
+  const key = getApiKey();
+  if (!key) return [];
+
+  const system = [
+    "You extract durable learner preferences/facts from one chat turn.",
+    'Reply with JSON only: {"facts":["..."]} — max 4 short facts, empty array if nothing worth remembering.',
+    "Facts should be stable (goals, stack, chain preference), not transient questions.",
+  ].join(" ");
+
+  const user = JSON.stringify({
+    user: String(userMessage || "").slice(0, 8000),
+    assistant: String(assistantReply || "").slice(0, 8000),
+  });
+
+  try {
+    const out = await chatCompleteMessages(
+      [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      { maxTokens: 400, temperature: 0.2 }
+    );
+    const text = out.text || "";
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return [];
+    const j = JSON.parse(match[0]);
+    const facts = Array.isArray(j.facts) ? j.facts.map((x) => String(x).trim()).filter(Boolean) : [];
+    return facts.slice(0, 4);
+  } catch {
+    return [];
+  }
+}
+
+module.exports = {
+  chatComplete,
+  chatCompleteMessages,
+  streamChatComplete,
+  streamChatCompleteMessages,
+  extractLearnerFactsFromExchange,
+  runAgent,
+  runWorkflowSteps,
+  getApiKey,
+  mockChatResult,
+};

@@ -24,6 +24,7 @@ import { CourseAdminDashboard } from "./pages/CourseAdminDashboard";
 import { CourseCatalogPage } from "./pages/CourseCatalogPage";
 import { CourseDetailPage } from "./pages/CourseDetailPage";
 import { CourseLessonPage } from "./pages/CourseLessonPage";
+import { AiTutorPage } from "./pages/AiTutorPage";
 import { getSessionToken, setSession } from "./session";
 import { LearningAdminPage } from "./learning/LearningAdminPage";
 import { LearningSessionPage } from "./learning/LearningSessionPage";
@@ -191,44 +192,6 @@ function StatCard({ value, label }) {
       <div className="stat-value">{value}</div>
       <div className="muted">{label}</div>
     </article>
-  );
-}
-
-function AiTutorPage() {
-  return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">AI Tutor</h1>
-        <p className="muted">Powered by AI · 24/7 learning assistant</p>
-      </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>Ask me anything!</h3>
-          <p className="muted">
-            Crypto, blockchain, DeFi, AI — I&apos;m here to help you learn.
-          </p>
-          <ul className="list">
-            <li>Explain blockchain in simple terms</li>
-            <li>What is DeFi and how does it work?</li>
-            <li>How do smart contracts work?</li>
-            <li>Explain proof of stake vs proof of work</li>
-          </ul>
-        </article>
-        <article className="panel">
-          <h3>Modes</h3>
-          <p className="muted">Chat · Quiz Generator</p>
-          <p className="muted">
-            Sign in to save your chat history and learning progress.
-          </p>
-          <Link to="/learn" className="btn btn-primary" style={{ marginRight: "0.5rem" }}>
-            Live learning hub
-          </Link>
-          <Link to="/login" className="btn btn-outline">
-            Sign In
-          </Link>
-        </article>
-      </div>
-    </section>
   );
 }
 

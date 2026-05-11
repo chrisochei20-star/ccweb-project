@@ -1,4 +1,6 @@
 -- Dynamic course system: categories, progress, quizzes, certificates, bookmarks
+-- Note: db/migrate.js runs each statement in its own transaction for incremental files,
+-- so a failing seed INSERT cannot roll back earlier ADD COLUMN statements.
 
 ALTER TABLE ccweb_courses ADD COLUMN IF NOT EXISTS category_slug TEXT NOT NULL DEFAULT 'general';
 ALTER TABLE ccweb_courses ADD COLUMN IF NOT EXISTS level TEXT NOT NULL DEFAULT 'beginner';

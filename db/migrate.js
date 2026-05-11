@@ -130,7 +130,12 @@ async function applySchemaFiles(pool) {
     const incSql = fs.readFileSync(filePath, "utf8");
     const stmts = splitSqlStatements(incSql).filter((s) => s.replace(/;/g, "").trim().length > 0);
     if (!stmts.length) continue;
-    await runStatementsInTransaction(pool, stmts, path.basename(filePath));
+    const label = path.basename(filePath);
+    // One transaction per statement so a later seed/INSERT failure cannot roll back
+    // earlier ADD COLUMN / CREATE INDEX work (fixes legacy DBs missing category_slug, etc.).
+    for (let i = 0; i < stmts.length; i += 1) {
+      await runStatementsInTransaction(pool, [stmts[i]], `${label}#${i + 1}/${stmts.length}`);
+    }
   }
 }
 

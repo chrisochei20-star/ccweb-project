@@ -4,6 +4,10 @@
  * Baseline: db/schema.sql
  * Incremental: db/migrations/*.sql sorted by filename (001_*.sql, 002_*.sql, …)
  *
+ * Each SQL statement runs in its own transaction (baseline + incremental). That way a later
+ * statement failure cannot roll back earlier DDL (e.g. legacy ccweb_courses missing category_slug
+ * would break CREATE INDEX in the same file if everything shared one transaction).
+ *
  * CLI: node db/migrate.js | npm run db:migrate
  */
 const fs = require("fs");
@@ -124,15 +128,15 @@ async function applySchemaFiles(pool) {
   const sqlPath = path.join(__dirname, "schema.sql");
   const sql = fs.readFileSync(sqlPath, "utf8");
   const baselineStatements = splitSqlStatements(sql);
-  await runStatementsInTransaction(pool, baselineStatements, "schema.sql");
+  for (let i = 0; i < baselineStatements.length; i += 1) {
+    await runStatementsInTransaction(pool, [baselineStatements[i]], `schema.sql#${i + 1}/${baselineStatements.length}`);
+  }
 
   for (const filePath of listIncrementalMigrationFiles()) {
     const incSql = fs.readFileSync(filePath, "utf8");
     const stmts = splitSqlStatements(incSql).filter((s) => s.replace(/;/g, "").trim().length > 0);
     if (!stmts.length) continue;
     const label = path.basename(filePath);
-    // One transaction per statement so a later seed/INSERT failure cannot roll back
-    // earlier ADD COLUMN / CREATE INDEX work (fixes legacy DBs missing category_slug, etc.).
     for (let i = 0; i < stmts.length; i += 1) {
       await runStatementsInTransaction(pool, [stmts[i]], `${label}#${i + 1}/${stmts.length}`);
     }

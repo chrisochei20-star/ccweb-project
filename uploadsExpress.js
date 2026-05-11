@@ -22,7 +22,16 @@ function imageMulter() {
 }
 
 function createUploadsRouter(deps) {
-  const { authJwtMiddleware, ccwebUsers, buildUserProfile, sanitizeUser } = deps;
+  const { authJwtMiddleware, ccwebUsers, buildUserProfile, sanitizeUser } = deps || {};
+  if (typeof authJwtMiddleware !== "function") {
+    throw new Error("createUploadsRouter: authJwtMiddleware must be provided and be a function");
+  }
+  if (typeof buildUserProfile !== "function" || typeof sanitizeUser !== "function") {
+    throw new Error("createUploadsRouter: buildUserProfile and sanitizeUser are required");
+  }
+  if (!ccwebUsers || typeof ccwebUsers.get !== "function") {
+    throw new Error("createUploadsRouter: ccwebUsers Map is required");
+  }
   const router = express.Router();
   const upload = imageMulter();
 

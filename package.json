@@ -25,7 +25,8 @@
     "mobile:sync": "npm run build && npx cap sync"
   },
   "engines": {
-    "node": "20.x"
+    "node": "20.x",
+    "npm": ">=10.0.0"
   },
   "keywords": [
     "web3",
@@ -36,8 +37,8 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@capacitor/android": "^8.3.1",
-    "@capacitor/core": "^8.3.1",
+    "@capacitor/android": "7.4.3",
+    "@capacitor/core": "7.4.3",
     "axios": "^1.16.0",
     "bcrypt": "^6.0.0",
     "bs58": "^6.0.0",
@@ -71,12 +72,15 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.3.1",
+    "@capacitor/cli": "7.4.3",
     "@playwright/test": "^1.51.0",
     "@tailwindcss/vite": "^4.1.11",
     "@vitejs/plugin-react": "^5.1.0",
     "tailwindcss": "^4.1.11",
     "vite": "^7.1.10",
     "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "@types/node": "^20.19.4"
   }
 }

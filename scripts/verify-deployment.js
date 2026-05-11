@@ -2,6 +2,8 @@
 /**
  * Post-deploy smoke checks for Render API + optional Postgres schema verify (when DATABASE_URL is set locally).
  *
+ * Before shipping, run locally or in CI: `npm run verify:predeploy` (imports + tests + Vite build).
+ *
  * Usage:
  *   DEPLOY_VERIFY_API_URL=https://your-api.onrender.com node scripts/verify-deployment.js
  *   node scripts/verify-deployment.js https://your-api.onrender.com

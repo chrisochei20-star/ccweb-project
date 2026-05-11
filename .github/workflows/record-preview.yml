@@ -23,6 +23,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify package imports vs package.json
+        run: npm run verify:imports
+
       - name: Install Playwright Chromium
         run: npx playwright install chromium --with-deps
 

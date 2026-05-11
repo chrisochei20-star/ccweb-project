@@ -187,7 +187,7 @@ function createPlatformApp(deps) {
 
   v1.use("/users", usersRouter);
 
-  v1.use("/uploads", apiRateShort, createUploadsRouter(deps));
+  v1.use("/uploads", apiRateShort, createUploadsRouter({ ...deps, authJwtMiddleware }));
 
   const chatImageUpload = imageMulter();
 

@@ -58,8 +58,25 @@ const declared = new Set([
   ...Object.keys(pkg.optionalDependencies || {}),
 ]);
 
-/** Workspace / meta packages (local paths, not from registry in this check) */
+/** Local workspace packages under packages/ — not required in root package.json */
 const allowExtra = new Set([]);
+try {
+  const pkgsDir = path.join(ROOT, "packages");
+  if (fs.existsSync(pkgsDir)) {
+    for (const name of fs.readdirSync(pkgsDir)) {
+      const pj = path.join(pkgsDir, name, "package.json");
+      if (!fs.existsSync(pj)) continue;
+      try {
+        const meta = JSON.parse(fs.readFileSync(pj, "utf8"));
+        if (meta.name && typeof meta.name === "string") allowExtra.add(meta.name);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+} catch {
+  /* ignore */
+}
 
 const used = new Map();
 
@@ -91,7 +108,7 @@ for (const name of used.keys()) {
 missing.sort((a, b) => a.name.localeCompare(b.name));
 
 if (missing.length) {
-  console.error("Missing from package.json (imported but not declared):\n");
+  console.error("[verify:imports] Missing from package.json (imported but not declared):\n");
   for (const m of missing) {
     console.error(`  • ${m.name}`);
     for (const f of [...new Set(m.files)].slice(0, 5)) console.error(`      ${f}`);
@@ -100,4 +117,4 @@ if (missing.length) {
   process.exit(1);
 }
 
-console.log(`OK: all ${used.size} external package roots are declared in package.json.`);
+console.log(`[verify:imports] OK: all ${used.size} external package roots are declared in package.json.`);

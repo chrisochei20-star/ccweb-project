@@ -17,6 +17,7 @@
     "db:verify": "node db/verifySchema.js",
     "verify:deploy": "node scripts/verify-deployment.js",
     "verify:imports": "node scripts/check-import-deps.js",
+    "verify:predeploy": "npm run verify:imports && npm test && npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

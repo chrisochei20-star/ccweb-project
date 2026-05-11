@@ -517,6 +517,13 @@ CREATE TABLE IF NOT EXISTS ccweb_courses (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Legacy databases: CREATE TABLE IF NOT EXISTS does not add new columns to an existing table.
+-- These must run before any CREATE INDEX that references the columns below.
+ALTER TABLE ccweb_courses ADD COLUMN IF NOT EXISTS category_slug TEXT NOT NULL DEFAULT 'general';
+ALTER TABLE ccweb_courses ADD COLUMN IF NOT EXISTS level TEXT NOT NULL DEFAULT 'beginner';
+ALTER TABLE ccweb_courses ADD COLUMN IF NOT EXISTS published BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE ccweb_courses ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;
+
 CREATE INDEX IF NOT EXISTS ccweb_courses_slug_lower ON ccweb_courses (lower(slug));
 CREATE INDEX IF NOT EXISTS ccweb_courses_category ON ccweb_courses (category_slug);
 CREATE INDEX IF NOT EXISTS ccweb_courses_published ON ccweb_courses (published) WHERE published = TRUE;

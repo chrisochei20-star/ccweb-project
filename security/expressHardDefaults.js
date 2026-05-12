@@ -5,6 +5,7 @@
 
 const helmet = require("helmet");
 const cors = require("cors");
+const { trimOrigin } = require("../services/deploymentOrigins");
 
 function parseAllowedOrigins() {
   const raw = (process.env.CCWEB_ALLOWED_ORIGINS || "").trim();
@@ -12,24 +13,96 @@ function parseAllowedOrigins() {
     return { mode: "all" };
   }
   if (raw) {
-    return { mode: "list", origins: raw.split(",").map((s) => s.trim()).filter(Boolean) };
+    const origins = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    return { mode: "list", origins: mergePublicAppOrigin(origins) };
   }
   if (process.env.NODE_ENV === "production") {
     // Align with productionGate CCWEB_BOOT_WARN_ONLY=1 when origins unset (open dynamic CORS).
     if (process.env.CCWEB_BOOT_WARN_ONLY === "1") {
       return { mode: "all" };
     }
-    return { mode: "list", origins: [] };
+    const pub = publicAppOriginOrNull();
+    return { mode: "list", origins: pub ? [pub] : [] };
   }
   return {
     mode: "list",
-    origins: [
+    origins: mergePublicAppOrigin([
       "http://localhost:5173",
       "http://127.0.0.1:5173",
       "http://localhost:3000",
       "http://127.0.0.1:3000",
-    ],
+    ]),
   };
+}
+
+/** @param {string[]} origins */
+function mergePublicAppOrigin(origins) {
+  const pub = publicAppOriginOrNull();
+  if (!pub) return origins;
+  if (origins.includes(pub)) return origins;
+  return [...origins, pub];
+}
+
+function publicAppOriginOrNull() {
+  const pub = trimOrigin(process.env.PUBLIC_APP_URL || "");
+  if (!pub || !/^https:\/\//i.test(pub)) return null;
+  try {
+    return new URL(pub).origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * CORS headers for Node http.Server handlers (no Express cors middleware).
+ * Mirrors Express `cors({ origin, credentials: true })` rules for preflight + simple responses.
+ * @param {import("http").IncomingMessage} req
+ * @param {import("http").ServerResponse} res
+ * @param {{ methods?: string; headers?: string; maxAgeSec?: number }} [opts]
+ */
+function setRawCorsHeaders(req, res, opts = {}) {
+  const methods = opts.methods || "GET, POST, PUT, PATCH, DELETE, OPTIONS";
+  const headers =
+    opts.headers ||
+    "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With, X-CCWEB-Admin, CCWEB-API-Key";
+  const maxAge = opts.maxAgeSec ?? 7200;
+  const origin = String(req.headers.origin || "").trim();
+  const parsed = parseAllowedOrigins();
+
+  res.setHeader("Access-Control-Allow-Methods", methods);
+  res.setHeader("Access-Control-Allow-Headers", headers);
+  res.setHeader("Access-Control-Max-Age", String(maxAge));
+
+  if (parsed.mode === "all") {
+    if (origin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    } else {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    }
+    return;
+  }
+
+  const allowed = parsed.origins;
+  if (origin && allowed.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    return;
+  }
+  if (!origin) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+}
+
+/**
+ * @param {import("http").IncomingMessage} req
+ * @param {import("http").ServerResponse} res
+ * @param {{ methods?: string; headers?: string }} [opts]
+ */
+function writeRawOptions(req, res, opts = {}) {
+  setRawCorsHeaders(req, res, opts);
+  res.writeHead(204);
+  res.end();
 }
 
 /**
@@ -75,4 +148,9 @@ function applyExpressSecurity(app) {
   );
 }
 
-module.exports = { applyExpressSecurity, parseAllowedOrigins };
+module.exports = {
+  applyExpressSecurity,
+  parseAllowedOrigins,
+  setRawCorsHeaders,
+  writeRawOptions,
+};

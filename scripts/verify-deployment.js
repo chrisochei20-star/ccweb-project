@@ -3,6 +3,7 @@
  * Post-deploy smoke checks for Render API + optional Postgres schema verify (when DATABASE_URL is set locally).
  *
  * Before shipping, run locally or in CI: `npm run verify:predeploy` (imports + tests + Vite build).
+ * Human checklist: docs/PRODUCTION_DEPLOY_CHECKLIST.md
  *
  * Usage:
  *   DEPLOY_VERIFY_API_URL=https://your-api.onrender.com node scripts/verify-deployment.js
@@ -17,8 +18,8 @@ const path = require("path");
 
 const apiBase = (process.env.DEPLOY_VERIFY_API_URL || process.argv[2] || "").trim().replace(/\/$/, "");
 
-async function fetchJson(url) {
-  const res = await fetch(url, { redirect: "follow" });
+async function fetchJson(url, init = {}) {
+  const res = await fetch(url, { redirect: "follow", ...init });
   const text = await res.text();
   let json = null;
   try {
@@ -47,6 +48,19 @@ async function main() {
     console.error("[verify] /health:", h.status, h.text?.slice(0, 200));
   } else {
     console.log("[verify] OK GET /health →", h.json.message || h.json.status);
+  }
+
+  const rootH = await fetchJson(`${apiBase}/`, { headers: { Accept: "application/json" } });
+  if (!rootH.ok || !rootH.json || rootH.json.status !== "ok") {
+    console.warn(
+      "[verify] WARN GET / (Accept: application/json) — expected {status:\"ok\"}; redeploy API if you still see 404/HTML here."
+    );
+    if (process.env.CCWEB_VERIFY_STRICT_ROOT === "1") {
+      failures.push(`GET / (Accept: application/json) failed (${rootH.status})`);
+      console.error("[verify] GET /:", rootH.status, rootH.text?.slice(0, 200));
+    }
+  } else {
+    console.log("[verify] OK GET / (json) →", rootH.json.status);
   }
 
   const cfgUrl = `${apiBase}/api/v1/config`;

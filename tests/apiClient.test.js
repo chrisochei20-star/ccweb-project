@@ -4,9 +4,11 @@ import { apiFetch } from "../src/lib/apiClient.js";
 describe("apiFetch", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
+    vi.spyOn(console, "warn").mockImplementation(() => {});
   });
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it("returns response on first success", async () => {

@@ -38,7 +38,10 @@ function validateOrExit() {
 
   if (!(process.env.CCWEB_ALLOWED_ORIGINS || "").trim()) {
     if (warnOnly) warns.push("CCWEB_ALLOWED_ORIGINS");
-    else errs.push("CCWEB_ALLOWED_ORIGINS (comma-separated https origins, or * for open-beta CORS)");
+    else
+      errs.push(
+        "CCWEB_ALLOWED_ORIGINS (comma-separated https origins, or * for open-beta CORS). When set, PUBLIC_APP_URL is also merged into the allowlist automatically."
+      );
   }
 
   if (!(process.env.AUTH_JWT_SECRET || "").trim() || process.env.AUTH_JWT_SECRET.length < 32) {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-describe("parseAllowedOrigins (CORS)", async () => {
+describe("parseAllowedOrigins (CORS)", () => {
   let prev;
 
   beforeEach(() => {
@@ -8,6 +8,7 @@ describe("parseAllowedOrigins (CORS)", async () => {
     delete process.env.CCWEB_ALLOWED_ORIGINS;
     delete process.env.NODE_ENV;
     delete process.env.CCWEB_BOOT_WARN_ONLY;
+    delete process.env.PUBLIC_APP_URL;
     vi.resetModules();
   });
 
@@ -28,6 +29,16 @@ describe("parseAllowedOrigins (CORS)", async () => {
       mode: "list",
       origins: ["https://a.com", "https://b.com"],
     });
+  });
+
+  it("merges PUBLIC_APP_URL origin into explicit allowlist for CORS", async () => {
+    process.env.CCWEB_ALLOWED_ORIGINS = "https://a.com";
+    process.env.PUBLIC_APP_URL = "https://b.com/";
+    const { parseAllowedOrigins } = await import("../security/expressHardDefaults.js");
+    const o = parseAllowedOrigins();
+    expect(o.mode).toBe("list");
+    expect(o.origins).toContain("https://a.com");
+    expect(o.origins).toContain("https://b.com");
   });
 
   it("allows all origins in production when CCWEB_BOOT_WARN_ONLY=1 and origins unset", async () => {

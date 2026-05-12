@@ -27,6 +27,7 @@ const { handleStripeWebhook } = require("./payments/stripeWebhook");
 const { handleStripeCheckoutEscrow } = require("./payments/stripeCheckout");
 const { createPlatformApp } = require("./platformExpress");
 const { sendRawHealth } = require("./server/http/controllers/health.controller");
+const { writeRawOptions } = require("./security/expressHardDefaults");
 const { attachChatSocket, closeChatSocket } = require("./server/realtime/chatSocket");
 const monetizationEngine = require("./services/monetizationEngine");
 const monPg = require("./db/persistenceMonetization");
@@ -3830,8 +3831,34 @@ const server = http.createServer(async (req, res) => {
   const { pathname } = requestUrl;
 
   if (pathname === "/health" || pathname === "/api/health") {
-    sendRawHealth(res);
+    if (req.method === "OPTIONS") {
+      writeRawOptions(req, res, {
+        methods: "GET, OPTIONS",
+        headers: "Accept, Content-Type, Authorization, Cookie",
+      });
+      return;
+    }
+    if (req.method === "GET") {
+      sendRawHealth(res, req);
+      return;
+    }
+  }
+
+  if (pathname === "/" && req.method === "OPTIONS") {
+    writeRawOptions(req, res, {
+      methods: "GET, OPTIONS",
+      headers: "Accept, Content-Type, Authorization, Cookie",
+    });
     return;
+  }
+
+  if (pathname === "/" && req.method === "GET") {
+    const accept = String(req.headers.accept || "");
+    const wantsHtml = /\btext\/html\b/i.test(accept);
+    if (!wantsHtml) {
+      sendRawHealth(res, req);
+      return;
+    }
   }
 
   if (
@@ -3913,12 +3940,10 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname.startsWith("/api/intelligence") && ["GET", "POST", "DELETE", "OPTIONS"].includes(req.method || "GET")) {
     if (req.method === "OPTIONS") {
-      res.writeHead(204, {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      writeRawOptions(req, res, {
+        methods: "GET, POST, DELETE, OPTIONS",
+        headers: "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With",
       });
-      res.end();
       return;
     }
     delegateIntelligence(req, res);
@@ -3927,12 +3952,10 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname.startsWith("/api/growth") && ["GET", "POST", "OPTIONS"].includes(req.method || "GET")) {
     if (req.method === "OPTIONS") {
-      res.writeHead(204, {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      writeRawOptions(req, res, {
+        methods: "GET, POST, OPTIONS",
+        headers: "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With",
       });
-      res.end();
       return;
     }
     delegateGrowth(req, res);
@@ -3941,12 +3964,10 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname.startsWith("/api/social") && ["GET", "POST", "OPTIONS"].includes(req.method || "GET")) {
     if (req.method === "OPTIONS") {
-      res.writeHead(204, {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      writeRawOptions(req, res, {
+        methods: "GET, POST, OPTIONS",
+        headers: "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With",
       });
-      res.end();
       return;
     }
     delegateSocial(req, res);
@@ -3958,12 +3979,10 @@ const server = http.createServer(async (req, res) => {
     ["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"].includes(req.method || "GET")
   ) {
     if (req.method === "OPTIONS") {
-      res.writeHead(204, {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, DELETE, PUT, PATCH, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, CCWEB-API-Key",
+      writeRawOptions(req, res, {
+        methods: "GET, POST, DELETE, PUT, PATCH, OPTIONS",
+        headers: "Content-Type, Authorization, CCWEB-API-Key, Cookie, Accept, Origin, X-Requested-With",
       });
-      res.end();
       return;
     }
     delegateDeveloper(req, res);
@@ -3972,12 +3991,10 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname.startsWith("/api/v1") && ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"].includes(req.method || "GET")) {
     if (req.method === "OPTIONS") {
-      res.writeHead(204, {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-CCWEB-Admin, Cookie",
+      writeRawOptions(req, res, {
+        methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        headers: "Content-Type, Authorization, X-CCWEB-Admin, Cookie, Accept, Origin, X-Requested-With",
       });
-      res.end();
       return;
     }
     delegatePlatform(req, res);

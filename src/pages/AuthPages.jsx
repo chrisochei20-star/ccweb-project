@@ -4,6 +4,7 @@ import { Link, useNavigate, useOutletContext, useSearchParams } from "react-rout
 import { BrowserProvider, getAddress } from "ethers";
 import { setSession } from "../session";
 import { apiUrl, getApiBaseUrl } from "../config/env";
+import { apiFetch } from "../lib/apiClient";
 
 function mapNetworkError(err) {
   const msg = err?.message || String(err);
@@ -11,7 +12,7 @@ function mapNetworkError(err) {
     const base = getApiBaseUrl();
     if (base) {
       return (
-        `Cannot reach ${base}. Confirm Render is up, HTTPS works, and CCWEB_ALLOWED_ORIGINS includes your Vercel origin (or use * for open beta).`
+        `Cannot reach ${base}. Confirm Render is up, HTTPS works, and CCWEB_ALLOWED_ORIGINS includes your Vercel origin (e.g. https://ccweb-project-hoiy.vercel.app) or use * for open beta.`
       );
     }
     return (
@@ -106,16 +107,20 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
             setLoading(true);
             setError(null);
             try {
-              const r = await fetch(apiUrl("/api/auth/oauth/google"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({
-                  idToken,
-                  referralCode: refFromUrl || undefined,
-                  utm_source: utmSource || undefined,
-                }),
-              });
+              const r = await apiFetch(
+                apiUrl("/api/auth/oauth/google"),
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "include",
+                  body: JSON.stringify({
+                    idToken,
+                    referralCode: refFromUrl || undefined,
+                    utm_source: utmSource || undefined,
+                  }),
+                },
+                { networkRetries: 2 }
+              );
               const data = await r.json();
               if (!r.ok) throw new Error(data.error || "Google sign-in failed");
               const access = data.accessToken || data.token;
@@ -158,18 +163,22 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
         );
       }
       if (mode === "signup") {
-        const reg = await fetch(apiUrl("/api/auth/register"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            email,
-            password,
-            displayName: displayName.trim() || undefined,
-            referralCode: refFromUrl || undefined,
-            utm_source: utmSource || undefined,
-          }),
-        });
+        const reg = await apiFetch(
+          apiUrl("/api/auth/register"),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              email,
+              password,
+              displayName: displayName.trim() || undefined,
+              referralCode: refFromUrl || undefined,
+              utm_source: utmSource || undefined,
+            }),
+          },
+          { networkRetries: 2 }
+        );
         let regData;
         try {
           regData = await reg.json();
@@ -178,12 +187,16 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
         }
         if (!reg.ok) throw new Error(regData.error || "Registration failed");
       }
-      const loginRes = await fetch(apiUrl("/api/auth/login"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email, password }),
-      });
+      const loginRes = await apiFetch(
+        apiUrl("/api/auth/login"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ email, password }),
+        },
+        { networkRetries: 2 }
+      );
       let data;
       try {
         data = await loginRes.json();
@@ -213,12 +226,16 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
     setError(null);
     setLoading(true);
     try {
-      const loginRes = await fetch(apiUrl("/api/auth/login/2fa"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ twoFactorToken, code: otp.trim() }),
-      });
+      const loginRes = await apiFetch(
+        apiUrl("/api/auth/login/2fa"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ twoFactorToken, code: otp.trim() }),
+        },
+        { networkRetries: 2 }
+      );
       const data = await loginRes.json();
       if (!loginRes.ok) throw new Error(data.error || "Invalid code");
       const access = data.accessToken || data.token;
@@ -243,28 +260,36 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
       const provider = new BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const address = await signer.getAddress();
-      const nonceRes = await fetch(apiUrl("/api/auth/wallet/nonce"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address }),
-      });
+      const nonceRes = await apiFetch(
+        apiUrl("/api/auth/wallet/nonce"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address }),
+        },
+        { networkRetries: 2 }
+      );
       const nonceJson = await nonceRes.json();
       if (!nonceRes.ok) throw new Error(nonceJson.error || "Nonce failed");
       const { message } = nonceJson;
       const signature = await signer.signMessage(message);
-      const verifyRes = await fetch(apiUrl("/api/auth/wallet/connect"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          address: getAddress(address),
-          message,
-          signature,
-          chainType: "evm",
-          referralCode: refFromUrl || undefined,
-          utm_source: utmSource || undefined,
-        }),
-      });
+      const verifyRes = await apiFetch(
+        apiUrl("/api/auth/wallet/connect"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            address: getAddress(address),
+            message,
+            signature,
+            chainType: "evm",
+            referralCode: refFromUrl || undefined,
+            utm_source: utmSource || undefined,
+          }),
+        },
+        { networkRetries: 2 }
+      );
       const data = await verifyRes.json();
       if (!verifyRes.ok) throw new Error(data.error || "Wallet verification failed");
       const access = data.accessToken || data.token;

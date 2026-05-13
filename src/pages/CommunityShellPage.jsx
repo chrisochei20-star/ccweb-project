@@ -1,7 +1,18 @@
-import { MessageCircle, MessagesSquare, Newspaper, TrendingUp } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Hash, MessagesSquare, Newspaper, Radio, Sparkles, TrendingUp } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
-import { apiUrl } from "../config/env";
+import {
+  createCommunityChat,
+  createCommunityPost,
+  createPostComment,
+  fetchCommunityChats,
+  fetchCommunityPosts,
+  fetchPostComments,
+} from "../api/communityApi";
+import { SocialPostCard } from "../components/community/SocialPostCard";
+import { Skeleton } from "../components/ui/Skeleton";
+
+const CHANNELS = ["general", "trading", "builders"];
 
 export function CommunityShellPage() {
   const { user } = useOutletContext() || {};
@@ -18,17 +29,18 @@ export function CommunityShellPage() {
   const [expandedPost, setExpandedPost] = useState(null);
   const [commentsByPost, setCommentsByPost] = useState({});
   const [commentDraft, setCommentDraft] = useState({});
+  const [commentsLoadingId, setCommentsLoadingId] = useState(null);
   const [err, setErr] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(12);
+  const sentinelRef = useRef(null);
 
   const loadPosts = useCallback(async () => {
     setLoadingPosts(true);
     setErr(null);
     try {
-      const path = feedMode === "trending" ? "/api/community/posts/trending" : "/api/community/posts";
-      const res = await fetch(apiUrl(path));
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load posts");
-      setPosts(data.posts || []);
+      const list = await fetchCommunityPosts(feedMode);
+      setPosts(list);
+      setVisibleCount(12);
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -40,11 +52,8 @@ export function CommunityShellPage() {
     setLoadingChats(true);
     setErr(null);
     try {
-      const q = channel ? `?channel=${encodeURIComponent(channel)}` : "";
-      const res = await fetch(apiUrl(`/api/community/chats${q}`));
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load chat");
-      setChats(data.chats || []);
+      const list = await fetchCommunityChats(channel);
+      setChats(list);
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -60,24 +69,52 @@ export function CommunityShellPage() {
     if (tab === "chat") loadChats();
   }, [tab, loadChats]);
 
+  useEffect(() => {
+    if (!expandedPost) return;
+    let cancelled = false;
+    (async () => {
+      setCommentsLoadingId(expandedPost);
+      setErr(null);
+      try {
+        const list = await fetchPostComments(expandedPost);
+        if (!cancelled) setCommentsByPost((p) => ({ ...p, [expandedPost]: list }));
+      } catch (e) {
+        if (!cancelled) setErr(e.message);
+      } finally {
+        if (!cancelled) setCommentsLoadingId(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [expandedPost]);
+
+  useEffect(() => {
+    if (tab !== "feed" || loadingPosts) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) setVisibleCount((c) => Math.min(c + 10, posts.length));
+      },
+      { rootMargin: "120px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [tab, loadingPosts, posts.length]);
+
   async function submitPost(e) {
     e.preventDefault();
     if (!user?.id || !postTitle.trim() || !postBody.trim()) return;
     setErr(null);
     try {
-      const res = await fetch(apiUrl("/api/community/posts"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          authorUserId: user.id,
-          authorDisplayName: user.displayName,
-          title: postTitle.trim(),
-          content: postBody.trim(),
-          tags: [],
-        }),
+      await createCommunityPost({
+        authorUserId: user.id,
+        authorDisplayName: user.displayName,
+        title: postTitle.trim(),
+        content: postBody.trim(),
+        tags: [],
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not post");
       setPostTitle("");
       setPostBody("");
       await loadPosts();
@@ -86,17 +123,8 @@ export function CommunityShellPage() {
     }
   }
 
-  async function openComments(postId) {
-    setExpandedPost(postId);
-    if (commentsByPost[postId]) return;
-    try {
-      const res = await fetch(apiUrl(`/api/community/posts/${postId}/comments`));
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Comments failed");
-      setCommentsByPost((prev) => ({ ...prev, [postId]: data.comments || [] }));
-    } catch (e) {
-      setErr(e.message);
-    }
+  function toggleThread(postId) {
+    setExpandedPost((cur) => (cur === postId ? null : postId));
   }
 
   async function submitComment(postId) {
@@ -105,21 +133,14 @@ export function CommunityShellPage() {
     if (!text) return;
     setErr(null);
     try {
-      const res = await fetch(apiUrl(`/api/community/posts/${postId}/comments`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          authorUserId: user.id,
-          authorDisplayName: user.displayName,
-          body: text,
-        }),
+      await createPostComment(postId, {
+        authorUserId: user.id,
+        authorDisplayName: user.displayName,
+        body: text,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Comment failed");
       setCommentDraft((prev) => ({ ...prev, [postId]: "" }));
-      const listRes = await fetch(apiUrl(`/api/community/posts/${postId}/comments`));
-      const listData = await listRes.json();
-      setCommentsByPost((prev) => ({ ...prev, [postId]: listData.comments || [] }));
+      const list = await fetchPostComments(postId);
+      setCommentsByPost((prev) => ({ ...prev, [postId]: list }));
     } catch (e) {
       setErr(e.message);
     }
@@ -130,18 +151,12 @@ export function CommunityShellPage() {
     if (!user?.id || !chatMsg.trim()) return;
     setErr(null);
     try {
-      const res = await fetch(apiUrl("/api/community/chats"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          authorUserId: user.id,
-          authorDisplayName: user.displayName,
-          channel,
-          message: chatMsg.trim(),
-        }),
+      await createCommunityChat({
+        authorUserId: user.id,
+        authorDisplayName: user.displayName,
+        channel,
+        message: chatMsg.trim(),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Send failed");
       setChatMsg("");
       await loadChats();
     } catch (e) {
@@ -149,22 +164,27 @@ export function CommunityShellPage() {
     }
   }
 
+  const shownPosts = posts.slice(0, Math.max(visibleCount, posts.length));
+
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-3 pb-6 pt-3 md:max-w-5xl">
-      <header>
-        <p className="text-xs font-semibold uppercase tracking-widest text-ccweb-violet">Community</p>
-        <h1 className="mt-1 text-2xl font-bold text-white md:text-3xl">Feed &amp; rooms</h1>
-        <p className="mt-1 max-w-2xl text-sm text-ccweb-muted">
-          Posts and chat sync with <code className="text-ccweb-cyan">/api/community/*</code>. Sign in to publish.
+    <div className="mx-auto max-w-3xl space-y-5 px-3 pb-6 pt-3 md:max-w-2xl">
+      <header className="ccweb-stagger">
+        <p className="ccweb-kicker flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-ccweb-cyan">
+          <Radio className="h-3.5 w-3.5" aria-hidden />
+          Live network
+        </p>
+        <h1 className="ccweb-display-heading mt-2 text-2xl font-bold tracking-tight text-white md:text-3xl">Community</h1>
+        <p className="mt-2 max-w-xl text-sm leading-relaxed text-ccweb-muted">
+          X-style feed for builders and learners. Discord-style rooms for quick vibes. Everything syncs to your Render API.
         </p>
       </header>
 
-      <div className="flex gap-2 rounded-2xl border border-white/10 bg-black/25 p-1">
+      <div className="flex gap-2 rounded-2xl border border-white/10 bg-black/25 p-1 shadow-inner">
         <button
           type="button"
           onClick={() => setTab("feed")}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold ${
-            tab === "feed" ? "bg-white/10 text-white" : "text-ccweb-muted"
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+            tab === "feed" ? "bg-white/12 text-white shadow-[0_0_20px_rgba(34,211,238,0.12)]" : "text-ccweb-muted hover:bg-white/6"
           }`}
         >
           <Newspaper className="h-4 w-4" />
@@ -173,55 +193,58 @@ export function CommunityShellPage() {
         <button
           type="button"
           onClick={() => setTab("chat")}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold ${
-            tab === "chat" ? "bg-white/10 text-white" : "text-ccweb-muted"
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+            tab === "chat" ? "bg-white/12 text-white shadow-[0_0_20px_rgba(167,139,250,0.12)]" : "text-ccweb-muted hover:bg-white/6"
           }`}
         >
           <MessagesSquare className="h-4 w-4" />
-          Chat
+          Rooms
         </button>
       </div>
 
-      {err && <p className="text-sm text-rose-300">{err}</p>}
+      {err && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100" role="alert">
+          {err}
+        </div>
+      )}
 
       {tab === "feed" && (
         <>
           {user ? (
-            <form onSubmit={submitPost} className="ccweb-glass space-y-3 rounded-2xl p-5">
-              <h2 className="font-semibold text-white">New post</h2>
-              <input
-                className="ccweb-input"
-                placeholder="Title"
-                value={postTitle}
-                onChange={(e) => setPostTitle(e.target.value)}
-              />
+            <form
+              onSubmit={submitPost}
+              className="ccweb-card-premium space-y-3 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-transparent p-5"
+            >
+              <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                <Sparkles className="h-4 w-4 text-ccweb-cyan" />
+                Compose
+              </div>
+              <input className="ccweb-input" placeholder="Headline" value={postTitle} onChange={(e) => setPostTitle(e.target.value)} />
               <textarea
-                className="ccweb-input min-h-[100px] resize-y"
-                placeholder="What are you building or learning?"
+                className="ccweb-input min-h-[110px] resize-y"
+                placeholder="What are you shipping, learning, or seeing on-chain?"
                 value={postBody}
                 onChange={(e) => setPostBody(e.target.value)}
               />
               <button type="submit" className="ccweb-gradient-btn text-sm">
-                Publish
+                Post to feed
               </button>
             </form>
           ) : (
-            <div className="ccweb-glass rounded-2xl p-5">
+            <div className="ccweb-glass rounded-2xl p-5 text-center">
               <p className="text-sm text-ccweb-muted">
-                <Link to="/login" className="text-ccweb-cyan underline">
+                <Link to="/login" className="font-medium text-ccweb-cyan underline">
                   Sign in
                 </Link>{" "}
-                to create posts and comments.
+                to compose and react.
               </p>
             </div>
           )}
 
-          <section className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-ccweb-muted">
-                {feedMode === "trending" ? "Trending" : "Latest"}
-              </h2>
-              <div className="flex gap-1 rounded-full border border-white/10 bg-black/30 p-0.5">
+          <section className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-ccweb-muted">Timeline</h2>
+              <div className="flex gap-1 rounded-full border border-white/10 bg-black/35 p-0.5">
                 <button
                   type="button"
                   onClick={() => setFeedMode("latest")}
@@ -232,100 +255,103 @@ export function CommunityShellPage() {
                 <button
                   type="button"
                   onClick={() => setFeedMode("trending")}
-                  className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${feedMode === "trending" ? "bg-white/15 text-white" : "text-ccweb-muted"}`}
+                  className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
+                    feedMode === "trending" ? "bg-white/15 text-white" : "text-ccweb-muted"
+                  }`}
                 >
                   <TrendingUp className="h-3.5 w-3.5" /> Trending
                 </button>
               </div>
             </div>
-            {loadingPosts && <p className="text-sm text-ccweb-muted">Loading posts…</p>}
-            {!loadingPosts && posts.length === 0 && <p className="text-sm text-ccweb-muted">No posts yet — be the first.</p>}
-            <ul className="space-y-3">
-              {posts.map((p) => (
-                <li key={p.id} className="ccweb-glass rounded-2xl p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <p className="font-medium text-white">{p.title}</p>
-                      <p className="text-xs text-ccweb-muted">
-                        {p.authorDisplayName || "Member"} · {new Date(p.createdAt).toLocaleString()}
-                      </p>
+
+            {loadingPosts && (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="ccweb-glass rounded-2xl p-4">
+                    <div className="flex gap-3">
+                      <Skeleton className="h-11 w-11 shrink-0 rounded-full" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-40 rounded-md" />
+                        <Skeleton className="h-4 w-full rounded-md" />
+                        <Skeleton className="h-16 w-full rounded-lg" />
+                      </div>
                     </div>
-                      <span className="text-xs text-ccweb-muted">
-                        {p.commentCount ?? 0} comments
-                        {p.reactionCount != null ? ` · ${p.reactionCount} reactions` : ""}
-                      </span>
                   </div>
-                  <p className="mt-2 text-sm text-ccweb-muted">{p.content}</p>
-                  <button
-                    type="button"
-                    className="mt-3 flex items-center gap-1 text-xs font-medium text-ccweb-cyan hover:underline"
-                    onClick={() => openComments(p.id)}
-                  >
-                    <MessageCircle className="h-3.5 w-3.5" />
-                    {expandedPost === p.id ? "Hide thread" : "View thread"}
-                  </button>
-                  {expandedPost === p.id && (
-                    <div className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3">
-                      <ul className="max-h-48 space-y-2 overflow-y-auto text-sm">
-                        {(commentsByPost[p.id] || []).map((c) => (
-                          <li key={c.id} className="border-b border-white/5 pb-2">
-                            <span className="text-ccweb-cyan">{c.authorDisplayName}</span>
-                            <span className="text-ccweb-muted"> · {new Date(c.createdAt).toLocaleString()}</span>
-                            <p className="text-white/90">{c.body}</p>
-                          </li>
-                        ))}
-                      </ul>
-                      {user && (
-                        <div className="mt-3 flex gap-2">
-                          <input
-                            className="ccweb-input flex-1 text-sm"
-                            placeholder="Write a comment…"
-                            value={commentDraft[p.id] || ""}
-                            onChange={(e) => setCommentDraft((prev) => ({ ...prev, [p.id]: e.target.value }))}
-                          />
-                          <button type="button" className="ccweb-outline-btn shrink-0 text-sm" onClick={() => submitComment(p.id)}>
-                            Send
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                ))}
+              </div>
+            )}
+
+            {!loadingPosts && posts.length === 0 && (
+              <p className="rounded-2xl border border-dashed border-white/15 bg-black/20 px-4 py-8 text-center text-sm text-ccweb-muted">
+                No posts yet — start the thread.
+              </p>
+            )}
+
+            <ul className="space-y-3">
+              {shownPosts.map((p) => (
+                <li key={p.id}>
+                  <SocialPostCard
+                    post={p}
+                    user={user}
+                    expanded={expandedPost === p.id}
+                    comments={commentsByPost[p.id]}
+                    commentsLoading={commentsLoadingId === p.id}
+                    commentDraft={commentDraft[p.id]}
+                    onToggleThread={toggleThread}
+                    onCommentDraft={(id, v) => setCommentDraft((prev) => ({ ...prev, [id]: v }))}
+                    onSubmitComment={submitComment}
+                  />
                 </li>
               ))}
             </ul>
+            {!loadingPosts && posts.length > visibleCount && <div ref={sentinelRef} className="h-4" aria-hidden />}
+            {!loadingPosts && posts.length > 0 && visibleCount >= posts.length && (
+              <p className="pb-4 text-center text-xs text-ccweb-muted">You&apos;re caught up.</p>
+            )}
           </section>
         </>
       )}
 
       {tab === "chat" && (
-        <section className="ccweb-glass rounded-2xl p-5">
-          <div className="flex flex-wrap gap-2">
-            {["general", "trading", "builders"].map((c) => (
+        <section className="ccweb-card-premium overflow-hidden rounded-2xl border border-white/10">
+          <div className="flex items-center gap-2 border-b border-white/10 bg-black/30 px-4 py-3">
+            <Hash className="h-4 w-4 text-ccweb-violet" />
+            <span className="text-sm font-semibold text-white">Channels</span>
+          </div>
+          <div className="flex flex-wrap gap-2 border-b border-white/5 px-4 py-3">
+            {CHANNELS.map((c) => (
               <button
                 key={c}
                 type="button"
                 onClick={() => setChannel(c)}
-                className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${
-                  channel === c ? "bg-ccweb-cyan/20 text-ccweb-cyan" : "border border-white/15 text-ccweb-muted"
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold capitalize transition ${
+                  channel === c ? "bg-ccweb-violet/25 text-ccweb-violet ring-1 ring-ccweb-violet/40" : "border border-white/12 text-ccweb-muted hover:border-white/25"
                 }`}
               >
                 #{c}
               </button>
             ))}
           </div>
-          <div className="mt-4 max-h-72 space-y-2 overflow-y-auto rounded-xl bg-black/35 p-3">
-            {loadingChats && <p className="text-sm text-ccweb-muted">Loading…</p>}
+          <div className="flex max-h-[420px] min-h-[220px] flex-col-reverse overflow-y-auto bg-[#070b14] px-3 py-3">
+            {loadingChats && <p className="text-center text-sm text-ccweb-muted">Loading messages…</p>}
             {!loadingChats &&
-              chats.map((m) => (
-                <div key={m.id} className="text-sm">
-                  <span className="font-medium text-ccweb-cyan">{m.authorDisplayName}</span>
-                  <span className="text-xs text-ccweb-muted"> · {new Date(m.createdAt).toLocaleTimeString()}</span>
-                  <p className="text-white/90">{m.message}</p>
+              [...chats].reverse().map((m) => (
+                <div key={m.id} className="mb-2 flex gap-2">
+                  <div className="mt-0.5 h-8 w-8 shrink-0 rounded-md bg-gradient-to-br from-ccweb-violet/40 to-ccweb-cyan/30" />
+                  <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-white/8 bg-white/[0.04] px-3 py-2">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="text-sm font-semibold text-ccweb-cyan">{m.authorDisplayName}</span>
+                      <span className="text-[10px] uppercase tracking-wide text-ccweb-muted">
+                        {new Date(m.createdAt).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm leading-relaxed text-slate-200">{m.message}</p>
+                  </div>
                 </div>
               ))}
           </div>
           {user ? (
-            <form onSubmit={sendChat} className="mt-4 flex gap-2">
+            <form onSubmit={sendChat} className="flex gap-2 border-t border-white/10 bg-black/40 p-3">
               <input
                 className="ccweb-input flex-1 text-sm"
                 placeholder={`Message #${channel}`}
@@ -337,7 +363,7 @@ export function CommunityShellPage() {
               </button>
             </form>
           ) : (
-            <p className="mt-4 text-sm text-ccweb-muted">
+            <p className="border-t border-white/10 p-4 text-center text-sm text-ccweb-muted">
               <Link to="/login" className="text-ccweb-cyan underline">
                 Sign in
               </Link>{" "}

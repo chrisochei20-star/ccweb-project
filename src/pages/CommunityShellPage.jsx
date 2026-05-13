@@ -11,6 +11,8 @@ import {
 } from "../api/communityApi";
 import { SocialPostCard } from "../components/community/SocialPostCard";
 import { Skeleton } from "../components/ui/Skeleton";
+import { toast } from "../lib/toastBus";
+import { getSessionToken } from "../session";
 
 const CHANNELS = ["general", "trading", "builders"];
 
@@ -42,7 +44,9 @@ export function CommunityShellPage() {
       setPosts(list);
       setVisibleCount(12);
     } catch (e) {
-      setErr(e.message);
+      const m = e.message || "Failed to load";
+      setErr(m);
+      toast.error(m);
     } finally {
       setLoadingPosts(false);
     }
@@ -55,7 +59,9 @@ export function CommunityShellPage() {
       const list = await fetchCommunityChats(channel);
       setChats(list);
     } catch (e) {
-      setErr(e.message);
+      const m = e.message || "Failed to load";
+      setErr(m);
+      toast.error(m);
     } finally {
       setLoadingChats(false);
     }
@@ -79,7 +85,11 @@ export function CommunityShellPage() {
         const list = await fetchPostComments(expandedPost);
         if (!cancelled) setCommentsByPost((p) => ({ ...p, [expandedPost]: list }));
       } catch (e) {
-        if (!cancelled) setErr(e.message);
+        if (!cancelled) {
+          const m = e.message || "Comments failed";
+          setErr(m);
+          toast.error(m);
+        }
       } finally {
         if (!cancelled) setCommentsLoadingId(null);
       }
@@ -105,12 +115,15 @@ export function CommunityShellPage() {
 
   async function submitPost(e) {
     e.preventDefault();
-    if (!user?.id || !postTitle.trim() || !postBody.trim()) return;
+    const token = getSessionToken();
+    if (!token) {
+      toast.error("Sign in to post.");
+      return;
+    }
+    if (!postTitle.trim() || !postBody.trim()) return;
     setErr(null);
     try {
       await createCommunityPost({
-        authorUserId: user.id,
-        authorDisplayName: user.displayName,
         title: postTitle.trim(),
         content: postBody.trim(),
         tags: [],
@@ -118,8 +131,11 @@ export function CommunityShellPage() {
       setPostTitle("");
       setPostBody("");
       await loadPosts();
+      toast.success("Posted to the feed.");
     } catch (e) {
-      setErr(e.message);
+      const m = e.message || "Post failed";
+      setErr(m);
+      toast.error(m);
     }
   }
 
@@ -128,39 +144,48 @@ export function CommunityShellPage() {
   }
 
   async function submitComment(postId) {
-    if (!user?.id) return;
+    const token = getSessionToken();
+    if (!token) {
+      toast.error("Sign in to comment.");
+      return;
+    }
     const text = (commentDraft[postId] || "").trim();
     if (!text) return;
     setErr(null);
     try {
       await createPostComment(postId, {
-        authorUserId: user.id,
-        authorDisplayName: user.displayName,
         body: text,
       });
       setCommentDraft((prev) => ({ ...prev, [postId]: "" }));
       const list = await fetchPostComments(postId);
       setCommentsByPost((prev) => ({ ...prev, [postId]: list }));
     } catch (e) {
-      setErr(e.message);
+      const m = e.message || "Comment failed";
+      setErr(m);
+      toast.error(m);
     }
   }
 
   async function sendChat(e) {
     e.preventDefault();
-    if (!user?.id || !chatMsg.trim()) return;
+    const token = getSessionToken();
+    if (!token) {
+      toast.error("Sign in to chat.");
+      return;
+    }
+    if (!chatMsg.trim()) return;
     setErr(null);
     try {
       await createCommunityChat({
-        authorUserId: user.id,
-        authorDisplayName: user.displayName,
         channel,
         message: chatMsg.trim(),
       });
       setChatMsg("");
       await loadChats();
     } catch (e) {
-      setErr(e.message);
+      const m = e.message || "Send failed";
+      setErr(m);
+      toast.error(m);
     }
   }
 

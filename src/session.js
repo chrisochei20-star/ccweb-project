@@ -5,26 +5,51 @@ const TOKEN_KEY = "ccweb_session_token";
 const USER_KEY = "ccweb_user";
 const REFRESH_KEY = "ccweb_refresh_token";
 
+function sessionBackend() {
+  if (typeof window === "undefined") return null;
+  try {
+    if (import.meta.env?.VITE_SESSION_LOCAL_STORAGE === "true") return window.localStorage;
+    if (window.Capacitor?.isNativePlatform?.()) return window.localStorage;
+  } catch {
+    /* Capacitor bridge may be unavailable in web tests */
+  }
+  return window.sessionStorage;
+}
+
+function store() {
+  const b = sessionBackend();
+  return (
+    b || {
+      getItem() {
+        return null;
+      },
+      setItem() {},
+      removeItem() {},
+    }
+  );
+}
+
 export function getSessionToken() {
-  return sessionStorage.getItem(TOKEN_KEY);
+  return store().getItem(TOKEN_KEY);
 }
 
 export function getRefreshToken() {
-  return sessionStorage.getItem(REFRESH_KEY);
+  return store().getItem(REFRESH_KEY);
 }
 
 export function setSession(accessToken, user, refreshToken) {
-  if (accessToken) sessionStorage.setItem(TOKEN_KEY, accessToken);
-  else sessionStorage.removeItem(TOKEN_KEY);
-  if (user) sessionStorage.setItem(USER_KEY, JSON.stringify(user));
-  else sessionStorage.removeItem(USER_KEY);
-  if (refreshToken) sessionStorage.setItem(REFRESH_KEY, refreshToken);
-  else sessionStorage.removeItem(REFRESH_KEY);
+  const s = store();
+  if (accessToken) s.setItem(TOKEN_KEY, accessToken);
+  else s.removeItem(TOKEN_KEY);
+  if (user) s.setItem(USER_KEY, JSON.stringify(user));
+  else s.removeItem(USER_KEY);
+  if (refreshToken) s.setItem(REFRESH_KEY, refreshToken);
+  else s.removeItem(REFRESH_KEY);
 }
 
 export function getStoredUser() {
   try {
-    const raw = sessionStorage.getItem(USER_KEY);
+    const raw = store().getItem(USER_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -32,9 +57,12 @@ export function getStoredUser() {
 }
 
 export function clearSession() {
-  sessionStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(USER_KEY);
-  sessionStorage.removeItem(REFRESH_KEY);
+  for (const s of [typeof window !== "undefined" ? window.sessionStorage : null, typeof window !== "undefined" ? window.localStorage : null]) {
+    if (!s) continue;
+    s.removeItem(TOKEN_KEY);
+    s.removeItem(USER_KEY);
+    s.removeItem(REFRESH_KEY);
+  }
 }
 
 async function tryRefreshSession() {

@@ -195,6 +195,7 @@ CREATE TABLE IF NOT EXISTS community_posts (
   tags JSONB NOT NULL DEFAULT '[]'::jsonb,
   media_urls JSONB NOT NULL DEFAULT '[]'::jsonb,
   repost_of_id TEXT REFERENCES community_posts(id) ON DELETE SET NULL,
+  moderation_status TEXT NOT NULL DEFAULT 'visible',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -216,6 +217,7 @@ CREATE TABLE IF NOT EXISTS community_post_comments (
   author_user_id TEXT NOT NULL,
   author_display_name TEXT NOT NULL,
   body TEXT NOT NULL,
+  moderation_status TEXT NOT NULL DEFAULT 'visible',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -492,6 +494,7 @@ CREATE TABLE IF NOT EXISTS ccweb_chat_messages (
   author_user_id TEXT REFERENCES ccweb_users(id) ON DELETE SET NULL,
   body TEXT NOT NULL,
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  moderation_status TEXT NOT NULL DEFAULT 'visible',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -762,14 +765,81 @@ CREATE TABLE IF NOT EXISTS ccweb_payout_requests (
   creator_user_id TEXT NOT NULL REFERENCES ccweb_users(id) ON DELETE CASCADE,
   amount_minor BIGINT NOT NULL,
   currency TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending',
+  status TEXT NOT NULL DEFAULT 'pending_review',
   bank_meta JSONB NOT NULL DEFAULT '{}'::jsonb,
   flw_transfer_id TEXT,
+  risk_flags JSONB NOT NULL DEFAULT '[]'::jsonb,
+  encrypted_bank TEXT,
+  bank_hint TEXT,
+  flw_recipient_id TEXT,
+  reviewed_at TIMESTAMPTZ,
+  reviewed_by TEXT,
+  reject_reason TEXT,
+  transfer_ref TEXT,
+  transfer_meta JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS ccweb_payout_creator ON ccweb_payout_requests (creator_user_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS ccweb_payout_transfer_ref_uq
+  ON ccweb_payout_requests (transfer_ref) WHERE transfer_ref IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS ccweb_admin_audit_logs (
+  id TEXT PRIMARY KEY,
+  actor_kind TEXT NOT NULL DEFAULT 'admin',
+  actor_label TEXT,
+  action TEXT NOT NULL,
+  target_type TEXT,
+  target_id TEXT,
+  ip_hash TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_admin_audit_created ON ccweb_admin_audit_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS ccweb_admin_audit_action ON ccweb_admin_audit_logs (action, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS ccweb_trust_reports (
+  id TEXT PRIMARY KEY,
+  reporter_user_id TEXT NOT NULL REFERENCES ccweb_users(id) ON DELETE CASCADE,
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  reason_code TEXT NOT NULL DEFAULT 'other',
+  body TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'open',
+  moderator_note TEXT,
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_trust_reports_status_created ON ccweb_trust_reports (status, created_at DESC);
+CREATE INDEX IF NOT EXISTS ccweb_trust_reports_target ON ccweb_trust_reports (target_type, target_id);
+
+CREATE TABLE IF NOT EXISTS ccweb_moderation_actions (
+  id TEXT PRIMARY KEY,
+  actor_label TEXT NOT NULL,
+  action TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_mod_actions_created ON ccweb_moderation_actions (created_at DESC);
+
+CREATE TABLE IF NOT EXISTS ccweb_push_device_tokens (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES ccweb_users(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL DEFAULT 'web',
+  token TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, platform, token)
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_push_tokens_user ON ccweb_push_device_tokens (user_id, updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS ccweb_communities (
   id TEXT PRIMARY KEY,

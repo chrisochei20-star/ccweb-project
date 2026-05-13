@@ -1,7 +1,8 @@
-import { Bookmark, Heart, MessageCircle, Repeat2, Share2 } from "lucide-react";
+import { Bookmark, Flag, Heart, MessageCircle, Repeat2, Share2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import { createCommunityPost, createPostReaction, fetchPostReactions, setCommunityBookmark } from "../../api/communityApi";
+import { submitTrustReport } from "../../api/trustApi";
 import { assetsUrl } from "../../config/env";
 import { getSessionToken } from "../../session";
 import { toast } from "../../lib/toastBus";
@@ -40,6 +41,7 @@ export function SocialPostCard({
   const [likeBusy, setLikeBusy] = useState(false);
   const [repostBusy, setRepostBusy] = useState(false);
   const [bookmarkBusy, setBookmarkBusy] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
   const [localReactions, setLocalReactions] = useState(null);
   const canInteract = Boolean(getSessionToken());
   const mediaUrls = post.mediaUrls || [];
@@ -60,6 +62,36 @@ export function SocialPostCard({
       : post.reactionCount != null
         ? post.reactionCount
         : null;
+
+  async function handleReportPost() {
+    if (!canInteract) return;
+    const details = typeof window !== "undefined" ? window.prompt("Optional details for moderators", "") : "";
+    if (details === null) return;
+    setReportBusy(true);
+    try {
+      await submitTrustReport({ targetType: "post", targetId: post.id, reasonCode: "other", details: details || "" });
+      toast.success("Thanks — moderators will review this report.");
+    } catch (e) {
+      toast.error(e.message || "Report failed");
+    } finally {
+      setReportBusy(false);
+    }
+  }
+
+  async function handleReportComment(commentId) {
+    if (!canInteract) return;
+    const details = typeof window !== "undefined" ? window.prompt("Optional details for moderators", "") : "";
+    if (details === null) return;
+    setReportBusy(true);
+    try {
+      await submitTrustReport({ targetType: "comment", targetId: commentId, reasonCode: "other", details: details || "" });
+      toast.success("Comment reported.");
+    } catch (e) {
+      toast.error(e.message || "Report failed");
+    } finally {
+      setReportBusy(false);
+    }
+  }
 
   async function handleLike() {
     if (!getSessionToken()) return;
@@ -234,6 +266,15 @@ export function SocialPostCard({
             >
               <Bookmark className="h-3.5 w-3.5" strokeWidth={2} fill={bookmarked ? "currentColor" : "none"} />
             </button>
+            <button
+              type="button"
+              disabled={!canInteract || reportBusy}
+              onClick={handleReportPost}
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-ccweb-muted transition hover:bg-amber-500/10 hover:text-amber-200 disabled:opacity-40"
+              title="Report post"
+            >
+              <Flag className="h-3.5 w-3.5" strokeWidth={2} />
+            </button>
             {!compactThread && (
               <button
                 type="button"
@@ -260,7 +301,17 @@ export function SocialPostCard({
                 <ul className="max-h-56 space-y-2.5 overflow-y-auto text-sm">
                   {(comments || []).map((c) => (
                     <li key={c.id} className="border-b border-white/5 pb-2 last:border-0">
-                      <span className="font-medium text-ccweb-cyan">{c.authorDisplayName}</span>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium text-ccweb-cyan">{c.authorDisplayName}</span>
+                        <button
+                          type="button"
+                          className="text-[11px] text-amber-200/80 underline-offset-2 hover:underline"
+                          disabled={!canInteract || reportBusy}
+                          onClick={() => handleReportComment(c.id)}
+                        >
+                          Report
+                        </button>
+                      </div>
                       <span className="text-xs text-ccweb-muted"> · {new Date(c.createdAt).toLocaleString()}</span>
                       <p className="mt-0.5 text-white/90">{c.body}</p>
                     </li>

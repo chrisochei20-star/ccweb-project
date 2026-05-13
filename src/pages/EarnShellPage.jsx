@@ -14,6 +14,9 @@ export function EarnShellPage() {
   const [payBusy, setPayBusy] = useState(false);
   const [payoutMajor, setPayoutMajor] = useState("");
   const [payoutCur, setPayoutCur] = useState("USD");
+  const [bankAcct, setBankAcct] = useState("");
+  const [bankCode, setBankCode] = useState("");
+  const [benName, setBenName] = useState("");
   const { data: analytics, loading, error, refresh } = useCachedFetch(user ? "/api/v1/analytics/user" : null, {
     enabled: Boolean(user),
     ttlMs: 60_000,
@@ -70,15 +73,27 @@ export function EarnShellPage() {
       toast.error("Enter a payout amount.");
       return;
     }
+    if (!bankAcct.trim() || !bankCode.trim() || !benName.trim()) {
+      toast.error("Enter account number, bank code, and legal beneficiary name.");
+      return;
+    }
     setPayBusy(true);
     try {
       await requestFlutterwavePayout({
         currency: payoutCur,
         amountMajor: major,
-        bank: { note: "Provide bank details to ops; this queues a payout request." },
+        bank: {
+          account_number: bankAcct.trim(),
+          account_bank: bankCode.trim(),
+          beneficiary_name: benName.trim(),
+          country: payoutCur === "NGN" ? "NG" : "US",
+        },
       });
       toast.success("Payout request recorded.");
       setPayoutMajor("");
+      setBankAcct("");
+      setBankCode("");
+      setBenName("");
       refresh();
     } catch (e) {
       toast.error(e.message || "Payout request failed");
@@ -281,6 +296,10 @@ export function EarnShellPage() {
                 <span className="text-white">₦{Number(fw.creator.estimatedShareNgn || 0).toLocaleString()}</span> ·{" "}
                 <span className="text-ccweb-muted">{fw.creator.completedTxCount} tx</span>
               </p>
+              <p className="mt-1 text-xs text-ccweb-muted">
+                Queued payouts are encrypted at rest and reviewed before Flutterwave transfer. Set{" "}
+                <code className="text-ccweb-green">CCWEB_PAYOUT_ENCRYPTION_KEY</code> (64 hex) on the server.
+              </p>
               <div className="mt-3 flex flex-wrap items-end gap-2">
                 <div>
                   <label className="text-[10px] uppercase text-ccweb-muted">Payout amount</label>
@@ -295,6 +314,23 @@ export function EarnShellPage() {
                   <option value="USD">USD</option>
                   <option value="NGN">NGN</option>
                 </select>
+                <div>
+                  <label className="text-[10px] uppercase text-ccweb-muted">Account #</label>
+                  <input className="ccweb-input mt-1 w-36 text-sm" value={bankAcct} onChange={(e) => setBankAcct(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase text-ccweb-muted">Bank code</label>
+                  <input
+                    className="ccweb-input mt-1 w-24 text-sm"
+                    value={bankCode}
+                    onChange={(e) => setBankCode(e.target.value)}
+                    placeholder="NGN: 044"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase text-ccweb-muted">Legal name</label>
+                  <input className="ccweb-input mt-1 min-w-[140px] text-sm" value={benName} onChange={(e) => setBenName(e.target.value)} />
+                </div>
                 <button type="button" disabled={payBusy} className="ccweb-outline-btn mt-5 text-sm" onClick={submitPayout}>
                   Queue payout
                 </button>
@@ -303,7 +339,10 @@ export function EarnShellPage() {
                 <ul className="mt-3 space-y-1 text-xs text-ccweb-muted">
                   {fw.payouts.map((p) => (
                     <li key={p.id} className="flex justify-between rounded-lg bg-black/30 px-2 py-1">
-                      <span>{p.status}</span>
+                      <span>
+                        {p.status}
+                        {p.bankHint ? ` · ${p.bankHint}` : ""}
+                      </span>
                       <span>
                         {p.currency} {(p.amountMinor / 100).toFixed(2)}
                       </span>

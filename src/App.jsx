@@ -22,6 +22,7 @@ import { MobileDashboardPage } from "./pages/MobileDashboardPage";
 import { ProfileShellPage } from "./pages/ProfileShellPage";
 import { ChatPage } from "./pages/ChatPage";
 import { CourseAdminDashboard } from "./pages/CourseAdminDashboard";
+import { AdminOpsPage } from "./pages/AdminOpsPage";
 import { CourseCatalogPage } from "./pages/CourseCatalogPage";
 import { CourseDetailPage } from "./pages/CourseDetailPage";
 import { CourseLessonPage } from "./pages/CourseLessonPage";
@@ -94,6 +95,7 @@ function App() {
             <Route path="messages" element={<ChatPage />} />
             <Route path="learn/admin" element={<LearningAdminPage />} />
             <Route path="learn/admin/courses" element={<CourseAdminDashboard />} />
+            <Route path="admin/ops" element={<AdminOpsPage />} />
           </Route>
           <Route path="marketplace" element={<GrowthHubPage initialTab="marketplace" />} />
           <Route path="escrow" element={<GrowthHubPage initialTab="escrow" />} />

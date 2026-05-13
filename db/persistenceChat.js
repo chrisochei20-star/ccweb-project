@@ -136,7 +136,7 @@ async function getMessages(chatId, userId, { limit = 50, before } = {}) {
   if (!ok) return null;
   const lim = Math.min(100, Math.max(1, limit));
   const params = [chatId];
-  let sql = `SELECT * FROM ccweb_chat_messages WHERE chat_id = $1`;
+  let sql = `SELECT * FROM ccweb_chat_messages WHERE chat_id = $1 AND COALESCE(moderation_status, 'visible') = 'visible'`;
   if (before) {
     sql += ` AND created_at < $2 ORDER BY created_at DESC LIMIT $3`;
     params.push(new Date(before), lim);
@@ -183,6 +183,7 @@ async function listConversations(userId) {
        (
          SELECT COUNT(*)::int FROM ccweb_chat_messages msg
          WHERE msg.chat_id = c.id
+           AND COALESCE(msg.moderation_status, 'visible') = 'visible'
            AND msg.author_user_id <> $1
            AND msg.created_at > COALESCE(my.last_read_at, to_timestamp(0))
        ) AS unread_count
@@ -190,11 +191,11 @@ async function listConversations(userId) {
      JOIN ccweb_chats c ON c.id = my.chat_id
      JOIN ccweb_chat_members om ON om.chat_id = c.id AND om.user_id <> $1
      LEFT JOIN LATERAL (
-       SELECT body, metadata, created_at, author_user_id
-       FROM ccweb_chat_messages
-       WHERE chat_id = c.id
-       ORDER BY created_at DESC
-       LIMIT 1
+         SELECT body, metadata, created_at, author_user_id
+         FROM ccweb_chat_messages
+         WHERE chat_id = c.id AND COALESCE(moderation_status, 'visible') = 'visible'
+         ORDER BY created_at DESC
+         LIMIT 1
      ) lm ON true
      WHERE my.user_id = $1
      ORDER BY COALESCE(lm.created_at, c.updated_at) DESC NULLS LAST`,

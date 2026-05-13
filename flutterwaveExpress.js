@@ -67,6 +67,9 @@ function createFlutterwaveRouter({ authJwtMiddleware }) {
     try {
       if (event === "charge.completed" && data?.tx_ref) {
         await persistenceFlutterwave.applySuccessfulCharge(String(data.tx_ref), data);
+      } else if (String(event || "").toLowerCase().includes("transfer") && (data || req.body?.data)) {
+        const td = data || req.body?.data || {};
+        await persistenceFlutterwave.applyTransferNotification(td);
       }
     } catch {
       /* avoid retry storms */
@@ -236,9 +239,14 @@ function createFlutterwaveRouter({ authJwtMiddleware }) {
       const major = Number(req.body?.amountMajor);
       if (!Number.isFinite(major) || major <= 0) return res.status(400).json({ error: "amountMajor required." });
       const minor = Math.round(major * 100);
-      const bankMeta = typeof req.body?.bank === "object" ? req.body.bank : {};
-      const id = await persistenceFlutterwave.insertPayoutRequest(req.ccwebUserId, minor, currency, bankMeta);
-      res.status(201).json({ ok: true, payoutRequestId: id });
+      const bank = typeof req.body?.bank === "object" && req.body.bank ? req.body.bank : {};
+      const out = await persistenceFlutterwave.createPayoutRequest(req.ccwebUserId, minor, currency, bank);
+      if (!out.ok) {
+        const code = out.code || "payout_rejected";
+        const status = code === "encryption_unconfigured" ? 503 : 400;
+        return res.status(status).json({ error: code, code, riskFlags: out.riskFlags || [] });
+      }
+      res.status(201).json({ ok: true, payoutRequestId: out.id, riskFlags: out.riskFlags || [] });
     } catch (e) {
       next(e);
     }

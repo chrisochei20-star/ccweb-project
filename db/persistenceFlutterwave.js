@@ -108,7 +108,7 @@ async function listCreatorIncoming(creatorUserId, limit = 50) {
   const { rows } = await query(
     `SELECT id, user_id, tx_ref, amount_minor, currency, status, kind, flw_tx_id, creator_user_id, metadata, created_at, updated_at
      FROM ccweb_flutterwave_transactions
-     WHERE creator_user_id = $1 AND status = 'completed' AND kind IN ('course_purchase','creator_tip','ai_tool_unlock')
+     WHERE creator_user_id = $1 AND status = 'completed' AND kind IN ('course_purchase','creator_tip','ai_tool_unlock','marketplace_sku')
      ORDER BY created_at DESC LIMIT $2`,
     [creatorUserId, lim]
   );
@@ -441,14 +441,14 @@ async function creatorEarningsSummary(creatorUserId) {
   const fee = platformFeeBps();
   const { rows: cnt } = await query(
     `SELECT COUNT(*)::int AS c FROM ccweb_flutterwave_transactions
-     WHERE creator_user_id = $1 AND status = 'completed' AND kind IN ('course_purchase','creator_tip','ai_tool_unlock')`,
+     WHERE creator_user_id = $1 AND status = 'completed' AND kind IN ('course_purchase','creator_tip','ai_tool_unlock','marketplace_sku')`,
     [creatorUserId]
   );
   const { rows } = await query(
     `SELECT currency,
             COALESCE(SUM((amount_minor - FLOOR(amount_minor * $2 / 10000.0))::bigint), 0)::bigint AS share_minor
      FROM ccweb_flutterwave_transactions
-     WHERE creator_user_id = $1 AND status = 'completed' AND kind IN ('course_purchase','creator_tip','ai_tool_unlock')
+     WHERE creator_user_id = $1 AND status = 'completed' AND kind IN ('course_purchase','creator_tip','ai_tool_unlock','marketplace_sku')
      GROUP BY currency`,
     [creatorUserId, fee]
   );
@@ -553,16 +553,12 @@ async function applySuccessfulCharge(txRef, data) {
       await bumpWallet(userId, { aiCents: pack });
       await learningPg.addCreditsCents(userId, pack);
     }
-  } else if (kind === "ai_tool_unlock" && row.creator_user_id) {
-    const cid = row.creator_user_id;
-    if (creatorMinor > 0) {
-      if (currency === "USD") await bumpWallet(cid, { usdCents: creatorMinor });
-      else await bumpWallet(cid, { ngn: creatorMinor });
-    }
-    await bumpWallet(userId, { aiCents: Math.max(0, Math.floor(row.amount_minor / 10)) });
+  } else if (kind === "marketplace_sku") {
+    const mp = require("./persistenceMarketplace");
+    await mp.fulfillMarketplaceSkuFromTx(row);
   }
 
-  if (platformFeeMinor > 0) {
+  if (platformFeeMinor > 0 && kind !== "marketplace_sku") {
     await query(
       `INSERT INTO ccweb_metering_events (id, user_id, kind, amount_usd, platform_share_usd, metadata)
        VALUES ($1,$2,'flutterwave_platform_fee', $3, $3, $4::jsonb)`,
@@ -596,4 +592,5 @@ module.exports = {
   creatorEarningsSummary,
   applySuccessfulCharge,
   platformFeeBps,
+  splitCreatorAmount,
 };

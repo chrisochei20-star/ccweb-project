@@ -144,6 +144,20 @@ function createFlutterwaveRouter({ authJwtMiddleware }) {
           );
         }
         meta.agentId = String(req.body?.agentId || "").slice(0, 120);
+      } else if (kind === "marketplace_sku") {
+        const mp = require("./db/persistenceMarketplace");
+        const skuId = String(req.body?.marketplaceSkuId || "").trim();
+        if (!skuId) return res.status(400).json({ error: "marketplaceSkuId required." });
+        const sku = await mp.getSkuById(skuId);
+        if (!sku || !sku.active) return res.status(404).json({ error: "SKU not found or inactive." });
+        if (sku.listingStatus !== "published") return res.status(400).json({ error: "Listing is not purchasable." });
+        creatorUserId = sku.sellerUserId || null;
+        if (currency === "USD") amountMinor = sku.priceUsdCents || 0;
+        else amountMinor = Math.round((sku.priceNgn || 0) * 100);
+        if (amountMinor <= 0) return res.status(400).json({ error: "SKU has no price in the selected currency." });
+        meta.marketplaceSkuId = skuId;
+        meta.listingId = sku.listingId;
+        meta.skuLabel = sku.label;
       } else {
         return res.status(400).json({ error: "Unsupported kind." });
       }

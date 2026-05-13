@@ -6,6 +6,7 @@ const express = require("express");
 const { getPool } = require("./db/pool");
 const coursesPg = require("./db/persistenceCourses");
 const communityPg = require("./db/persistenceCommunity");
+const mp = require("./db/persistenceMarketplace");
 
 function createDiscoverRouter({ optionalJwt }) {
   const router = express.Router();
@@ -25,10 +26,19 @@ function createDiscoverRouter({ optionalJwt }) {
         const trending = await communityPg.listTrendingPosts(Math.min(20, limit));
         posts = trending.map(({ reactionCount, trendingScore, ...rest }) => rest);
       }
+      let marketplace = [];
+      if (q && mp.usePostgres()) {
+        try {
+          marketplace = await mp.listListingsPublic({ q, limit: Math.min(15, limit) });
+        } catch {
+          marketplace = [];
+        }
+      }
       res.json({
         query: q || null,
         courses: courses.slice(0, limit),
         posts: posts.slice(0, limit),
+        marketplace: marketplace.slice(0, limit),
       });
     } catch (e) {
       next(e);

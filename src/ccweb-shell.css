@@ -398,3 +398,24 @@
     transform: none;
   }
 }
+
+/* Light chrome — `ThemeToggle` adds `ccweb-light` on <html> (cards stay glass-dark for contrast). */
+html.ccweb-light .ccweb-app-root {
+  color: #0f172a;
+  background:
+    radial-gradient(ellipse 90% 70% at 50% -20%, rgba(34, 211, 238, 0.14), transparent 50%),
+    linear-gradient(168deg, #f8fafc 0%, #e2e8f0 48%, #f1f5f9 100%);
+}
+html.ccweb-light .ccweb-app-pattern {
+  background-image: radial-gradient(rgba(15, 23, 42, 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+html.ccweb-light .ccweb-top-bar {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 250, 252, 0.86) 100%);
+  border-bottom-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
+}
+html.ccweb-light .ccweb-desktop-nav-inner {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(15, 23, 42, 0.08);
+}

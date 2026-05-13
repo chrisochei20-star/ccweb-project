@@ -4,6 +4,7 @@ import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { uploadProfileAvatar, uploadProfileBanner } from "../api/uploadsApi";
 import { assetsUrl, apiUrl } from "../config/env";
 import { ImageDropZone } from "../components/uploads/ImageDropZone";
+import { apiFetch } from "../lib/apiClient";
 import { getSessionToken, logoutApi, setSession } from "../session";
 
 export function ProfileShellPage() {
@@ -33,7 +34,7 @@ export function ProfileShellPage() {
     const token = getSessionToken();
     if (!token || !user?.id) return;
     let cancelled = false;
-    fetch(apiUrl("/api/v1/users/me"), { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch(apiUrl("/api/v1/users/me"), { headers: { Authorization: `Bearer ${token}` } }, { networkRetries: 1 })
       .then((r) => r.json())
       .then((d) => {
         if (!cancelled && d.betaSlug) setBetaSlug(d.betaSlug);
@@ -50,18 +51,22 @@ export function ProfileShellPage() {
     setMsg(null);
     const token = getSessionToken();
     try {
-      const res = await fetch(apiUrl("/api/v1/users/update"), {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+      const res = await apiFetch(
+        apiUrl("/api/v1/users/update"),
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            displayName: displayName.trim(),
+            pushEnabled,
+            betaSlug: betaSlug.trim() || undefined,
+          }),
         },
-        body: JSON.stringify({
-          displayName: displayName.trim(),
-          pushEnabled,
-          betaSlug: betaSlug.trim() || undefined,
-        }),
-      });
+        { networkRetries: 2 }
+      );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
       setUser(data.user);
@@ -148,12 +153,29 @@ export function ProfileShellPage() {
     : null;
 
   return (
-    <div className="mx-auto max-w-lg space-y-5 px-3 pb-24 pt-4 md:max-w-xl">
-      <header>
-        <p className="text-xs font-semibold uppercase tracking-widest text-ccweb-muted">Profile</p>
-        <h1 className="mt-1 text-2xl font-bold text-white">Account</h1>
-        <p className="mt-1 text-sm text-ccweb-muted">{user.email || "Wallet-only account"}</p>
-      </header>
+    <div className="mx-auto max-w-2xl space-y-5 px-3 pb-24 pt-2 md:max-w-3xl">
+      <section className="ccweb-stagger relative overflow-hidden rounded-3xl border border-white/10 shadow-[0_24px_80px_-28px_rgba(0,0,0,0.55)]">
+        <div
+          className="h-36 bg-cover bg-center md:h-44"
+          style={{
+            backgroundImage: user.bannerUrl
+              ? `url(${assetsUrl(user.bannerUrl)})`
+              : "linear-gradient(120deg, rgba(34,211,238,0.45), rgba(167,139,250,0.45))",
+          }}
+        />
+        <div className="relative flex flex-col gap-1 border-t border-white/10 bg-black/50 px-5 pb-5 pt-14 backdrop-blur-lg">
+          <div className="absolute -top-12 left-5 flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border-4 border-[#070b14] bg-gradient-to-br from-ccweb-cyan/35 to-ccweb-violet/30 text-lg font-bold text-white shadow-2xl ring-1 ring-white/15">
+            {user.avatarUrl ? (
+              <img src={assetsUrl(user.avatarUrl)} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <span>{(user.displayName || "?").slice(0, 2).toUpperCase()}</span>
+            )}
+          </div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-ccweb-muted">Public profile</p>
+          <h1 className="text-2xl font-bold tracking-tight text-white md:text-3xl">{user.displayName || "Member"}</h1>
+          <p className="text-sm text-ccweb-muted">{user.email || "Wallet-linked account"}</p>
+        </div>
+      </section>
 
       <section className="ccweb-glass rounded-2xl p-5">
         <h2 className="font-semibold text-white">Profile appearance</h2>

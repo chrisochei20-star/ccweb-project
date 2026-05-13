@@ -26,6 +26,7 @@ import { CourseDetailPage } from "./pages/CourseDetailPage";
 import { CourseLessonPage } from "./pages/CourseLessonPage";
 import { AiTutorPage } from "./pages/AiTutorPage";
 import { Skeleton } from "./components/ui/Skeleton";
+import { CcwebErrorBoundary } from "./components/CcwebErrorBoundary";
 import { NotificationCenterPage } from "./components/notifications/NotificationCenter";
 import { LearningAdminPage } from "./learning/LearningAdminPage";
 import { LearningSessionPage } from "./learning/LearningSessionPage";
@@ -67,8 +68,9 @@ function RouteFallback() {
 function App() {
   return (
     <BrowserRouter>
-      <Suspense fallback={<RouteFallback />}>
-        <Routes>
+      <CcwebErrorBoundary>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
         <Route element={<MobileLayout />}>
           <Route path="invite/:code" element={<BetaInvitePage />} />
           <Route path="u/:slug" element={<BetaUserSlugPage />} />
@@ -123,8 +125,9 @@ function App() {
           <Route path="welcome" element={<HomePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
-      </Routes>
-      </Suspense>
+          </Routes>
+        </Suspense>
+      </CcwebErrorBoundary>
     </BrowserRouter>
   );
 }

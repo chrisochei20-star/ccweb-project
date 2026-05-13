@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
+import { toast } from "../lib/toastBus";
 import { getSessionToken } from "../session";
 
 const cache = new Map();
@@ -16,7 +17,7 @@ function resolveFetchUrl(url) {
  * Uses apiUrl() so production split CDN + API deploy works; sends Bearer token when present.
  */
 export function useCachedFetch(url, opts = {}) {
-  const { ttlMs = 45_000, enabled = true } = opts;
+  const { ttlMs = 45_000, enabled = true, toastOnError = false } = opts;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(Boolean(enabled && url));
   const [error, setError] = useState(null);
@@ -52,12 +53,14 @@ export function useCachedFetch(url, opts = {}) {
       }
       return json;
     } catch (e) {
-      if (mounted.current) setError(e.message || "Error");
+      const msg = e.message || "Error";
+      if (mounted.current) setError(msg);
+      if (toastOnError && mounted.current) toast.error(msg);
       throw e;
     } finally {
       if (mounted.current) setLoading(false);
     }
-  }, [url, enabled, ttlMs]);
+  }, [url, enabled, ttlMs, toastOnError]);
 
   useEffect(() => {
     mounted.current = true;

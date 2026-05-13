@@ -15,6 +15,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchNotificationSummary, fetchNotifications, markNotificationsRead } from "../../api/notificationsApi";
 import { createChatSocket } from "../../lib/chatSocket";
+import { toast } from "../../lib/toastBus";
 import { Skeleton } from "../ui/Skeleton";
 
 function hrefForNotification(n) {
@@ -93,7 +94,9 @@ export function NotificationCenterPage() {
         setGrouped(data.grouped || []);
         setNextCursor(data.nextCursor || null);
       } catch (e) {
-        setErr(e.message || "Could not load notifications");
+        const m = e.message || "Could not load notifications";
+        setErr(m);
+        toast.error(m);
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -122,7 +125,9 @@ export function NotificationCenterPage() {
       await markNotificationsRead({ markAll: true });
       await load(null, false);
     } catch (e) {
-      setErr(e.message || "Could not mark read");
+      const m = e.message || "Could not mark read";
+      setErr(m);
+      toast.error(m);
     }
   }
 
@@ -130,8 +135,8 @@ export function NotificationCenterPage() {
     try {
       await markNotificationsRead({ ids: [id] });
       setItems((prev) => prev.map((x) => (x.id === id ? { ...x, read: true, readAt: new Date().toISOString() } : x)));
-    } catch {
-      /* ignore */
+    } catch (e) {
+      toast.error(e.message || "Could not update");
     }
   }
 

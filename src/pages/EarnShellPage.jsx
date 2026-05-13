@@ -2,20 +2,23 @@ import { Gift, Radio, Share2, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
-import { useCachedFetch } from "../hooks/useCachedFetch";
 import { GrowthLoopCard } from "../components/GrowthLoopCard";
 import { ShareActions } from "../components/ShareCard";
+import { Skeleton } from "../components/ui/Skeleton";
+import { useCachedFetch } from "../hooks/useCachedFetch";
 
 export function EarnShellPage() {
   const { user } = useOutletContext() || {};
-  const { data: analytics, loading, error, refresh } = useCachedFetch(
-    user ? "/api/v1/analytics/user" : null,
-    { enabled: Boolean(user), ttlMs: 60_000 }
-  );
+  const { data: analytics, loading, error, refresh } = useCachedFetch(user ? "/api/v1/analytics/user" : null, {
+    enabled: Boolean(user),
+    ttlMs: 60_000,
+    toastOnError: true,
+  });
 
   const { data: lb, loading: lbLoading } = useCachedFetch(user ? "/api/v1/growth/leaderboards?limit=15" : null, {
     enabled: Boolean(user),
     ttlMs: 120_000,
+    toastOnError: true,
   });
 
   const summary = useMemo(() => {
@@ -95,7 +98,17 @@ export function EarnShellPage() {
               Refresh
             </button>
           </div>
-          {loading && <p className="mt-3 text-sm text-ccweb-muted">Loading…</p>}
+          {loading && (
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="ccweb-glass-subtle rounded-xl p-4">
+                  <Skeleton className="h-6 w-6 rounded-lg" />
+                  <Skeleton className="mt-3 h-3 w-24 rounded-md" />
+                  <Skeleton className="mt-2 h-8 w-20 rounded-md" />
+                </div>
+              ))}
+            </div>
+          )}
           {error && <p className="mt-3 text-sm text-rose-300">{error}</p>}
           {!loading && analytics && !analytics.postgres && (
             <p className="mt-3 text-sm text-amber-200/90">

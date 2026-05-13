@@ -2347,7 +2347,7 @@ function sendJson(res, statusCode, payload, req) {
     setRawCorsHeaders(req, res, {
       methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS",
       headers:
-        "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With, CCWEB-API-Key, X-CCWEB-Admin",
+        "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With, CCWEB-API-Key, X-CCWEB-Admin, X-CCWEB-Admin-Label",
     });
   }
   res.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
@@ -4378,7 +4378,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "OPTIONS") {
       writeRawOptions(req, res, {
         methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-        headers: "Content-Type, Authorization, X-CCWEB-Admin, Cookie, Accept, Origin, X-Requested-With",
+        headers: "Content-Type, Authorization, X-CCWEB-Admin, X-CCWEB-Admin-Label, Cookie, Accept, Origin, X-Requested-With",
       });
       return;
     }

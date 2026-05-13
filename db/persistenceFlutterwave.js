@@ -3,9 +3,10 @@
  */
 
 const crypto = require("crypto");
-const { query } = require("./pool");
+const { query, getPool } = require("./pool");
 const learningPg = require("./persistenceLearning");
 const coursesPg = require("./persistenceCourses");
+const payoutCrypto = require("../services/payoutFieldCrypto");
 
 function usePostgres() {
   return Boolean((process.env.DATABASE_URL || "").trim());
@@ -131,35 +132,308 @@ function mapTxRow(r) {
   };
 }
 
-async function insertPayoutRequest(creatorUserId, amountMinor, currency, bankMeta = {}) {
-  if (!usePostgres()) return null;
+function parseJson(val, fallback) {
+  if (val && typeof val === "object") return val;
+  if (typeof val === "string") {
+    try {
+      return JSON.parse(val);
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
+async function payoutRiskFlags(creatorUserId, amountMinor, currency, wallet) {
+  const flags = [];
+  const cur = String(currency || "USD").toUpperCase();
+  const minUsd = Number(process.env.CCWEB_PAYOUT_MIN_USD_CENTS || 2000);
+  const minNgn = Number(process.env.CCWEB_PAYOUT_MIN_NGN_MINOR || 500000);
+  if (cur === "USD" && amountMinor < minUsd) flags.push("below_min_usd");
+  if (cur === "NGN" && amountMinor < minNgn) flags.push("below_min_ngn");
+  const maxUsd = Number(process.env.CCWEB_PAYOUT_MAX_USD_MINOR || 10_000_000);
+  const maxNgn = Number(process.env.CCWEB_PAYOUT_MAX_NGN_MINOR || 1_000_000_000);
+  if (cur === "USD" && amountMinor > maxUsd) flags.push("above_max_usd");
+  if (cur === "NGN" && amountMinor > maxNgn) flags.push("above_max_ngn");
+  const { rows: pc } = await query(
+    `SELECT COUNT(*)::int AS c FROM ccweb_payout_requests
+     WHERE creator_user_id = $1
+       AND status IN ('pending_review','approved','transfer_submitted')
+       AND created_at > NOW() - INTERVAL '24 hours'`,
+    [creatorUserId]
+  );
+  const maxP = Number(process.env.CCWEB_PAYOUT_MAX_ACTIVE_PER_24H || 3);
+  if (Number(pc[0]?.c || 0) >= maxP) flags.push("velocity_24h");
+  const balUsd = wallet?.balanceUsdCents ?? 0;
+  const balNgn = wallet?.balanceNgn ?? 0;
+  if (cur === "USD" && amountMinor > balUsd) flags.push("insufficient_wallet");
+  if (cur === "NGN" && amountMinor > balNgn) flags.push("insufficient_wallet");
+  return flags;
+}
+
+/**
+ * @returns {Promise<{ ok: true, id: string } | { ok: false, code: string, riskFlags?: string[] }>}
+ */
+async function createPayoutRequest(creatorUserId, amountMinor, currency, bank = {}) {
+  if (!usePostgres()) return { ok: false, code: "NO_DATABASE" };
+  if (!payoutCrypto.isConfigured()) return { ok: false, code: "encryption_unconfigured" };
+  const cur = String(currency || "USD").toUpperCase();
+  if (cur !== "USD" && cur !== "NGN") return { ok: false, code: "bad_currency" };
+  const minor = Math.round(Number(amountMinor));
+  if (!Number.isFinite(minor) || minor <= 0) return { ok: false, code: "bad_amount" };
+
+  const acct = String(bank.account_number || bank.accountNumber || "").replace(/\s/g, "");
+  const bankCode = String(bank.account_bank || bank.accountBank || "").trim();
+  const beneficiaryName = String(bank.beneficiary_name || bank.beneficiaryName || "").trim();
+  if (!acct || !bankCode || !beneficiaryName) return { ok: false, code: "bank_fields_required" };
+
   await ensureCcwebUser(creatorUserId);
+  const wallet = await getWallet(creatorUserId);
+  const riskFlags = await payoutRiskFlags(creatorUserId, minor, cur, wallet);
+  const blockers = riskFlags;
+  if (blockers.length) return { ok: false, code: "risk_check_failed", riskFlags };
+
+  const sensitive = {
+    account_number: acct,
+    account_bank: bankCode,
+    beneficiary_name: beneficiaryName,
+    bank_name: bank.bank_name ? String(bank.bank_name).slice(0, 120) : undefined,
+    routing_number: bank.routing_number ? String(bank.routing_number).slice(0, 32) : undefined,
+  };
+  const enc = payoutCrypto.encryptJson(sensitive);
+  if (!enc) return { ok: false, code: "encrypt_failed" };
+  const hint = payoutCrypto.bankHintFromPayload(sensitive);
+  const publicMeta = {
+    country: String(bank.country || (cur === "NGN" ? "NG" : "US")).slice(0, 8),
+    currency: cur,
+  };
+
   const id = newId("po");
   await query(
-    `INSERT INTO ccweb_payout_requests (id, creator_user_id, amount_minor, currency, status, bank_meta)
-     VALUES ($1,$2,$3,$4,'pending',$5::jsonb)`,
-    [id, creatorUserId, amountMinor, currency, JSON.stringify(bankMeta || {})]
+    `INSERT INTO ccweb_payout_requests (
+       id, creator_user_id, amount_minor, currency, status, bank_meta, risk_flags, encrypted_bank, bank_hint
+     ) VALUES ($1,$2,$3,$4,'pending_review',$5::jsonb,$6::jsonb,$7,$8)`,
+    [id, creatorUserId, minor, cur, JSON.stringify(publicMeta), JSON.stringify(riskFlags), enc, hint]
   );
-  return id;
+  return { ok: true, id, riskFlags };
+}
+
+/** @deprecated name — use createPayoutRequest */
+async function insertPayoutRequest(creatorUserId, amountMinor, currency, bankMeta = {}) {
+  const out = await createPayoutRequest(creatorUserId, amountMinor, currency, bankMeta);
+  if (out && out.ok) return out.id;
+  const err = new Error(out.code || "payout_rejected");
+  err.code = out.code;
+  err.riskFlags = out.riskFlags;
+  throw err;
+}
+
+function mapPayoutRowPublic(r) {
+  return {
+    id: r.id,
+    amountMinor: Number(r.amount_minor),
+    currency: r.currency,
+    status: r.status,
+    bankHint: r.bank_hint || null,
+    riskFlags: parseJson(r.risk_flags, []),
+    flwTransferId: r.flw_transfer_id,
+    transferRef: r.transfer_ref || null,
+    reviewedAt: r.reviewed_at || null,
+    rejectReason: r.reject_reason || null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
 }
 
 async function listPayoutRequests(creatorUserId, limit = 40) {
   if (!usePostgres() || !creatorUserId) return [];
   const { rows } = await query(
-    `SELECT id, amount_minor, currency, status, bank_meta, flw_transfer_id, created_at, updated_at
+    `SELECT id, amount_minor, currency, status, bank_hint, risk_flags, flw_transfer_id, transfer_ref,
+            reviewed_at, reject_reason, created_at, updated_at
      FROM ccweb_payout_requests WHERE creator_user_id = $1 ORDER BY created_at DESC LIMIT $2`,
     [creatorUserId, Math.min(100, Math.max(1, limit))]
   );
-  return rows.map((r) => ({
-    id: r.id,
-    amountMinor: Number(r.amount_minor),
-    currency: r.currency,
-    status: r.status,
-    bankMeta: typeof r.bank_meta === "object" ? r.bank_meta : {},
-    flwTransferId: r.flw_transfer_id,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
-  }));
+  return rows.map(mapPayoutRowPublic);
+}
+
+async function listPayoutRequestsAdmin({ status = null, limit = 60 } = {}) {
+  if (!usePostgres()) return [];
+  const lim = Math.min(200, Math.max(1, limit));
+  if (status) {
+    const { rows } = await query(
+      `SELECT id, creator_user_id, amount_minor, currency, status, bank_hint, risk_flags, flw_transfer_id, transfer_ref,
+              reviewed_at, reviewed_by, reject_reason, created_at, updated_at
+       FROM ccweb_payout_requests WHERE status = $1 ORDER BY created_at DESC LIMIT $2`,
+      [String(status), lim]
+    );
+    return rows.map((r) => ({ ...mapPayoutRowPublic(r), creatorUserId: r.creator_user_id, reviewedBy: r.reviewed_by }));
+  }
+  const { rows } = await query(
+    `SELECT id, creator_user_id, amount_minor, currency, status, bank_hint, risk_flags, flw_transfer_id, transfer_ref,
+            reviewed_at, reviewed_by, reject_reason, created_at, updated_at
+     FROM ccweb_payout_requests ORDER BY created_at DESC LIMIT $1`,
+    [lim]
+  );
+  return rows.map((r) => ({ ...mapPayoutRowPublic(r), creatorUserId: r.creator_user_id, reviewedBy: r.reviewed_by }));
+}
+
+async function getPayoutRequestById(id) {
+  if (!usePostgres() || !id) return null;
+  const { rows } = await query(`SELECT * FROM ccweb_payout_requests WHERE id = $1 LIMIT 1`, [id]);
+  return rows[0] || null;
+}
+
+async function getPayoutByTransferRef(ref) {
+  if (!usePostgres() || !ref) return null;
+  const { rows } = await query(`SELECT * FROM ccweb_payout_requests WHERE transfer_ref = $1 LIMIT 1`, [String(ref)]);
+  return rows[0] || null;
+}
+
+async function approvePayoutRequest(id, reviewedBy) {
+  const { rows } = await query(
+    `UPDATE ccweb_payout_requests SET status = 'approved', reviewed_at = NOW(), reviewed_by = $2, updated_at = NOW()
+     WHERE id = $1 AND status = 'pending_review' RETURNING id`,
+    [id, String(reviewedBy || "admin").slice(0, 120)]
+  );
+  return rows[0]?.id || null;
+}
+
+async function rejectPayoutRequest(id, reviewedBy, reason) {
+  const { rows } = await query(
+    `UPDATE ccweb_payout_requests SET status = 'rejected', reviewed_at = NOW(), reviewed_by = $2,
+        reject_reason = $3, updated_at = NOW()
+     WHERE id = $1 AND status = 'pending_review' RETURNING id`,
+    [id, String(reviewedBy || "admin").slice(0, 120), String(reason || "").slice(0, 2000)]
+  );
+  return rows[0]?.id || null;
+}
+
+async function markPayoutTransferSubmitted(id, { flwTransferId, transferRef, meta = {} }) {
+  await query(
+    `UPDATE ccweb_payout_requests SET status = 'transfer_submitted', flw_transfer_id = $2,
+        transfer_ref = COALESCE($3, transfer_ref),
+        transfer_meta = COALESCE(transfer_meta, '{}'::jsonb) || $4::jsonb, updated_at = NOW()
+     WHERE id = $1 AND status = 'approved'`,
+    [id, flwTransferId ? String(flwTransferId) : null, transferRef || null, JSON.stringify(meta)]
+  );
+}
+
+async function finalizePayoutPaidFromWebhook(payoutRowId) {
+  const pool = getPool();
+  if (!pool) return { ok: false, reason: "no_pool" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(`SELECT * FROM ccweb_payout_requests WHERE id = $1 FOR UPDATE`, [payoutRowId]);
+    const pr = rows[0];
+    if (!pr) {
+      await client.query("ROLLBACK");
+      return { ok: false, reason: "missing" };
+    }
+    if (pr.status === "paid") {
+      await client.query("COMMIT");
+      return { ok: true, reason: "already_paid" };
+    }
+    if (pr.status !== "transfer_submitted") {
+      await client.query("ROLLBACK");
+      return { ok: false, reason: "not_transfer_submitted" };
+    }
+    const uid = pr.creator_user_id;
+    const minor = Number(pr.amount_minor);
+    const cur = String(pr.currency).toUpperCase();
+    let debit;
+    if (cur === "USD") {
+      debit = await client.query(
+        `UPDATE ccweb_internal_wallets SET balance_usd_cents = balance_usd_cents - $2, updated_at = NOW()
+         WHERE user_id = $1 AND balance_usd_cents >= $2 RETURNING user_id`,
+        [uid, minor]
+      );
+    } else {
+      debit = await client.query(
+        `UPDATE ccweb_internal_wallets SET balance_ngn = balance_ngn - $2, updated_at = NOW()
+         WHERE user_id = $1 AND balance_ngn >= $2 RETURNING user_id`,
+        [uid, minor]
+      );
+    }
+    if (!debit.rows[0]) {
+      await client.query("ROLLBACK");
+      return { ok: false, reason: "debit_failed" };
+    }
+    await client.query(`UPDATE ccweb_payout_requests SET status = 'paid', updated_at = NOW() WHERE id = $1`, [payoutRowId]);
+    await client.query("COMMIT");
+    return { ok: true };
+  } catch (e) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      /* */
+    }
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+async function markPayoutTransferFailed(payoutRowId, reason) {
+  await query(
+    `UPDATE ccweb_payout_requests SET status = 'failed', reject_reason = COALESCE($2, reject_reason), updated_at = NOW()
+     WHERE id = $1 AND status = 'transfer_submitted'`,
+    [payoutRowId, reason ? String(reason).slice(0, 2000) : null]
+  );
+}
+
+/**
+ * Flutterwave transfer webhook / poll: move payout to paid and debit internal wallet once.
+ * @param {object} data webhook `data` for transfer events
+ */
+async function applyTransferNotification(data) {
+  if (!usePostgres() || !data) return { applied: false, reason: "bad_input" };
+  const ref = data.reference != null ? String(data.reference) : "";
+  const flwId = data.id != null ? String(data.id) : "";
+  let row = ref ? await getPayoutByTransferRef(ref) : null;
+  if (!row && flwId) {
+    const { rows } = await query(`SELECT * FROM ccweb_payout_requests WHERE flw_transfer_id = $1 LIMIT 1`, [flwId]);
+    row = rows[0] || null;
+  }
+  if (!row) return { applied: false, reason: "payout_not_found" };
+  const st = String(data.status || data.transfer_status || "").toLowerCase();
+  if (st === "successful" || st === "completed" || st === "success") {
+    const out = await finalizePayoutPaidFromWebhook(row.id);
+    return out.ok ? { applied: true, payoutId: row.id } : { applied: false, reason: out.reason };
+  }
+  if (st === "failed" || st === "failure" || st === "error") {
+    await markPayoutTransferFailed(row.id, data.complete_message || data.message || "transfer_failed");
+    return { applied: true, failed: true, payoutId: row.id };
+  }
+  return { applied: false, reason: "noop_status", status: st };
+}
+
+async function adminFlutterwaveRevenueSnapshot() {
+  if (!usePostgres()) return null;
+  const { rows: feeRows } = await query(
+    `SELECT COALESCE(SUM(amount_usd), 0)::float AS platform_fee_usd
+     FROM ccweb_metering_events WHERE kind = 'flutterwave_platform_fee'`,
+    []
+  );
+  const { rows: txRows } = await query(
+    `SELECT currency, COUNT(*)::int AS c,
+            COALESCE(SUM(amount_minor), 0)::bigint AS volume_minor
+     FROM ccweb_flutterwave_transactions WHERE status = 'completed' GROUP BY currency`,
+    []
+  );
+  const { rows: payoutRows } = await query(
+    `SELECT status, COUNT(*)::int AS c FROM ccweb_payout_requests GROUP BY status`,
+    []
+  );
+  return {
+    platformFeeUsdApprox: Number(feeRows[0]?.platform_fee_usd || 0),
+    completedChargesByCurrency: txRows.map((r) => ({
+      currency: r.currency,
+      count: Number(r.c),
+      volumeMinor: Number(r.volume_minor),
+    })),
+    payoutQueue: payoutRows.map((r) => ({ status: r.status, count: Number(r.c) })),
+  };
 }
 
 async function creatorEarningsSummary(creatorUserId) {
@@ -306,8 +580,19 @@ module.exports = {
   insertPendingTx,
   listUserTransactions,
   listCreatorIncoming,
+  createPayoutRequest,
   insertPayoutRequest,
   listPayoutRequests,
+  listPayoutRequestsAdmin,
+  getPayoutRequestById,
+  getPayoutByTransferRef,
+  approvePayoutRequest,
+  rejectPayoutRequest,
+  markPayoutTransferSubmitted,
+  finalizePayoutPaidFromWebhook,
+  markPayoutTransferFailed,
+  applyTransferNotification,
+  adminFlutterwaveRevenueSnapshot,
   creatorEarningsSummary,
   applySuccessfulCharge,
   platformFeeBps,

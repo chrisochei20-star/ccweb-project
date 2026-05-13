@@ -53,7 +53,7 @@ function mergeTags(userTags, title, content) {
 
 const POST_SELECT = `
   p.id, p.author_user_id, p.author_display_name, p.title, p.content, p.tags, p.created_at,
-  p.media_urls, p.repost_of_id,
+  p.media_urls, p.repost_of_id, p.moderation_status,
   COALESCE(c.cnt, 0)::int AS comment_count,
   rp.id AS orig_id,
   rp.title AS orig_title,
@@ -61,7 +61,8 @@ const POST_SELECT = `
   rp.author_display_name AS orig_author_display_name,
   rp.author_user_id AS orig_author_user_id,
   rp.created_at AS orig_created_at,
-  rp.media_urls AS orig_media_urls
+  rp.media_urls AS orig_media_urls,
+  rp.moderation_status AS orig_moderation_status
 `;
 
 const POST_FROM = `
@@ -69,6 +70,9 @@ const POST_FROM = `
   LEFT JOIN (SELECT post_id, COUNT(*)::int AS cnt FROM community_post_comments GROUP BY post_id) c ON c.post_id = p.id
   LEFT JOIN community_posts rp ON p.repost_of_id = rp.id
 `;
+
+const POST_PUBLIC_FILTER = `COALESCE(p.moderation_status, 'visible') = 'visible'
+  AND (rp.id IS NULL OR COALESCE(rp.moderation_status, 'visible') = 'visible')`;
 
 function shapePost(r, extra = {}) {
   const tagArr = parseJsonArray(r.tags, []);
@@ -104,14 +108,17 @@ function shapePost(r, extra = {}) {
 }
 
 async function listPosts() {
-  const { rows } = await query(`SELECT ${POST_SELECT} ${POST_FROM} ORDER BY p.created_at DESC`, []);
+  const { rows } = await query(
+    `SELECT ${POST_SELECT} ${POST_FROM} WHERE ${POST_PUBLIC_FILTER} ORDER BY p.created_at DESC`,
+    []
+  );
   return rows.map((r) => shapePost(r));
 }
 
 async function listPostsByAuthor(authorUserId, limit = 40) {
   const lim = Math.min(100, Math.max(1, limit));
   const { rows } = await query(
-    `SELECT ${POST_SELECT} ${POST_FROM} WHERE p.author_user_id = $1 ORDER BY p.created_at DESC LIMIT $2`,
+    `SELECT ${POST_SELECT} ${POST_FROM} WHERE p.author_user_id = $1 AND ${POST_PUBLIC_FILTER} ORDER BY p.created_at DESC LIMIT $2`,
     [authorUserId, lim]
   );
   return rows.map((r) => shapePost(r));
@@ -126,6 +133,7 @@ async function listTrendingPosts(limit = 30) {
      LEFT JOIN (
        SELECT target_id, COUNT(*)::int AS cnt FROM community_reactions WHERE target_type = 'post' GROUP BY target_id
      ) rr ON rr.target_id = p.id
+     WHERE ${POST_PUBLIC_FILTER}
      ORDER BY COALESCE(rr.cnt, 0) DESC, COALESCE(c.cnt, 0) DESC, p.created_at DESC
      LIMIT $1`,
     [lim]
@@ -146,7 +154,7 @@ async function searchPosts(q, limit = 20) {
   const like = `%${safe}%`;
   const { rows } = await query(
     `SELECT ${POST_SELECT} ${POST_FROM}
-     WHERE p.title ILIKE $1 OR p.content ILIKE $1
+     WHERE (p.title ILIKE $1 OR p.content ILIKE $1) AND ${POST_PUBLIC_FILTER}
      ORDER BY p.created_at DESC
      LIMIT $2`,
     [like, lim]
@@ -154,8 +162,9 @@ async function searchPosts(q, limit = 20) {
   return rows.map((r) => shapePost(r));
 }
 
-async function getPostRow(postId) {
-  const { rows } = await query(`SELECT ${POST_SELECT} ${POST_FROM} WHERE p.id = $1`, [postId]);
+async function getPostRow(postId, { includeHidden = false } = {}) {
+  const extra = includeHidden ? "" : ` AND (${POST_PUBLIC_FILTER})`;
+  const { rows } = await query(`SELECT ${POST_SELECT} ${POST_FROM} WHERE p.id = $1${extra}`, [postId]);
   return rows[0] || null;
 }
 
@@ -186,7 +195,7 @@ async function createPost(body) {
       repostOfId,
     ]
   );
-  const row = await getPostRow(id);
+  const row = await getPostRow(id, { includeHidden: true });
   return shapePost(row);
 }
 
@@ -194,7 +203,7 @@ async function getPostWithComments(postId) {
   const row = await getPostRow(postId);
   if (!row) return null;
   const { rows: cr } = await query(
-    "SELECT * FROM community_post_comments WHERE post_id = $1 ORDER BY created_at ASC",
+    "SELECT * FROM community_post_comments WHERE post_id = $1 AND COALESCE(moderation_status, 'visible') = 'visible' ORDER BY created_at ASC",
     [postId]
   );
   const comments = cr.map((c) => ({
@@ -210,7 +219,7 @@ async function getPostWithComments(postId) {
 
 async function listComments(postId) {
   const { rows } = await query(
-    "SELECT * FROM community_post_comments WHERE post_id = $1 ORDER BY created_at ASC",
+    "SELECT * FROM community_post_comments WHERE post_id = $1 AND COALESCE(moderation_status, 'visible') = 'visible' ORDER BY created_at ASC",
     [postId]
   );
   return rows.map((c) => ({
@@ -354,7 +363,7 @@ async function listBookmarks(userId, limit = 50) {
      JOIN community_posts p ON p.id = b.post_id
      LEFT JOIN (SELECT post_id, COUNT(*)::int AS cnt FROM community_post_comments GROUP BY post_id) c ON c.post_id = p.id
      LEFT JOIN community_posts rp ON p.repost_of_id = rp.id
-     WHERE b.user_id = $1
+     WHERE b.user_id = $1 AND ${POST_PUBLIC_FILTER}
      ORDER BY b.created_at DESC
      LIMIT $2`,
     [userId, lim]

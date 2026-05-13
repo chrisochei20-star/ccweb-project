@@ -63,6 +63,7 @@ module.exports = {
   isConfigured,
   publicKey,
   secretHash,
+  authHeaders,
   createHostedPaymentLink,
   verifyByTxRef,
   verifyWebhookSignature,

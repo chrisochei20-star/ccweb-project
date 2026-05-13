@@ -41,6 +41,9 @@ const {
 const { createCoursesRouter } = require("./coursesExpress");
 const { createFlutterwaveRouter } = require("./flutterwaveExpress");
 const { createDiscoverRouter } = require("./discoverExpress");
+const { createAdminOpsRouter } = require("./adminOpsExpress");
+const { createTrustRouter } = require("./trustExpress");
+const pushDevices = require("./db/persistencePushDevices");
 const persistenceAiAgents = require("./db/persistenceAiAgents");
 const { getPool } = require("./db/pool");
 
@@ -540,6 +543,20 @@ function createPlatformApp(deps) {
 
   const flutterwaveRouter = createFlutterwaveRouter({ authJwtMiddleware });
   v1.use("/payments/flutterwave", apiRateShort, flutterwaveRouter);
+
+  v1.use("/admin/ops", apiRateShort, createAdminOpsRouter());
+  v1.use("/trust", apiRateShort, createTrustRouter({ authJwtMiddleware }));
+
+  const devicesRouter = express.Router();
+  devicesRouter.post("/push-token", authJwtMiddleware, async (req, res, next) => {
+    try {
+      await pushDevices.upsertDeviceToken(req.ccwebUserId, req.body?.platform, req.body?.token);
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+  v1.use("/devices", apiRateShort, devicesRouter);
 
   const agentRuns = [];
   const catalogAgents = [
@@ -1156,6 +1173,13 @@ function createPlatformApp(deps) {
       });
       const pricing = await monetizationEngine.quotePayPerUse("scan");
       const betaTesting = await betaPg.betaAnalyticsSummary(Number(req.query.betaDays) || 30);
+      let flutterwaveOps = null;
+      try {
+        const flwPg = require("./db/persistenceFlutterwave");
+        if (flwPg.usePostgres()) flutterwaveOps = await flwPg.adminFlutterwaveRevenueSnapshot();
+      } catch {
+        flutterwaveOps = null;
+      }
       res.json({
         learning: summary,
         growthHub: growthOverview,
@@ -1167,6 +1191,7 @@ function createPlatformApp(deps) {
           tierDefaults: monetizationEngine.tierLimits("free"),
         },
         betaTesting,
+        flutterwaveOps,
       });
     } catch (e) {
       next(e);

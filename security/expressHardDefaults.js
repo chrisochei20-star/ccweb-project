@@ -64,7 +64,7 @@ function setRawCorsHeaders(req, res, opts = {}) {
   const methods = opts.methods || "GET, POST, PUT, PATCH, DELETE, OPTIONS";
   const headers =
     opts.headers ||
-    "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With, X-CCWEB-Admin, CCWEB-API-Key";
+    "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With, X-CCWEB-Admin, X-CCWEB-Admin-Label, CCWEB-API-Key";
   const maxAge = opts.maxAgeSec ?? 7200;
   const origin = String(req.headers.origin || "").trim();
   const parsed = parseAllowedOrigins();

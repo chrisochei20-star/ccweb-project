@@ -2,6 +2,8 @@ import { Heart, MessageCircle, Repeat2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import { createPostReaction, fetchPostReactions } from "../../api/communityApi";
+import { getSessionToken } from "../../session";
+import { toast } from "../../lib/toastBus";
 import { SkeletonText } from "../ui/Skeleton";
 
 function initials(name) {
@@ -28,6 +30,7 @@ export function SocialPostCard({
   const [likeBusy, setLikeBusy] = useState(false);
   const [repostBusy, setRepostBusy] = useState(false);
   const [localReactions, setLocalReactions] = useState(null);
+  const canInteract = Boolean(getSessionToken());
 
   const loadReactions = useCallback(async () => {
     try {
@@ -46,36 +49,32 @@ export function SocialPostCard({
         : null;
 
   async function handleLike() {
-    if (!user?.id) return;
+    if (!getSessionToken()) return;
     setLikeBusy(true);
     try {
       await createPostReaction({
-        authorUserId: user.id,
-        authorDisplayName: user.displayName,
         postId: post.id,
         reaction: "like",
       });
       await loadReactions();
-    } catch {
-      /* duplicate or network */
+    } catch (e) {
+      toast.error(e.message || "Could not like");
     } finally {
       setLikeBusy(false);
     }
   }
 
   async function handleRepost() {
-    if (!user?.id) return;
+    if (!getSessionToken()) return;
     setRepostBusy(true);
     try {
       await createPostReaction({
-        authorUserId: user.id,
-        authorDisplayName: user.displayName,
         postId: post.id,
         reaction: "repost",
       });
       await loadReactions();
-    } catch {
-      /* ignore */
+    } catch (e) {
+      toast.error(e.message || "Could not repost");
     } finally {
       setRepostBusy(false);
     }
@@ -101,7 +100,7 @@ export function SocialPostCard({
           <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-white/5 pt-3">
             <button
               type="button"
-              disabled={!user || likeBusy}
+              disabled={!canInteract || likeBusy}
               onClick={handleLike}
               className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-ccweb-muted transition hover:bg-rose-500/10 hover:text-rose-200 disabled:opacity-40"
             >
@@ -110,7 +109,7 @@ export function SocialPostCard({
             </button>
             <button
               type="button"
-              disabled={!user || repostBusy}
+              disabled={!canInteract || repostBusy}
               onClick={handleRepost}
               className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-ccweb-muted transition hover:bg-ccweb-green/10 hover:text-ccweb-green disabled:opacity-40"
             >
@@ -148,7 +147,7 @@ export function SocialPostCard({
                   ))}
                 </ul>
               )}
-              {user ? (
+              {canInteract ? (
                 <div className="mt-3 flex gap-2">
                   <input
                     className="ccweb-input flex-1 text-sm"

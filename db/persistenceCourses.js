@@ -198,7 +198,15 @@ async function markLessonComplete(userId, lessonId) {
     lessonId,
   ]);
   const pct = await recalcCourseProgress(userId, lesson.courseId);
-  return { lessonId, courseId: lesson.courseId, progressPct: pct };
+  const course = await getCourseById(lesson.courseId);
+  return {
+    lessonId,
+    courseId: lesson.courseId,
+    courseSlug: course?.slug || null,
+    courseTitle: course?.title || null,
+    lessonTitle: lesson.title,
+    progressPct: pct,
+  };
 }
 
 async function getEnrollment(userId, courseId) {

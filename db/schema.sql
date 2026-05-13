@@ -503,6 +503,12 @@ CREATE TABLE IF NOT EXISTS ccweb_notifications (
 CREATE INDEX IF NOT EXISTS ccweb_notifications_user_created ON ccweb_notifications (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS ccweb_notifications_user_unread ON ccweb_notifications (user_id) WHERE read_at IS NULL;
 
+-- Richer in-app notifications (actor, grouping); safe on legacy DBs.
+ALTER TABLE ccweb_notifications ADD COLUMN IF NOT EXISTS actor_user_id TEXT REFERENCES ccweb_users(id) ON DELETE SET NULL;
+ALTER TABLE ccweb_notifications ADD COLUMN IF NOT EXISTS group_key TEXT;
+CREATE INDEX IF NOT EXISTS ccweb_notifications_user_group ON ccweb_notifications (user_id, group_key, created_at DESC)
+  WHERE group_key IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS ccweb_courses (
   id TEXT PRIMARY KEY,
   slug TEXT NOT NULL UNIQUE,

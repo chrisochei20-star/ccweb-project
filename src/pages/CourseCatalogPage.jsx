@@ -194,7 +194,18 @@ export function CourseCatalogPage({ compact = false }) {
       </ul>
 
       {!courses.length && !loading && (
-        <p className="text-center text-sm text-ccweb-muted">No courses match your filters.</p>
+        <div
+          className={`rounded-2xl border border-white/10 bg-black/20 text-center text-sm text-ccweb-muted ${
+            compact ? "px-4 py-8" : "p-10"
+          }`}
+        >
+          <GraduationCap className="mx-auto h-9 w-9 text-ccweb-cyan/50" aria-hidden />
+          <p className="mt-3 font-medium text-white/90">No courses match your filters</p>
+          <p className="mt-2 text-xs leading-relaxed text-ccweb-muted">
+            Clear search or pick another category. With <code className="text-ccweb-cyan">DATABASE_URL</code> the catalog
+            syncs from PostgreSQL.
+          </p>
+        </div>
       )}
     </section>
   );

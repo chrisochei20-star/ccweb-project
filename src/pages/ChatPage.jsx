@@ -5,6 +5,7 @@ import { apiUrl, assetsUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
 import { compressImageFile } from "../lib/imageCompress";
 import { createChatSocket } from "../lib/chatSocket";
+import { toast } from "../lib/toastBus";
 import { getSessionToken } from "../session";
 
 const QUICK_EMOJIS = ["😀", "🙂", "😂", "🔥", "❤️", "👍", "🎉", "⚡", "📈", "🚀", "💎", "✨", "🙏", "👀", "💬"];
@@ -209,19 +210,26 @@ export function ChatPage() {
     if (typingTimer.current) clearTimeout(typingTimer.current);
     setDraft("");
     try {
-      const res = await fetch(apiUrl(`/api/v1/chat/${encodeURIComponent(activeId)}/messages`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        credentials: "include",
-        body: JSON.stringify({ body: text }),
-      });
+      const res = await apiFetch(
+        apiUrl(`/api/v1/chat/${encodeURIComponent(activeId)}/messages`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          credentials: "include",
+          body: JSON.stringify({ body: text }),
+        },
+        { networkRetries: 1 }
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Send failed.");
       if (data.message) {
         setMessages((prev) => (prev.some((m) => m.id === data.message.id) ? prev : [...prev, data.message]));
       }
     } catch (e) {
-      setErr(e.message);
+      setDraft(text);
+      const m = e.message || "Send failed.";
+      setErr(m);
+      toast.error(m);
     }
   }
 
@@ -236,17 +244,23 @@ export function ChatPage() {
     const fd = new FormData();
     fd.append("file", prepared);
     try {
-      const res = await fetch(apiUrl(`/api/v1/chat/${encodeURIComponent(activeId)}/upload`), {
-        method: "POST",
-        headers: authHeaders(),
-        credentials: "include",
-        body: fd,
-      });
+      const res = await apiFetch(
+        apiUrl(`/api/v1/chat/${encodeURIComponent(activeId)}/upload`),
+        {
+          method: "POST",
+          headers: authHeaders(),
+          credentials: "include",
+          body: fd,
+        },
+        { networkRetries: 1 }
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Upload failed.");
       if (data.message) setMessages((prev) => [...prev, data.message]);
     } catch (e) {
-      setErr(e.message);
+      const m = e.message || "Upload failed.";
+      setErr(m);
+      toast.error(m);
     }
   }
 
@@ -255,19 +269,25 @@ export function ChatPage() {
     const id = newDmId.trim();
     if (!id) return;
     try {
-      const res = await fetch(apiUrl("/api/v1/chat/direct"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        credentials: "include",
-        body: JSON.stringify({ otherUserId: id }),
-      });
+      const res = await apiFetch(
+        apiUrl("/api/v1/chat/direct"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          credentials: "include",
+          body: JSON.stringify({ otherUserId: id }),
+        },
+        { networkRetries: 1 }
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Could not start chat.");
       setNewDmId("");
       setActiveId(data.chatId);
       await loadConversations();
     } catch (e) {
-      setErr(e.message);
+      const m = e.message || "Could not start chat.";
+      setErr(m);
+      toast.error(m);
     }
   }
 

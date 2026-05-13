@@ -55,6 +55,10 @@ CREATE TABLE IF NOT EXISTS ccweb_user_profiles (
   push_enabled BOOLEAN NOT NULL DEFAULT TRUE,
   avatar_url TEXT,
   banner_url TEXT,
+  bio TEXT NOT NULL DEFAULT '',
+  headline TEXT NOT NULL DEFAULT '',
+  website_url TEXT NOT NULL DEFAULT '',
+  twitter_handle TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -189,8 +193,22 @@ CREATE TABLE IF NOT EXISTS community_posts (
   title TEXT NOT NULL,
   content TEXT NOT NULL,
   tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+  media_urls JSONB NOT NULL DEFAULT '[]'::jsonb,
+  repost_of_id TEXT REFERENCES community_posts(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS community_posts_repost_of ON community_posts (repost_of_id) WHERE repost_of_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS community_posts_author_created ON community_posts (author_user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS community_post_bookmarks (
+  user_id TEXT NOT NULL,
+  post_id TEXT NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, post_id)
+);
+
+CREATE INDEX IF NOT EXISTS community_post_bookmarks_user_created ON community_post_bookmarks (user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS community_post_comments (
   id TEXT PRIMARY KEY,

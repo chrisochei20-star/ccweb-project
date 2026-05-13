@@ -95,6 +95,8 @@ function hydrateMessageRow(row, authorDisplayName) {
     }
   }
   if (!meta || typeof meta !== "object") meta = {};
+  const attType = meta.type === "image" && (meta.url || meta.imageUrl) ? "image" : meta.type === "video" ? "video" : meta.type === "file" ? "file" : null;
+  const mediaUrl = meta.url || meta.imageUrl || null;
   return {
     id: row.id,
     chatId: row.chat_id,
@@ -103,8 +105,12 @@ function hydrateMessageRow(row, authorDisplayName) {
     body: row.body,
     metadata: meta,
     createdAt: row.created_at,
-    isImage: meta.type === "image" && Boolean(meta.url || meta.imageUrl),
-    imageUrl: meta.url || meta.imageUrl || null,
+    isImage: attType === "image",
+    imageUrl: attType === "image" ? mediaUrl : null,
+    attachmentType: attType,
+    attachmentUrl: mediaUrl,
+    attachmentName: meta.name || null,
+    attachmentMime: meta.mime || null,
   };
 }
 
@@ -209,6 +215,8 @@ async function listConversations(userId) {
       }
     }
     if (meta?.type === "image") lastPreview = "📷 Image";
+    else if (meta?.type === "video") lastPreview = "🎬 Video";
+    else if (meta?.type === "file") lastPreview = `📎 ${meta.name || "File"}`;
 
     out.push({
       chatId: r.chat_id,

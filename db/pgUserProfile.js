@@ -18,7 +18,8 @@ function parseRoles(raw) {
 
 async function findByUserId(userId) {
   const { rows } = await query(
-    `SELECT user_id, display_name, roles, is_organic, push_enabled, avatar_url, banner_url, created_at, updated_at
+    `SELECT user_id, display_name, roles, is_organic, push_enabled, avatar_url, banner_url,
+            bio, headline, website_url, twitter_handle, created_at, updated_at
      FROM ccweb_user_profiles WHERE user_id = $1`,
     [userId]
   );
@@ -66,4 +67,29 @@ async function patchProfileMedia(userId, patch = {}) {
   );
 }
 
-module.exports = { findByUserId, upsert, parseRoles, patchProfileMedia };
+async function patchSocialFields(userId, patch = {}) {
+  if (!userId || !patch || typeof patch !== "object") return;
+  const sets = [];
+  const params = [];
+  let i = 0;
+  const add = (col, val) => {
+    if (val === undefined) return;
+    i += 1;
+    params.push(val);
+    sets.push(`${col} = $${i}`);
+  };
+  const trunc = (s, n) => (s == null ? undefined : String(s).trim().slice(0, n));
+  add("bio", trunc(patch.bio, 2000));
+  add("headline", trunc(patch.headline, 200));
+  add("website_url", trunc(patch.websiteUrl, 500));
+  add("twitter_handle", trunc(patch.twitterHandle, 80).replace(/^@+/, ""));
+  if (!sets.length) return;
+  i += 1;
+  params.push(userId);
+  await query(
+    `UPDATE ccweb_user_profiles SET ${sets.join(", ")}, updated_at = NOW() WHERE user_id = $${i}`,
+    params
+  );
+}
+
+module.exports = { findByUserId, upsert, parseRoles, patchProfileMedia, patchSocialFields };

@@ -1,14 +1,16 @@
-import { Hash, MessagesSquare, Newspaper, Radio, Sparkles, TrendingUp } from "lucide-react";
+import { Hash, ImagePlus, MessagesSquare, Newspaper, Radio, Sparkles, TrendingUp, Video, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import {
   createCommunityChat,
   createCommunityPost,
   createPostComment,
+  fetchCommunityBookmarks,
   fetchCommunityChats,
   fetchCommunityPosts,
   fetchPostComments,
 } from "../api/communityApi";
+import { uploadCommunityImage, uploadCommunityVideo } from "../api/uploadsApi";
 import { SocialPostCard } from "../components/community/SocialPostCard";
 import { Skeleton } from "../components/ui/Skeleton";
 import { toast } from "../lib/toastBus";
@@ -35,6 +37,27 @@ export function CommunityShellPage() {
   const [err, setErr] = useState(null);
   const [visibleCount, setVisibleCount] = useState(12);
   const sentinelRef = useRef(null);
+  const [mediaUrls, setMediaUrls] = useState([]);
+  const [repostOfId, setRepostOfId] = useState(null);
+  const [bookmarkIds, setBookmarkIds] = useState(() => new Set());
+
+  const refreshBookmarks = useCallback(async () => {
+    const t = getSessionToken();
+    if (!t) {
+      setBookmarkIds(new Set());
+      return;
+    }
+    try {
+      const list = await fetchCommunityBookmarks();
+      setBookmarkIds(new Set((list || []).map((p) => p.id)));
+    } catch {
+      setBookmarkIds(new Set());
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshBookmarks();
+  }, [refreshBookmarks]);
 
   const loadPosts = useCallback(async () => {
     setLoadingPosts(true);
@@ -43,6 +66,7 @@ export function CommunityShellPage() {
       const list = await fetchCommunityPosts(feedMode);
       setPosts(list);
       setVisibleCount(12);
+      void refreshBookmarks();
     } catch (e) {
       const m = e.message || "Failed to load";
       setErr(m);
@@ -50,7 +74,7 @@ export function CommunityShellPage() {
     } finally {
       setLoadingPosts(false);
     }
-  }, [feedMode]);
+  }, [feedMode, refreshBookmarks]);
 
   const loadChats = useCallback(async () => {
     setLoadingChats(true);
@@ -120,16 +144,20 @@ export function CommunityShellPage() {
       toast.error("Sign in to post.");
       return;
     }
-    if (!postTitle.trim() || !postBody.trim()) return;
+    if (!repostOfId && (!postTitle.trim() || !postBody.trim())) return;
     setErr(null);
     try {
       await createCommunityPost({
-        title: postTitle.trim(),
-        content: postBody.trim(),
+        title: postTitle.trim() || "Post",
+        content: postBody.trim() || " ",
         tags: [],
+        mediaUrls,
+        repostOfId: repostOfId || undefined,
       });
       setPostTitle("");
       setPostBody("");
+      setMediaUrls([]);
+      setRepostOfId(null);
       await loadPosts();
       toast.success("Posted to the feed.");
     } catch (e) {
@@ -137,6 +165,39 @@ export function CommunityShellPage() {
       setErr(m);
       toast.error(m);
     }
+  }
+
+  async function handleMediaPick(e, kind) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    const token = getSessionToken();
+    if (!token) {
+      toast.error("Sign in to upload.");
+      return;
+    }
+    try {
+      const data = kind === "video" ? await uploadCommunityVideo(f, token) : await uploadCommunityImage(f, token);
+      if (data.url) setMediaUrls((prev) => [...prev, data.url].slice(0, 10));
+    } catch (err) {
+      toast.error(err.message || "Upload failed");
+    }
+  }
+
+  function onQuoteRepost(post) {
+    setRepostOfId(post.id);
+    setPostTitle("Repost");
+    setPostBody((post.content || "").slice(0, 800));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function onBookmarkChange(postId, next) {
+    setBookmarkIds((prev) => {
+      const n = new Set(prev);
+      if (next) n.add(postId);
+      else n.delete(postId);
+      return n;
+    });
   }
 
   function toggleThread(postId) {
@@ -244,6 +305,14 @@ export function CommunityShellPage() {
                 <Sparkles className="h-4 w-4 text-ccweb-cyan" />
                 Compose
               </div>
+              {repostOfId && (
+                <div className="flex items-center justify-between rounded-xl border border-ccweb-cyan/30 bg-ccweb-cyan/10 px-3 py-2 text-xs text-ccweb-cyan">
+                  <span>Quoting a post — this will link as a repost.</span>
+                  <button type="button" className="rounded-lg p-1 hover:bg-white/10" onClick={() => setRepostOfId(null)} aria-label="Clear repost">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
               <input className="ccweb-input" placeholder="Headline" value={postTitle} onChange={(e) => setPostTitle(e.target.value)} />
               <textarea
                 className="ccweb-input min-h-[110px] resize-y"
@@ -251,6 +320,34 @@ export function CommunityShellPage() {
                 value={postBody}
                 onChange={(e) => setPostBody(e.target.value)}
               />
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="ccweb-outline-btn inline-flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs">
+                  <ImagePlus className="h-4 w-4" />
+                  Photo
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => handleMediaPick(e, "image")} />
+                </label>
+                <label className="ccweb-outline-btn inline-flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs">
+                  <Video className="h-4 w-4" />
+                  Video
+                  <input type="file" accept="video/mp4,video/webm,video/quicktime" className="hidden" onChange={(e) => handleMediaPick(e, "video")} />
+                </label>
+              </div>
+              {mediaUrls.length > 0 && (
+                <ul className="flex flex-wrap gap-2 text-[11px] text-ccweb-muted">
+                  {mediaUrls.map((u) => (
+                    <li key={u} className="flex max-w-full items-center gap-1 rounded-lg bg-black/30 px-2 py-1">
+                      <span className="truncate">{u.slice(-32)}</span>
+                      <button
+                        type="button"
+                        className="text-rose-300 hover:underline"
+                        onClick={() => setMediaUrls((prev) => prev.filter((x) => x !== u))}
+                      >
+                        remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <button type="submit" className="ccweb-gradient-btn text-sm">
                 Post to feed
               </button>
@@ -325,6 +422,9 @@ export function CommunityShellPage() {
                     onToggleThread={toggleThread}
                     onCommentDraft={(id, v) => setCommentDraft((prev) => ({ ...prev, [id]: v }))}
                     onSubmitComment={submitComment}
+                    bookmarked={bookmarkIds.has(p.id)}
+                    onBookmarkChange={onBookmarkChange}
+                    onQuoteRepost={onQuoteRepost}
                   />
                 </li>
               ))}

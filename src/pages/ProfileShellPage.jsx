@@ -22,12 +22,20 @@ export function ProfileShellPage() {
   const [backupCodes, setBackupCodes] = useState(null);
 
   const [betaSlug, setBetaSlug] = useState("");
+  const [bio, setBio] = useState("");
+  const [headline, setHeadline] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [twitterHandle, setTwitterHandle] = useState("");
   const [mediaBusy, setMediaBusy] = useState({ avatar: false, banner: false });
 
   useEffect(() => {
     if (user) {
       setDisplayName(user.displayName || "");
       setPushEnabled(user.pushEnabled !== false);
+      setBio(user.bio || "");
+      setHeadline(user.headline || "");
+      setWebsiteUrl(user.websiteUrl || "");
+      setTwitterHandle(user.twitterHandle || "");
     }
   }, [user]);
 
@@ -64,6 +72,10 @@ export function ProfileShellPage() {
             displayName: displayName.trim(),
             pushEnabled,
             betaSlug: betaSlug.trim() || undefined,
+            bio: bio.trim(),
+            headline: headline.trim(),
+            websiteUrl: websiteUrl.trim(),
+            twitterHandle: twitterHandle.trim(),
           }),
         },
         { networkRetries: 2 }
@@ -189,6 +201,9 @@ export function ProfileShellPage() {
           <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-ccweb-muted">Public profile</p>
           <h1 className="text-2xl font-bold tracking-tight text-white md:text-3xl">{user.displayName || "Member"}</h1>
           <p className="text-sm text-ccweb-muted">{user.email || "Wallet-linked account"}</p>
+          <Link to={`/p/${encodeURIComponent(user.id)}`} className="mt-2 inline-block text-xs font-medium text-ccweb-cyan hover:underline">
+            View public creator page →
+          </Link>
         </div>
       </section>
 
@@ -259,6 +274,34 @@ export function ProfileShellPage() {
           <KeyRound className="h-5 w-5 text-ccweb-cyan" />
           Identity
         </h2>
+        <label className="mt-4 block text-xs font-medium text-ccweb-muted">Headline</label>
+        <input
+          className="ccweb-input mt-1"
+          placeholder="e.g. DeFi builder · Solidity · NYC"
+          value={headline}
+          onChange={(e) => setHeadline(e.target.value)}
+        />
+        <label className="mt-4 block text-xs font-medium text-ccweb-muted">Bio</label>
+        <textarea
+          className="ccweb-input mt-1 min-h-[100px] resize-y"
+          placeholder="Tell the network what you ship and care about."
+          value={bio}
+          onChange={(e) => setBio(e.target.value)}
+        />
+        <label className="mt-4 block text-xs font-medium text-ccweb-muted">Website</label>
+        <input
+          className="ccweb-input mt-1"
+          placeholder="https://…"
+          value={websiteUrl}
+          onChange={(e) => setWebsiteUrl(e.target.value)}
+        />
+        <label className="mt-4 block text-xs font-medium text-ccweb-muted">X (Twitter) handle</label>
+        <input
+          className="ccweb-input mt-1 font-mono text-sm"
+          placeholder="username (no @)"
+          value={twitterHandle}
+          onChange={(e) => setTwitterHandle(e.target.value)}
+        />
         <label className="mt-4 block text-xs font-medium text-ccweb-muted">Display name</label>
         <input className="ccweb-input mt-1" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
         <label className="mt-4 block text-xs font-medium text-ccweb-muted">Public beta URL slug</label>

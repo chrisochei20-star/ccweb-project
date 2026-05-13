@@ -233,16 +233,18 @@ export function ChatPage() {
     }
   }
 
-  async function uploadImage(file) {
+  async function uploadAttachment(file) {
     if (!activeId || !file) return;
-    let prepared = file;
-    try {
-      prepared = await compressImageFile(file, { maxWidth: 2048, maxHeight: 2048 });
-    } catch {
-      prepared = file;
+    let uploadBlob = file;
+    if (file.type.startsWith("image/")) {
+      try {
+        uploadBlob = await compressImageFile(file, { maxWidth: 2048, maxHeight: 2048 });
+      } catch {
+        uploadBlob = file;
+      }
     }
     const fd = new FormData();
-    fd.append("file", prepared);
+    fd.append("file", uploadBlob);
     try {
       const res = await apiFetch(
         apiUrl(`/api/v1/chat/${encodeURIComponent(activeId)}/upload`),
@@ -429,7 +431,8 @@ export function ChatPage() {
             <div className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
               {messages.map((m) => {
                 const mine = m.authorUserId === user.id;
-                const img = m.isImage && (m.imageUrl || m.metadata?.url);
+                const att = m.attachmentType || (m.isImage ? "image" : null);
+                const url = m.attachmentUrl || m.imageUrl || m.metadata?.url;
                 return (
                   <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                     <div
@@ -445,13 +448,24 @@ export function ChatPage() {
                           {m.authorDisplayName}
                         </p>
                       )}
-                      {img ? (
-                        <a href={assetsUrl(img)} target="_blank" rel="noreferrer">
+                      {att === "image" && url ? (
+                        <a href={assetsUrl(url)} target="_blank" rel="noreferrer">
                           <img
-                            src={assetsUrl(img)}
+                            src={assetsUrl(url)}
                             alt=""
                             className="max-h-56 max-w-full rounded-lg object-cover"
                           />
+                        </a>
+                      ) : att === "video" && url ? (
+                        <video src={assetsUrl(url)} controls className="max-h-56 max-w-full rounded-lg bg-black/40" />
+                      ) : att === "file" && url ? (
+                        <a
+                          href={assetsUrl(url)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`font-medium underline ${mine ? "text-white" : "text-ccweb-cyan"}`}
+                        >
+                          {m.attachmentName || m.metadata?.name || "Download attachment"}
                         </a>
                       ) : (
                         <p className="whitespace-pre-wrap break-words">{m.body}</p>
@@ -490,12 +504,12 @@ export function ChatPage() {
                   <ImagePlus className="h-5 w-5" />
                   <input
                     type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,application/pdf"
                     className="hidden"
                     onChange={(e) => {
                       const f = e.target.files?.[0];
                       e.target.value = "";
-                      if (f) uploadImage(f);
+                      if (f) uploadAttachment(f);
                     }}
                   />
                 </label>

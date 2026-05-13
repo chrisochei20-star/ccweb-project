@@ -5,9 +5,9 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const { isCloudinaryConfigured, uploadBuffer } = require("./cloudinaryUpload");
+const { isCloudinaryConfigured, uploadBuffer, uploadVideoBuffer } = require("./cloudinaryUpload");
 
-/** @typedef {'avatar'|'banner'|'chat'|'course_thumb'} UploadKind */
+/** @typedef {'avatar'|'banner'|'chat'|'course_thumb'|'community'} UploadKind */
 
 function transformationForKind(kind) {
   switch (kind) {
@@ -17,6 +17,8 @@ function transformationForKind(kind) {
       return [{ width: 1600, height: 480, crop: "fill", gravity: "auto", quality: "auto", fetch_format: "auto" }];
     case "course_thumb":
       return [{ width: 1200, height: 675, crop: "limit", quality: "auto", fetch_format: "auto" }];
+    case "community":
+      return [{ width: 1600, height: 1600, crop: "limit", quality: "auto", fetch_format: "auto" }];
     case "chat":
     default:
       return [{ width: 1600, height: 1600, crop: "limit", quality: "auto", fetch_format: "auto" }];
@@ -34,6 +36,8 @@ function folderForKind(kind, userId) {
       return `ccweb/chat/${uid}`;
     case "course_thumb":
       return "ccweb/courses/thumbnails";
+    case "community":
+      return `ccweb/community/${uid}`;
     default:
       return `ccweb/misc/${uid}`;
   }
@@ -50,6 +54,8 @@ function diskDirForKind(kind, userId) {
       return path.join(__dirname, "..", "public", "uploads", "chat", uid);
     case "course_thumb":
       return path.join(__dirname, "..", "public", "uploads", "courses");
+    case "community":
+      return path.join(__dirname, "..", "public", "uploads", "community", uid);
     default:
       return path.join(__dirname, "..", "public", "uploads", "misc", uid);
   }
@@ -60,6 +66,7 @@ function extForMime(mimetype) {
   if (m.includes("png")) return ".png";
   if (m.includes("webp")) return ".webp";
   if (m.includes("gif")) return ".gif";
+  if (m.includes("pdf")) return ".pdf";
   return ".jpg";
 }
 
@@ -91,4 +98,36 @@ async function saveUploadedImage(buffer, { mimetype, originalName, userId, kind 
   return { url: `/${rel}`, storage: "local" };
 }
 
-module.exports = { saveUploadedImage, folderForKind, transformationForKind };
+/**
+ * Chat attachment: image (local/Cloudinary), video (Cloudinary only), or PDF (local disk).
+ * @returns {Promise<{ url: string, storage: 'cloudinary'|'local', attachmentType: 'image'|'video'|'file' }>}
+ */
+async function saveChatAttachment(buffer, { mimetype, originalName, userId }) {
+  const m = (mimetype || "").toLowerCase();
+  if (m.startsWith("image/")) {
+    const r = await saveUploadedImage(buffer, { mimetype, originalName, userId, kind: "chat" });
+    return { ...r, attachmentType: "image" };
+  }
+  if (m.startsWith("video/")) {
+    if (!isCloudinaryConfigured()) {
+      throw new Error("Video attachments require Cloudinary (set CLOUDINARY_URL or CLOUDINARY_*).");
+    }
+    const folder = folderForKind("chat", userId);
+    const hint = path.basename(originalName || "clip").replace(/[^\w.-]/g, "") || "clip";
+    const out = await uploadVideoBuffer(buffer, { folder, filenameHint: hint });
+    return { url: out.secure_url, storage: "cloudinary", attachmentType: "video" };
+  }
+  if (m === "application/pdf") {
+    const uid = String(userId || "misc").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
+    const dir = path.join(__dirname, "..", "public", "uploads", "chat-files", uid);
+    fs.mkdirSync(dir, { recursive: true });
+    const name = `doc-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.pdf`;
+    const full = path.join(dir, name);
+    fs.writeFileSync(full, buffer);
+    const rel = path.relative(path.join(__dirname, "..", "public"), full).split(path.sep).join("/");
+    return { url: `/${rel}`, storage: "local", attachmentType: "file" };
+  }
+  throw new Error("Unsupported attachment type (use image, MP4/WebM video with Cloudinary, or PDF).");
+}
+
+module.exports = { saveUploadedImage, saveChatAttachment, folderForKind, transformationForKind };

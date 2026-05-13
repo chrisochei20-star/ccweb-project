@@ -83,6 +83,50 @@ function createUploadsRouter(deps) {
     }
   });
 
+  router.post("/community/image", authJwtMiddleware, upload.single("file"), async (req, res, next) => {
+    try {
+      if (!req.file?.buffer) return res.status(400).json({ error: "Image file required (field name: file)." });
+      const v = validateImageBuffer(req.file.buffer);
+      if (!v.ok) return res.status(400).json({ error: v.error });
+      const saved = await saveUploadedImage(req.file.buffer, {
+        mimetype: req.file.mimetype,
+        originalName: req.file.originalname,
+        userId: req.ccwebUserId,
+        kind: "community",
+      });
+      res.json({ ok: true, url: saved.url, storage: saved.storage });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  const videoMulter = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: Math.min(MAX_BYTES * 6, 70 * 1024 * 1024) },
+    fileFilter(req, file, cb) {
+      cb(null, /^video\/(mp4|webm|quicktime)$/i.test(file.mimetype));
+    },
+  });
+
+  router.post("/community/video", authJwtMiddleware, videoMulter.single("file"), async (req, res, next) => {
+    try {
+      const { isCloudinaryConfigured, uploadVideoBuffer } = require("./services/cloudinaryUpload");
+      if (!isCloudinaryConfigured()) {
+        return res.status(503).json({ error: "Cloudinary is required for community video uploads.", code: "NO_CLOUDINARY" });
+      }
+      if (!req.file?.buffer) return res.status(400).json({ error: "Video file required (field name: file)." });
+      const uid = String(req.ccwebUserId || "anon").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
+      const folder = `ccweb/community/${uid}/video`;
+      const out = await uploadVideoBuffer(req.file.buffer, {
+        folder,
+        filenameHint: (req.file.originalname || "clip").toString().slice(0, 80),
+      });
+      res.json({ ok: true, url: out.secure_url, storage: "cloudinary" });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   return router;
 }
 

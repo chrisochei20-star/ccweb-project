@@ -56,8 +56,34 @@ async function uploadBuffer(buffer, { folder, filenameHint = "img", transformati
   });
 }
 
+/**
+ * @returns {Promise<{ secure_url: string, public_id: string }>}
+ */
+async function uploadVideoBuffer(buffer, { folder, filenameHint = "clip" } = {}) {
+  configureOnce();
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        resource_type: "video",
+        use_filename: true,
+        unique_filename: true,
+        filename_override: String(filenameHint || "clip").slice(0, 80),
+        overwrite: false,
+      },
+      (err, result) => {
+        if (err) return reject(err);
+        if (!result?.secure_url) return reject(new Error("Cloudinary video upload failed."));
+        resolve({ secure_url: result.secure_url, public_id: result.public_id });
+      }
+    );
+    uploadStream.end(buffer);
+  });
+}
+
 module.exports = {
   configureOnce,
   isCloudinaryConfigured,
   uploadBuffer,
+  uploadVideoBuffer,
 };

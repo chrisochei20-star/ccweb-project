@@ -22,8 +22,9 @@ const monetizationEngine = require("./services/monetizationEngine");
 const betaPg = require("./db/persistenceBeta");
 const chatPg = require("./db/persistenceChat");
 const persistenceNotifications = require("./db/persistenceNotifications");
+const multer = require("multer");
 const { validateImageBuffer } = require("./services/imageMagic");
-const { saveUploadedImage } = require("./services/imageStorage");
+const { saveUploadedImage, saveChatAttachment } = require("./services/imageStorage");
 const { isCloudinaryConfigured } = require("./services/cloudinaryUpload");
 const { imageMulter, createUploadsRouter, MAX_BYTES } = require("./uploadsExpress");
 const { publicAppBaseUrl, trimOrigin } = require("./services/deploymentOrigins");
@@ -128,11 +129,28 @@ function createPlatformApp(deps) {
           roles: existingInMem?.roles || ["member"],
           pushEnabled,
           isOrganic: existingInMem?.isOrganic ?? true,
+          bio: req.body?.bio,
+          headline: req.body?.headline,
+          websiteUrl: req.body?.websiteUrl,
+          twitterHandle: req.body?.twitterHandle,
         },
         existingInMem || null
       );
       ccwebUsers.set(req.ccwebUserId, merged);
       await authEngine.persistNewUserProfile(req.ccwebUserId, merged);
+      if ((process.env.DATABASE_URL || "").trim()) {
+        try {
+          const pgUserProfile = require("./db/pgUserProfile");
+          await pgUserProfile.patchSocialFields(req.ccwebUserId, {
+            bio: merged.bio,
+            headline: merged.headline,
+            websiteUrl: merged.websiteUrl,
+            twitterHandle: merged.twitterHandle,
+          });
+        } catch {
+          /* ignore */
+        }
+      }
       await authStore.saveUser({
         ...row,
         email: row.email || merged.email || null,
@@ -197,6 +215,23 @@ function createPlatformApp(deps) {
     }
   });
 
+  usersRouter.delete("/:userId/follow", authJwtMiddleware, async (req, res, next) => {
+    try {
+      if (!persistenceNotifications.enabled()) {
+        return res.status(503).json({ error: "Follows require PostgreSQL.", code: "NO_DATABASE" });
+      }
+      const target = (req.params.userId || "").trim();
+      if (!target || target === req.ccwebUserId) {
+        return res.status(400).json({ error: "Invalid unfollow target." });
+      }
+      const { query } = require("./db/pool");
+      await query(`DELETE FROM ccweb_follows WHERE follower_id = $1 AND following_id = $2`, [req.ccwebUserId, target]);
+      res.json({ ok: true, following: false });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   usersRouter.get("/:id", optionalJwt, async (req, res, next) => {
     try {
       const { sanitizeUser } = deps;
@@ -217,7 +252,28 @@ function createPlatformApp(deps) {
       if (req.ccwebUserId !== id) {
         delete publicUser.email;
       }
-      res.json({ user: publicUser });
+      let followerCount = null;
+      let followingCount = null;
+      let isFollowing = null;
+      if ((process.env.DATABASE_URL || "").trim()) {
+        try {
+          const { query } = require("./db/pool");
+          const fc = await query(`SELECT COUNT(*)::int AS c FROM ccweb_follows WHERE following_id = $1`, [id]);
+          followerCount = Number(fc.rows[0]?.c) || 0;
+          const fg = await query(`SELECT COUNT(*)::int AS c FROM ccweb_follows WHERE follower_id = $1`, [id]);
+          followingCount = Number(fg.rows[0]?.c) || 0;
+          if (req.ccwebUserId) {
+            const iff = await query(
+              `SELECT 1 FROM ccweb_follows WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
+              [req.ccwebUserId, id]
+            );
+            isFollowing = iff.rows.length > 0;
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      res.json({ user: publicUser, followerCount, followingCount, isFollowing });
     } catch (e) {
       next(e);
     }
@@ -290,7 +346,17 @@ function createPlatformApp(deps) {
 
   v1.use("/uploads", apiRateShort, createUploadsRouter({ ...deps, authJwtMiddleware }));
 
-  const chatImageUpload = imageMulter();
+  const chatMediaMulter = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: Math.min(MAX_BYTES * 6, 80 * 1024 * 1024) },
+    fileFilter(req, file, cb) {
+      const ok =
+        /^image\/(jpeg|jpg|pjpeg|png|webp|gif)$/i.test(file.mimetype) ||
+        /^video\/(mp4|webm|quicktime)$/i.test(file.mimetype) ||
+        file.mimetype === "application/pdf";
+      cb(null, ok);
+    },
+  });
 
   const chatRouter = express.Router();
 
@@ -393,25 +459,45 @@ function createPlatformApp(deps) {
     }
   });
 
-  chatRouter.post("/:chatId/upload", authJwtMiddleware, chatImageUpload.single("file"), async (req, res, next) => {
+  chatRouter.post("/:chatId/upload", authJwtMiddleware, chatMediaMulter.single("file"), async (req, res, next) => {
     try {
-      if (!req.file?.buffer) return res.status(400).json({ error: "Image file required (field name: file)." });
+      if (!req.file?.buffer) return res.status(400).json({ error: "File required (field name: file)." });
       const chatId = req.params.chatId;
       const ok = await chatPg.verifyMember(chatId, req.ccwebUserId);
       if (!ok) return res.status(403).json({ error: "Forbidden." });
-      const v = validateImageBuffer(req.file.buffer);
-      if (!v.ok) return res.status(400).json({ error: v.error });
-      const saved = await saveUploadedImage(req.file.buffer, {
-        mimetype: req.file.mimetype,
-        originalName: req.file.originalname,
-        userId: req.ccwebUserId,
-        kind: "chat",
-      });
-      const imageUrl = saved.url;
-      const message = await chatPg.appendMessage(chatId, req.ccwebUserId, "📷", {
-        type: "image",
-        url: imageUrl,
-      });
+      const mt = (req.file.mimetype || "").toLowerCase();
+      let saved;
+      let meta;
+      if (mt.startsWith("image/")) {
+        const v = validateImageBuffer(req.file.buffer);
+        if (!v.ok) return res.status(400).json({ error: v.error });
+        saved = await saveUploadedImage(req.file.buffer, {
+          mimetype: req.file.mimetype,
+          originalName: req.file.originalname,
+          userId: req.ccwebUserId,
+          kind: "chat",
+        });
+        meta = { type: "image", url: saved.url };
+      } else {
+        try {
+          saved = await saveChatAttachment(req.file.buffer, {
+            mimetype: req.file.mimetype,
+            originalName: req.file.originalname,
+            userId: req.ccwebUserId,
+          });
+        } catch (e) {
+          return res.status(400).json({ error: e.message || "Upload failed." });
+        }
+        if (saved.attachmentType === "video") meta = { type: "video", url: saved.url };
+        else meta = {
+          type: "file",
+          url: saved.url,
+          name: (req.file.originalname || "attachment").toString().slice(0, 200),
+          mime: req.file.mimetype,
+        };
+      }
+      const bodyEmoji = meta.type === "image" ? "📷" : meta.type === "video" ? "🎬" : "📎";
+      const message = await chatPg.appendMessage(chatId, req.ccwebUserId, bodyEmoji, meta);
       broadcastChatMessage(chatId, message);
       broadcastInboxRefresh(req.ccwebUserId, chatId);
       const other = await chatPg.getOtherMember(chatId, req.ccwebUserId);
@@ -419,11 +505,13 @@ function createPlatformApp(deps) {
         broadcastInboxRefresh(other, chatId);
         if (persistenceNotifications.enabled()) {
           try {
+            const preview =
+              meta.type === "image" ? "📷 Image" : meta.type === "video" ? "🎬 Video" : `📎 ${meta.name || "File"}`;
             await persistenceNotifications.createChatMessageNotification({
               recipientUserId: other,
               actorUserId: req.ccwebUserId,
               chatId,
-              preview: "📷 Image",
+              preview,
               messageId: message.id,
             });
             broadcastNotificationUpdate(other, { kind: "chat" });
@@ -432,7 +520,7 @@ function createPlatformApp(deps) {
           }
         }
       }
-      res.status(201).json({ message, url: imageUrl, storage: saved.storage });
+      res.status(201).json({ message, url: saved.url, storage: saved.storage });
     } catch (e) {
       next(e);
     }

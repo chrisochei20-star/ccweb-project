@@ -95,3 +95,34 @@ export async function createPostReaction({ postId, reaction = "like" }) {
   if (!res.ok) throw new Error(data.error || "Reaction failed");
   return data;
 }
+
+export async function fetchCommunityBookmarks() {
+  const res = await apiFetch(apiUrl("/api/community/bookmarks"), {
+    credentials: "include",
+    headers: authHeaders(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Bookmarks failed");
+  return data.posts || [];
+}
+
+export async function setCommunityBookmark(postId, bookmarked) {
+  const method = bookmarked ? "POST" : "DELETE";
+  const res = await apiFetch(apiUrl(`/api/community/posts/${encodeURIComponent(postId)}/bookmark`), {
+    method,
+    credentials: "include",
+    headers: authHeaders(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Bookmark update failed");
+  return data;
+}
+
+export async function fetchCommunityPostsByUser(userId) {
+  const res = await apiFetch(apiUrl(`/api/community/posts/by-user/${encodeURIComponent(userId)}`), {
+    credentials: "include",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not load posts");
+  return data.posts || [];
+}

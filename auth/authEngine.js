@@ -57,6 +57,10 @@ async function ensureUserProfile(ccwebUsers, buildUserProfile, userId) {
 
   let avatarUrl = null;
   let bannerUrl = null;
+  let bio = "";
+  let headline = "";
+  let websiteUrl = "";
+  let twitterHandle = "";
 
   if ((process.env.DATABASE_URL || "").trim()) {
     try {
@@ -69,6 +73,10 @@ async function ensureUserProfile(ccwebUsers, buildUserProfile, userId) {
         pushEnabled = prof.push_enabled !== false;
         avatarUrl = prof.avatar_url || null;
         bannerUrl = prof.banner_url || null;
+        bio = prof.bio || "";
+        headline = prof.headline || "";
+        websiteUrl = prof.website_url || "";
+        twitterHandle = prof.twitter_handle || "";
       }
     } catch (e) {
       logger.warn({ msg: "profile_row_load_failed", userId, err: e.message });
@@ -85,6 +93,10 @@ async function ensureUserProfile(ccwebUsers, buildUserProfile, userId) {
       pushEnabled,
       avatarUrl,
       bannerUrl,
+      bio,
+      headline,
+      websiteUrl,
+      twitterHandle,
     },
     null
   );

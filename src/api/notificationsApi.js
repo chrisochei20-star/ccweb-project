@@ -57,3 +57,14 @@ export async function followUser(userId) {
   if (!res.ok && res.status !== 200 && res.status !== 201) throw new Error(data.error || "Follow failed");
   return data;
 }
+
+export async function unfollowUser(userId) {
+  const res = await apiFetch(apiUrl(`/api/v1/users/${encodeURIComponent(userId)}/follow`), {
+    method: "DELETE",
+    headers: authHeaders(),
+    credentials: "include",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Unfollow failed");
+  return data;
+}

@@ -15,6 +15,7 @@ import { ProtectedLayout } from "./layout/ProtectedLayout";
 import { LoginPage, SignupPage } from "./pages/AuthPages";
 import { BuildHubPage } from "./pages/BuildHubPage";
 import { CommunityShellPage } from "./pages/CommunityShellPage";
+import { PublicProfilePage } from "./pages/PublicProfilePage";
 import { EarnShellPage } from "./pages/EarnShellPage";
 import { LearnShellPage } from "./pages/LearnShellPage";
 import { MobileDashboardPage } from "./pages/MobileDashboardPage";
@@ -86,6 +87,7 @@ function App() {
           <Route path="build" element={<BuildHubPage />} />
           <Route path="earn" element={<EarnShellPage />} />
           <Route path="community" element={<CommunityShellPage />} />
+          <Route path="p/:userId" element={<PublicProfilePage />} />
           <Route path="notifications" element={<NotificationCenterPage />} />
           <Route element={<ProtectedLayout />}>
             <Route path="profile" element={<ProfileShellPage />} />

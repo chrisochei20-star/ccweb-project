@@ -85,6 +85,8 @@ const communityComments = new Map();
 const communityChats = new Map();
 const communityReactions = new Map();
 const communityBugReports = new Map();
+/** In-memory bookmarks when PostgreSQL community tables are not used (`userId|||postId`). */
+const communityBookmarkKeys = new Set();
 const aiBlogs = new Map();
 const dappDeployments = new Map();
 const dappPayments = new Map();
@@ -295,6 +297,14 @@ function buildUserProfile(input, existing = null) {
     input.avatarUrl !== undefined ? input.avatarUrl || null : existing?.avatarUrl ?? null;
   const bannerUrl =
     input.bannerUrl !== undefined ? input.bannerUrl || null : existing?.bannerUrl ?? null;
+  const bio = input.bio !== undefined ? String(input.bio || "").slice(0, 2000) : existing?.bio ?? "";
+  const headline = input.headline !== undefined ? String(input.headline || "").slice(0, 200) : existing?.headline ?? "";
+  const websiteUrl =
+    input.websiteUrl !== undefined ? String(input.websiteUrl || "").trim().slice(0, 500) : existing?.websiteUrl ?? "";
+  const twitterHandle =
+    input.twitterHandle !== undefined
+      ? String(input.twitterHandle || "").trim().replace(/^@+/, "").slice(0, 80)
+      : existing?.twitterHandle ?? "";
   return {
     id,
     email: email ? String(email).trim().toLowerCase() : null,
@@ -304,6 +314,10 @@ function buildUserProfile(input, existing = null) {
     pushEnabled: input.pushEnabled === undefined ? existing?.pushEnabled ?? true : Boolean(input.pushEnabled),
     avatarUrl,
     bannerUrl,
+    bio,
+    headline,
+    websiteUrl,
+    twitterHandle,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
   };
@@ -319,6 +333,10 @@ function sanitizeUser(user) {
     pushEnabled: user.pushEnabled,
     avatarUrl: user.avatarUrl || null,
     bannerUrl: user.bannerUrl || null,
+    bio: user.bio || "",
+    headline: user.headline || "",
+    websiteUrl: user.websiteUrl || "",
+    twitterHandle: user.twitterHandle || "",
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -1205,7 +1223,15 @@ function handleListCommunityPosts(req, res) {
   }
   const posts = Array.from(communityPosts.values())
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
-    .map((p) => ({ ...p, commentCount: counts.get(p.id) || 0 }));
+    .map((p) => ({
+      ...p,
+      tags: p.tags || [],
+      mediaUrls: p.mediaUrls || [],
+      repostOfId: p.repostOfId || null,
+      originalPost: p.originalPost || null,
+      hashtags: p.hashtags || extractHashtagsFromText(`${p.title}\n${p.content}`),
+      commentCount: counts.get(p.id) || 0,
+    }));
   sendJson(res, 200, { count: posts.length, posts }, req);
 }
 
@@ -1220,6 +1246,100 @@ function handleListTrendingCommunityPosts(req, res) {
   handleListCommunityPosts(req, res);
 }
 
+function bookmarkMemKey(userId, postId) {
+  return `${userId}|||${postId}`;
+}
+
+function handleListCommunityPostsByUser(req, res, userId) {
+  const id = (userId || "").toString().trim();
+  if (!id) {
+    sendJson(res, 400, { error: "userId required." }, req);
+    return;
+  }
+  if (useCommunityPg()) {
+    communityPg
+      .listPostsByAuthor(id, 80)
+      .then((posts) => sendJson(res, 200, { userId: id, count: posts.length, posts }, req))
+      .catch((e) => sendJson(res, 500, { error: e.message }, req));
+    return;
+  }
+  const counts = new Map();
+  for (const c of communityComments.values()) {
+    counts.set(c.postId, (counts.get(c.postId) || 0) + 1);
+  }
+  const posts = Array.from(communityPosts.values())
+    .filter((p) => p.authorUserId === id)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .map((p) => ({
+      ...p,
+      tags: p.tags || [],
+      mediaUrls: p.mediaUrls || [],
+      repostOfId: p.repostOfId || null,
+      originalPost: p.originalPost || null,
+      hashtags: p.hashtags || extractHashtagsFromText(`${p.title}\n${p.content}`),
+      commentCount: counts.get(p.id) || 0,
+    }));
+  sendJson(res, 200, { userId: id, count: posts.length, posts }, req);
+}
+
+async function handleCommunityBookmark(req, res, postId, method) {
+  const actor = await requireCommunityActor(req, res);
+  if (!actor) return;
+  const pid = (postId || "").toString().trim();
+  if (!pid) {
+    sendJson(res, 400, { error: "postId required." }, req);
+    return;
+  }
+  if (useCommunityPg()) {
+    try {
+      if (method === "POST") await communityPg.addBookmark(actor.userId, pid);
+      else await communityPg.removeBookmark(actor.userId, pid);
+      sendJson(res, 200, { ok: true }, req);
+    } catch (e) {
+      sendJson(res, 500, { error: e.message }, req);
+    }
+    return;
+  }
+  const key = bookmarkMemKey(actor.userId, pid);
+  if (method === "POST") communityBookmarkKeys.add(key);
+  else communityBookmarkKeys.delete(key);
+  sendJson(res, 200, { ok: true }, req);
+}
+
+async function handleListCommunityBookmarks(req, res) {
+  const actor = await requireCommunityActor(req, res);
+  if (!actor) return;
+  if (useCommunityPg()) {
+    communityPg
+      .listBookmarks(actor.userId, 80)
+      .then((posts) => sendJson(res, 200, { count: posts.length, posts }, req))
+      .catch((e) => sendJson(res, 500, { error: e.message }, req));
+    return;
+  }
+  const counts = new Map();
+  for (const c of communityComments.values()) {
+    counts.set(c.postId, (counts.get(c.postId) || 0) + 1);
+  }
+  const posts = [];
+  for (const key of communityBookmarkKeys) {
+    const [uid, pid] = key.split("|||");
+    if (uid !== actor.userId || !pid) continue;
+    const p = communityPosts.get(pid);
+    if (!p) continue;
+    posts.push({
+      ...p,
+      tags: p.tags || [],
+      mediaUrls: p.mediaUrls || [],
+      repostOfId: p.repostOfId || null,
+      originalPost: p.originalPost || null,
+      hashtags: p.hashtags || extractHashtagsFromText(`${p.title}\n${p.content}`),
+      commentCount: counts.get(p.id) || 0,
+    });
+  }
+  posts.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  sendJson(res, 200, { count: posts.length, posts }, req);
+}
+
 async function handleCreateCommunityPost(req, res) {
   const actor = await requireCommunityActor(req, res);
   if (!actor) return;
@@ -1232,10 +1352,41 @@ async function handleCreateCommunityPost(req, res) {
     return;
   }
 
-  const title = (body.title || "").toString().trim();
-  const content = (body.content || "").toString().trim();
+  const repostOfId = (body.repostOfId || "").toString().trim() || null;
+  let title = (body.title || "").toString().trim();
+  let content = (body.content || "").toString().trim();
+  const mediaUrls = Array.isArray(body.mediaUrls)
+    ? body.mediaUrls.map((u) => String(u || "").trim()).filter((u) => u && (u.startsWith("http") || u.startsWith("/")))
+    : [];
+
+  if (repostOfId) {
+    let parentContent = "";
+    if (useCommunityPg()) {
+      try {
+        const pr = await communityPg.getPostRow(repostOfId);
+        if (!pr) {
+          sendJson(res, 404, { error: "Original post not found for repost.", code: "REPOST_PARENT_MISSING" }, req);
+          return;
+        }
+        parentContent = (pr.content || "").toString();
+      } catch (e) {
+        sendJson(res, 500, { error: e.message }, req);
+        return;
+      }
+    } else {
+      const parent = communityPosts.get(repostOfId);
+      if (!parent) {
+        sendJson(res, 404, { error: "Original post not found for repost.", code: "REPOST_PARENT_MISSING" }, req);
+        return;
+      }
+      parentContent = (parent.content || "").toString();
+    }
+    if (!title) title = "Repost";
+    if (!content) content = parentContent.trim().slice(0, 4000) || " ";
+  }
+
   if (!title || !content) {
-    sendJson(res, 400, { error: "title and content are required." }, req);
+    sendJson(res, 400, { error: "title and content are required (unless repostOfId is set)." }, req);
     return;
   }
 
@@ -1249,6 +1400,8 @@ async function handleCreateCommunityPost(req, res) {
         title,
         content,
         tags: Array.isArray(body.tags) ? body.tags.map((tag) => tag.toString()) : [],
+        mediaUrls,
+        repostOfId,
       });
       createNotification({
         type: "community_post_created",
@@ -1266,19 +1419,40 @@ async function handleCreateCommunityPost(req, res) {
       if (learningPg.usePostgres()) learningPg.addXpDelta(author.id, 25).catch(() => {});
       sendJson(res, 201, post, req);
     } catch (e) {
-      sendJson(res, 500, { error: e.message }, req);
+      const code = e.code === "REPOST_PARENT_MISSING" ? 404 : 500;
+      sendJson(res, code, { error: e.message }, req);
     }
     return;
   }
 
   const id = `post-${String(nextCommunityPostId++).padStart(4, "0")}`;
+  let originalPost = null;
+  if (repostOfId) {
+    const p = communityPosts.get(repostOfId);
+    if (p) {
+      originalPost = {
+        id: p.id,
+        title: p.title,
+        content: p.content,
+        authorDisplayName: p.authorDisplayName,
+        authorUserId: p.authorUserId,
+        createdAt: p.createdAt,
+        mediaUrls: p.mediaUrls || [],
+      };
+    }
+  }
+  const tagMerge = [...new Set([...(Array.isArray(body.tags) ? body.tags.map((t) => String(t).toLowerCase()) : []), ...extractHashtagsFromText(`${title}\n${content}`)]))].slice(0, 40);
   const post = {
     id,
     authorUserId: author.id,
     authorDisplayName: author.displayName,
     title,
     content,
-    tags: Array.isArray(body.tags) ? body.tags.map((tag) => tag.toString()) : [],
+    tags: tagMerge,
+    hashtags: extractHashtagsFromText(`${title}\n${content}`),
+    mediaUrls: mediaUrls.slice(0, 10),
+    repostOfId,
+    originalPost,
     createdAt: new Date().toISOString(),
   };
   communityPosts.set(id, post);
@@ -1296,7 +1470,15 @@ async function handleCreateCommunityPost(req, res) {
     postId: id,
   });
 
-  sendJson(res, 201, post, req);
+  sendJson(res, 201, { ...post, commentCount: 0 }, req);
+}
+
+function extractHashtagsFromText(text) {
+  const re = /#([\p{L}\p{N}_]{2,40})/gu;
+  const s = new Set();
+  let m;
+  while ((m = re.exec(String(text || ""))) !== null) s.add(m[1].toLowerCase());
+  return [...s];
 }
 
 function handleGetCommunityPost(req, postId, res) {
@@ -4297,9 +4479,26 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname.startsWith("/api/community") && req.method === "OPTIONS") {
     writeRawOptions(req, res, {
-      methods: "GET, POST, OPTIONS",
+      methods: "GET, POST, DELETE, OPTIONS",
       headers: "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With",
     });
+    return;
+  }
+
+  if (pathname === "/api/community/bookmarks" && req.method === "GET") {
+    await handleListCommunityBookmarks(req, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/community\/posts\/by-user\/[^/]+$/) && req.method === "GET") {
+    const userId = pathname.split("/").pop();
+    handleListCommunityPostsByUser(req, res, userId);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/community\/posts\/[^/]+\/bookmark$/) && (req.method === "POST" || req.method === "DELETE")) {
+    const postId = pathname.split("/")[4];
+    await handleCommunityBookmark(req, res, postId, req.method);
     return;
   }
 

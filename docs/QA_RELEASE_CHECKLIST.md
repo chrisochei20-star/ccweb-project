@@ -2,6 +2,8 @@
 
 Use this before tagging a production release or promoting Render/Vercel deployments. Adjust URLs and secrets for your environment.
 
+**See also:** [POST_MERGE_VERIFICATION.md](./POST_MERGE_VERIFICATION.md) (after deploy), [DEPLOYMENT_RENDER_VERCEL.md](./DEPLOYMENT_RENDER_VERCEL.md) (Render + Vercel env).
+
 ## Environment and deploy
 
 - [ ] **Render API**: `NODE_VERSION` / Node 20.x, `PORT` bound correctly, `AUTH_JWT_SECRET` (32+ chars), `DATABASE_URL` when Postgres is required.

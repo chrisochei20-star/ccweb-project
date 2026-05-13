@@ -66,7 +66,12 @@ export async function postEnrollCourseSlug(slug) {
     body: JSON.stringify({}),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Enrollment failed");
+  if (!res.ok) {
+    const err = new Error(data.error || "Enrollment failed");
+    err.status = res.status;
+    err.code = data.code;
+    throw err;
+  }
   return data;
 }
 

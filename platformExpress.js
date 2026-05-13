@@ -39,6 +39,7 @@ const {
   onlineStatusForUserIds,
 } = require("./server/realtime/chatSocket");
 const { createCoursesRouter } = require("./coursesExpress");
+const { createFlutterwaveRouter } = require("./flutterwaveExpress");
 const { createDiscoverRouter } = require("./discoverExpress");
 const persistenceAiAgents = require("./db/persistenceAiAgents");
 const { getPool } = require("./db/pool");
@@ -536,6 +537,9 @@ function createPlatformApp(deps) {
 
   const discoverRouter = createDiscoverRouter({ optionalJwt });
   v1.use("/discover", apiRateShort, discoverRouter);
+
+  const flutterwaveRouter = createFlutterwaveRouter({ authJwtMiddleware });
+  v1.use("/payments/flutterwave", apiRateShort, flutterwaveRouter);
 
   const agentRuns = [];
   const catalogAgents = [
@@ -1109,7 +1113,23 @@ function createPlatformApp(deps) {
       } catch {
         dashboard = null;
       }
-      res.json({ postgres: true, profile, orders: orders.slice(0, 25), growth, dashboard });
+      let flutterwave = null;
+      try {
+        const flwPg = require("./db/persistenceFlutterwave");
+        const fwClient = require("./services/flutterwaveClient");
+        if (flwPg.usePostgres()) {
+          flutterwave = {
+            configured: fwClient.isConfigured(),
+            wallet: await flwPg.getWallet(req.ccwebUserId),
+            recentTransactions: await flwPg.listUserTransactions(req.ccwebUserId, 15),
+            creator: await flwPg.creatorEarningsSummary(req.ccwebUserId),
+            payouts: await flwPg.listPayoutRequests(req.ccwebUserId, 10),
+          };
+        }
+      } catch {
+        flutterwave = null;
+      }
+      res.json({ postgres: true, profile, orders: orders.slice(0, 25), growth, dashboard, flutterwave });
     } catch (e) {
       next(e);
     }

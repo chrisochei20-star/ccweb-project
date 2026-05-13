@@ -1,14 +1,19 @@
-import { Gift, Radio, Share2, TrendingUp } from "lucide-react";
+import { CreditCard, Gift, Radio, Share2, TrendingUp, Wallet } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { GrowthLoopCard } from "../components/GrowthLoopCard";
 import { ShareActions } from "../components/ShareCard";
 import { Skeleton } from "../components/ui/Skeleton";
 import { useCachedFetch } from "../hooks/useCachedFetch";
+import { initializeFlutterwaveCheckout, requestFlutterwavePayout } from "../api/flutterwaveApi";
+import { toast } from "../lib/toastBus";
 
 export function EarnShellPage() {
   const { user } = useOutletContext() || {};
+  const [payBusy, setPayBusy] = useState(false);
+  const [payoutMajor, setPayoutMajor] = useState("");
+  const [payoutCur, setPayoutCur] = useState("USD");
   const { data: analytics, loading, error, refresh } = useCachedFetch(user ? "/api/v1/analytics/user" : null, {
     enabled: Boolean(user),
     ttlMs: 60_000,
@@ -35,6 +40,52 @@ export function EarnShellPage() {
   }, [analytics]);
 
   const growth = analytics?.growth;
+  const fw = analytics?.flutterwave;
+
+  const startCheckout = useCallback(
+    async (body) => {
+      if (!fw?.configured) {
+        toast.error("Flutterwave is not configured on the server.");
+        return;
+      }
+      setPayBusy(true);
+      try {
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const redirectUrl = `${origin}/earn`;
+        const out = await initializeFlutterwaveCheckout({ ...body, redirectUrl });
+        if (out.checkoutLink) window.location.href = out.checkoutLink;
+        else toast.error("No checkout link returned.");
+      } catch (e) {
+        toast.error(e.message || "Checkout failed");
+      } finally {
+        setPayBusy(false);
+      }
+    },
+    [fw?.configured]
+  );
+
+  async function submitPayout() {
+    const major = Number(payoutMajor);
+    if (!Number.isFinite(major) || major <= 0) {
+      toast.error("Enter a payout amount.");
+      return;
+    }
+    setPayBusy(true);
+    try {
+      await requestFlutterwavePayout({
+        currency: payoutCur,
+        amountMajor: major,
+        bank: { note: "Provide bank details to ops; this queues a payout request." },
+      });
+      toast.success("Payout request recorded.");
+      setPayoutMajor("");
+      refresh();
+    } catch (e) {
+      toast.error(e.message || "Payout request failed");
+    } finally {
+      setPayBusy(false);
+    }
+  }
 
   const earningsSharePayload = useMemo(
     () => ({
@@ -52,7 +103,8 @@ export function EarnShellPage() {
         <p className="text-xs font-semibold uppercase tracking-widest text-ccweb-green">Earn</p>
         <h1 className="mt-1 text-2xl font-bold text-white md:text-3xl">Revenue &amp; referrals</h1>
         <p className="mt-1 max-w-2xl text-sm text-ccweb-muted">
-          Credits, XP, invites, and leaderboards — tied to real Postgres rows when the API is connected.
+          Credits, XP, invites, Flutterwave subscriptions &amp; one-tap checkout (USD/NGN), creator balances, and marketplace
+          activity — backed by PostgreSQL.
         </p>
       </header>
 
@@ -154,6 +206,123 @@ export function EarnShellPage() {
                 {summary.orders.map((o) => (
                   <li key={o.id} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
                     <span className="text-white/90">{o.listingTitle || o.id}</span> · {o.status} · ${o.amountUsd}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
+      {user && fw && (
+        <section className="ccweb-glass rounded-2xl p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
+              <Wallet className="h-5 w-5 text-ccweb-green" />
+              Wallet &amp; Flutterwave
+            </h2>
+            <CreditCard className="h-5 w-5 text-ccweb-cyan opacity-80" aria-hidden />
+          </div>
+          {!fw.configured && (
+            <p className="mt-2 text-sm text-amber-200/90">
+              Set <code className="rounded bg-black/30 px-1">FLUTTERWAVE_SECRET_KEY</code> and{" "}
+              <code className="rounded bg-black/30 px-1">FLUTTERWAVE_SECRET_HASH</code> on the API to enable hosted checkout and
+              webhooks.
+            </p>
+          )}
+          {fw.wallet && (
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-white/10 bg-black/30 p-3">
+                <p className="text-xs text-ccweb-muted">Internal USD</p>
+                <p className="text-lg font-semibold text-white">${((fw.wallet.balanceUsdCents || 0) / 100).toFixed(2)}</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/30 p-3">
+                <p className="text-xs text-ccweb-muted">Internal NGN</p>
+                <p className="text-lg font-semibold text-white">₦{Number(fw.wallet.balanceNgn || 0).toLocaleString()}</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/30 p-3">
+                <p className="text-xs text-ccweb-muted">AI credits (internal)</p>
+                <p className="text-lg font-semibold text-white">${((fw.wallet.aiCreditsCents || 0) / 100).toFixed(2)} eq.</p>
+              </div>
+            </div>
+          )}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={payBusy || !fw.configured}
+              className="ccweb-gradient-btn text-sm disabled:opacity-50"
+              onClick={() => startCheckout({ kind: "platform_subscription", currency: "USD", targetTier: "pro", periodDays: 30 })}
+            >
+              {payBusy ? "Please wait…" : "Subscribe (USD)"}
+            </button>
+            <button
+              type="button"
+              disabled={payBusy || !fw.configured}
+              className="ccweb-outline-btn text-sm disabled:opacity-50"
+              onClick={() => startCheckout({ kind: "platform_subscription", currency: "NGN", targetTier: "pro", periodDays: 30 })}
+            >
+              Subscribe (NGN)
+            </button>
+            <button
+              type="button"
+              disabled={payBusy || !fw.configured}
+              className="ccweb-outline-btn text-sm disabled:opacity-50"
+              onClick={() => startCheckout({ kind: "ai_credit_pack", currency: "USD", pack: "small" })}
+            >
+              AI credit pack
+            </button>
+          </div>
+          {fw.creator && (
+            <div className="mt-5 rounded-xl border border-white/10 bg-black/25 p-4">
+              <h3 className="text-sm font-semibold text-white">Creator revenue (from paid courses, tips, unlocks)</h3>
+              <p className="mt-1 text-xs text-ccweb-muted">
+                Est. after platform fee ({fw.creator.internalWallet ? "wallet synced" : "—"}):{" "}
+                <span className="text-white">${((fw.creator.estimatedShareUsdCents || 0) / 100).toFixed(2)}</span> ·{" "}
+                <span className="text-white">₦{Number(fw.creator.estimatedShareNgn || 0).toLocaleString()}</span> ·{" "}
+                <span className="text-ccweb-muted">{fw.creator.completedTxCount} tx</span>
+              </p>
+              <div className="mt-3 flex flex-wrap items-end gap-2">
+                <div>
+                  <label className="text-[10px] uppercase text-ccweb-muted">Payout amount</label>
+                  <input
+                    className="ccweb-input mt-1 w-28 text-sm"
+                    value={payoutMajor}
+                    onChange={(e) => setPayoutMajor(e.target.value)}
+                    inputMode="decimal"
+                  />
+                </div>
+                <select className="ccweb-input mt-5 text-sm" value={payoutCur} onChange={(e) => setPayoutCur(e.target.value)}>
+                  <option value="USD">USD</option>
+                  <option value="NGN">NGN</option>
+                </select>
+                <button type="button" disabled={payBusy} className="ccweb-outline-btn mt-5 text-sm" onClick={submitPayout}>
+                  Queue payout
+                </button>
+              </div>
+              {fw.payouts?.length > 0 && (
+                <ul className="mt-3 space-y-1 text-xs text-ccweb-muted">
+                  {fw.payouts.map((p) => (
+                    <li key={p.id} className="flex justify-between rounded-lg bg-black/30 px-2 py-1">
+                      <span>{p.status}</span>
+                      <span>
+                        {p.currency} {(p.amountMinor / 100).toFixed(2)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {fw.recentTransactions?.length > 0 && (
+            <div className="mt-5">
+              <h3 className="text-sm font-semibold text-white">Recent Flutterwave attempts</h3>
+              <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-xs text-ccweb-muted">
+                {fw.recentTransactions.map((t) => (
+                  <li key={t.id} className="flex justify-between rounded-lg bg-black/25 px-2 py-1 font-mono">
+                    <span className="text-white/90">{t.kind}</span>
+                    <span>
+                      {t.currency} {(t.amountMinor / 100).toFixed(2)} · {t.status}
+                    </span>
                   </li>
                 ))}
               </ul>

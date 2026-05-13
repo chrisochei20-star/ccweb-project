@@ -47,6 +47,19 @@ export function CourseLessonPage() {
       try {
         const d = await fetchCourseDetail(slug);
         if (c) return;
+        const isPaid = (d.course?.priceUsdCents || 0) > 0 || (d.course?.priceNgn || 0) > 0;
+        if (isPaid && !d.purchased) {
+          setCourse(d.course);
+          setLessons(d.lessons || []);
+          setLesson(null);
+          if (!user) {
+            setErr("Sign in and purchase this course to access lessons.");
+          } else {
+            setErr("Purchase this course to access lessons and the AI tutor.");
+          }
+          setLoading(false);
+          return;
+        }
         setCourse(d.course);
         setLessons(d.lessons || []);
         setCompleted(new Set(d.completedLessonIds || []));
@@ -69,7 +82,7 @@ export function CourseLessonPage() {
     return () => {
       c = true;
     };
-  }, [slug, lessonId]);
+  }, [slug, lessonId, user]);
 
   useEffect(() => {
     if (!user || !lessonId || !slug) return;

@@ -19,6 +19,9 @@ export function CourseAdminDashboard() {
   const [courseTitle, setCourseTitle] = useState("My AI Course");
   const [courseSummary, setCourseSummary] = useState("Short summary for catalog.");
   const [courseCategory, setCourseCategory] = useState("crypto");
+  const [coursePriceUsd, setCoursePriceUsd] = useState("0");
+  const [coursePriceNgn, setCoursePriceNgn] = useState("0");
+  const [courseCreatorId, setCourseCreatorId] = useState("");
 
   const [lessonCourseId, setLessonCourseId] = useState("");
   const [lessonTitle, setLessonTitle] = useState("Lesson 1");
@@ -91,6 +94,9 @@ export function CourseAdminDashboard() {
         categorySlug: courseCategory,
         level: "beginner",
         published: true,
+        priceUsdCents: Math.round((Number(coursePriceUsd) || 0) * 100),
+        priceNgn: Math.round(Number(coursePriceNgn) || 0),
+        creatorUserId: courseCreatorId.trim() || undefined,
       });
       setMsg(`Course saved. id: ${data.courseId}`);
       if (data.courseId) {
@@ -209,6 +215,26 @@ export function CourseAdminDashboard() {
             value={courseCategory}
             onChange={(e) => setCourseCategory(e.target.value)}
           />
+          <div className="grid gap-2 sm:grid-cols-3">
+            <input
+              className="ccweb-input"
+              placeholder="Price USD (dollars, e.g. 19.99)"
+              value={coursePriceUsd}
+              onChange={(e) => setCoursePriceUsd(e.target.value)}
+            />
+            <input
+              className="ccweb-input"
+              placeholder="Price NGN (whole naira, 0=none)"
+              value={coursePriceNgn}
+              onChange={(e) => setCoursePriceNgn(e.target.value)}
+            />
+            <input
+              className="ccweb-input font-mono text-sm"
+              placeholder="creator user id (optional)"
+              value={courseCreatorId}
+              onChange={(e) => setCourseCreatorId(e.target.value)}
+            />
+          </div>
           <button type="submit" className="btn btn-primary" disabled={busy}>
             Upsert course
           </button>

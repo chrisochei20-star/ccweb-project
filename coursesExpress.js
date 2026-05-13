@@ -91,6 +91,7 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
       const lessons = await coursesPg.listLessons(course.id);
       let completedLessonIds = [];
       let enrollment = null;
+      let purchased = false;
       if (req.ccwebUserId) {
         const set = await coursesPg.getLessonCompletionSet(
           req.ccwebUserId,
@@ -98,13 +99,14 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
         );
         completedLessonIds = [...set];
         enrollment = await coursesPg.getEnrollment(req.ccwebUserId, course.id);
+        purchased = await coursesPg.hasCoursePurchase(req.ccwebUserId, course.id);
       }
       const recommended = await coursesPg.listRecommended(req.ccwebUserId, {
         categorySlug: course.categorySlug,
         excludeCourseId: course.id,
         limit: 4,
       });
-      res.json({ course, lessons, completedLessonIds, enrollment, recommended });
+      res.json({ course, lessons, completedLessonIds, enrollment, purchased, recommended });
     } catch (e) {
       next(e);
     }
@@ -112,9 +114,18 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
 
   router.post("/me/enroll/:courseId", authJwtMiddleware, async (req, res, next) => {
     try {
-      const enrollment = await coursesPg.enrollUser(req.ccwebUserId, req.params.courseId);
-      if (!enrollment) return res.status(404).json({ error: "Course not found or not published." });
-      res.status(201).json({ ok: true, enrollment });
+      const out = await coursesPg.enrollUser(req.ccwebUserId, req.params.courseId);
+      if (!out.ok) {
+        if (out.code === "payment_required") {
+          return res.status(402).json({
+            error: "Purchase required before enrolling in this course.",
+            code: "PAYMENT_REQUIRED",
+            courseId: out.courseId,
+          });
+        }
+        return res.status(404).json({ error: "Course not found or not published." });
+      }
+      res.status(201).json({ ok: true, enrollment: out.enrollment });
     } catch (e) {
       next(e);
     }
@@ -124,8 +135,19 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
     try {
       const course = await coursesPg.getCourseBySlug(req.params.slug);
       if (!course) return res.status(404).json({ error: "Course not found." });
-      const enrollment = await coursesPg.enrollUser(req.ccwebUserId, course.id);
-      res.status(201).json({ ok: true, enrollment, courseId: course.id });
+      const out = await coursesPg.enrollUser(req.ccwebUserId, course.id);
+      if (!out.ok) {
+        if (out.code === "payment_required") {
+          return res.status(402).json({
+            error: "Purchase required before enrolling in this course.",
+            code: "PAYMENT_REQUIRED",
+            courseId: course.id,
+            slug: course.slug,
+          });
+        }
+        return res.status(404).json({ error: "Course not found or not published." });
+      }
+      res.status(201).json({ ok: true, enrollment: out.enrollment, courseId: course.id });
     } catch (e) {
       next(e);
     }

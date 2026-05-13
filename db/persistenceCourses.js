@@ -93,6 +93,9 @@ function mapCourseRow(r) {
     published: r.published,
     thumbnailUrl: r.thumbnail_url || meta.thumbnailUrl || null,
     metadata: meta,
+    priceUsdCents: Number(r.price_usd_cents ?? 0),
+    priceNgn: Number(r.price_ngn ?? 0),
+    creatorUserId: r.creator_user_id || null,
     enrollmentCount: Number(r.enrollment_count ?? 0),
     updatedAt: r.updated_at,
     createdAt: r.created_at,
@@ -215,17 +218,43 @@ async function markLessonComplete(userId, lessonId) {
 }
 
 async function enrollUser(userId, courseId) {
-  if (!usePostgres() || !userId || !courseId) return null;
+  if (!usePostgres() || !userId || !courseId) return { ok: false, code: "not_found" };
   await ensureCcwebUser(userId);
   const course = await getCourseById(courseId);
-  if (!course || !course.published) return null;
+  if (!course || !course.published) return { ok: false, code: "not_found" };
+  const paid = (course.priceUsdCents || 0) > 0 || (course.priceNgn || 0) > 0;
+  if (paid) {
+    const ok = await hasCoursePurchase(userId, courseId);
+    if (!ok) return { ok: false, code: "payment_required", courseId };
+  }
   await query(
     `INSERT INTO ccweb_course_enrollment (user_id, course_id, progress_pct, updated_at)
      VALUES ($1,$2,0,NOW())
      ON CONFLICT (user_id, course_id) DO NOTHING`,
     [userId, courseId]
   );
-  return getEnrollment(userId, courseId);
+  const enrollment = await getEnrollment(userId, courseId);
+  return { ok: true, enrollment };
+}
+
+async function hasCoursePurchase(userId, courseId) {
+  if (!usePostgres() || !userId || !courseId) return false;
+  const { rows } = await query(`SELECT 1 FROM ccweb_course_purchases WHERE user_id = $1 AND course_id = $2 LIMIT 1`, [
+    userId,
+    courseId,
+  ]);
+  return rows.length > 0;
+}
+
+async function recordCoursePurchase(userId, courseId, txId) {
+  if (!usePostgres() || !userId || !courseId || !txId) return false;
+  await ensureCcwebUser(userId);
+  await query(
+    `INSERT INTO ccweb_course_purchases (user_id, course_id, tx_id) VALUES ($1,$2,$3)
+     ON CONFLICT (user_id, course_id) DO NOTHING`,
+    [userId, courseId, txId]
+  );
+  return true;
 }
 
 async function getEnrollment(userId, courseId) {
@@ -397,9 +426,15 @@ async function adminUpsertCourse(payload) {
     payload.thumbnailUrl != null && String(payload.thumbnailUrl).trim()
       ? String(payload.thumbnailUrl).trim().slice(0, 2000)
       : null;
+  const priceUsdCents = Math.max(0, Math.min(5000000, Number(payload.priceUsdCents) || 0));
+  const priceNgn = Math.max(0, Math.min(500000000, Number(payload.priceNgn) || 0));
+  const creatorUserId =
+    payload.creatorUserId != null && String(payload.creatorUserId).trim()
+      ? String(payload.creatorUserId).trim().slice(0, 64)
+      : null;
   await query(
-    `INSERT INTO ccweb_courses (id, slug, title, summary, metadata, category_slug, level, published, thumbnail_url, updated_at)
-     VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,NOW())
+    `INSERT INTO ccweb_courses (id, slug, title, summary, metadata, category_slug, level, published, thumbnail_url, price_usd_cents, price_ngn, creator_user_id, updated_at)
+     VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,$12,NOW())
      ON CONFLICT (slug) DO UPDATE SET
        title = EXCLUDED.title,
        summary = EXCLUDED.summary,
@@ -408,9 +443,12 @@ async function adminUpsertCourse(payload) {
        level = EXCLUDED.level,
        published = EXCLUDED.published,
        thumbnail_url = COALESCE(EXCLUDED.thumbnail_url, ccweb_courses.thumbnail_url),
+       price_usd_cents = EXCLUDED.price_usd_cents,
+       price_ngn = EXCLUDED.price_ngn,
+       creator_user_id = EXCLUDED.creator_user_id,
        updated_at = NOW()
      RETURNING id`,
-    [id, slug, title, summary, JSON.stringify(meta), categorySlug, level, published, thumb]
+    [id, slug, title, summary, JSON.stringify(meta), categorySlug, level, published, thumb, priceUsdCents, priceNgn, creatorUserId]
   );
   const { rows } = await query(`SELECT id FROM ccweb_courses WHERE slug = $1`, [slug]);
   return rows[0]?.id || id;
@@ -517,6 +555,8 @@ module.exports = {
   getTutorContext,
   getEnrollment,
   enrollUser,
+  hasCoursePurchase,
+  recordCoursePurchase,
   adminUpsertCourse,
   adminUpsertLesson,
   adminUpsertQuiz,

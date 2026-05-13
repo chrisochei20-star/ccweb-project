@@ -546,7 +546,7 @@ export function FindPage({ initialTab = "scanner" }) {
             <h3>Courses &amp; community discovery</h3>
             <p className="muted">
               Unified PostgreSQL search via <code className="text-ccweb-cyan">GET /api/v1/discover</code>. Empty search shows trending
-              community posts and top catalog courses.
+              community posts, top catalog courses, and marketplace listings when you search by keyword.
             </p>
             <div className="find-scan-form find-scan-form-stack">
               <input
@@ -561,7 +561,7 @@ export function FindPage({ initialTab = "scanner" }) {
               </button>
             </div>
             {ccwebDiscover && (
-              <div style={{ marginTop: "1.25rem" }} className="find-trends-grid">
+              <div style={{ marginTop: "1.25rem" }} className="find-trends-grid lg:grid-cols-3">
                 <div className="find-trend-card panel glass-panel">
                   <h4>Courses</h4>
                   {(ccwebDiscover.courses || []).length === 0 ? (
@@ -591,6 +591,23 @@ export function FindPage({ initialTab = "scanner" }) {
                             {p.authorDisplayName}
                           </Link>
                           <span> — {p.title?.slice(0, 96)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div className="find-trend-card panel glass-panel">
+                  <h4>Marketplace</h4>
+                  {(ccwebDiscover.marketplace || []).length === 0 ? (
+                    <p className="muted small-print">No marketplace hits{ccwebQ.trim() ? "." : " — enter a search query."}</p>
+                  ) : (
+                    <ul className="muted small-print" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                      {(ccwebDiscover.marketplace || []).map((m) => (
+                        <li key={m.id} style={{ marginBottom: "0.5rem" }}>
+                          <Link to={`/shop/l/${encodeURIComponent(m.slug)}`} className="font-semibold text-white hover:underline">
+                            {m.title}
+                          </Link>
+                          <span className="muted"> · {m.kind}</span>
                         </li>
                       ))}
                     </ul>

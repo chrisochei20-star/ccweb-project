@@ -1,4 +1,4 @@
-import { History, LayoutDashboard, Link2, Workflow } from "lucide-react";
+import { History, LayoutDashboard, Link2, ShoppingBag, Workflow } from "lucide-react";
 import { Link, useOutletContext } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { fetchAgentRuns } from "../api/agentsApi";
@@ -43,7 +43,7 @@ export function BuildHubPage() {
         </p>
       </header>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Link
           to="/dapp-builder"
           className="ccweb-glass group flex flex-col rounded-2xl p-5 transition hover:border-ccweb-cyan/45"
@@ -63,13 +63,22 @@ export function BuildHubPage() {
           <span className="mt-4 text-sm font-medium text-ccweb-violet group-hover:underline">Manage agents →</span>
         </Link>
         <Link
-          to="/developers/onboarding"
+          to="/shop"
           className="ccweb-glass group flex flex-col rounded-2xl p-5 transition hover:border-ccweb-green/45"
         >
-          <Link2 className="h-8 w-8 text-ccweb-green" />
+          <ShoppingBag className="h-8 w-8 text-ccweb-green" />
+          <h2 className="mt-3 text-lg font-semibold text-white">Creator shop</h2>
+          <p className="mt-1 text-sm text-ccweb-muted">AI tools, agents, and workflows with Flutterwave checkout.</p>
+          <span className="mt-4 text-sm font-medium text-ccweb-green group-hover:underline">Browse marketplace →</span>
+        </Link>
+        <Link
+          to="/developers/onboarding"
+          className="ccweb-glass group flex flex-col rounded-2xl p-5 transition hover:border-ccweb-violet/45"
+        >
+          <Link2 className="h-8 w-8 text-ccweb-cyan" />
           <h2 className="mt-3 text-lg font-semibold text-white">Developer API</h2>
           <p className="mt-1 text-sm text-ccweb-muted">Keys, onboarding, and REST v1 integration.</p>
-          <span className="mt-4 text-sm font-medium text-ccweb-green group-hover:underline">Start onboarding →</span>
+          <span className="mt-4 text-sm font-medium text-ccweb-cyan group-hover:underline">Start onboarding →</span>
         </Link>
       </div>
 

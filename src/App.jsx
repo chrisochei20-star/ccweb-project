@@ -49,6 +49,15 @@ const VisualDappBuilderPage = lazy(() =>
   import("./VisualDappBuilderPage").then((m) => ({ default: m.VisualDappBuilderPage }))
 );
 const TokenDetailPage = lazy(() => import("./TokenDetailPage").then((m) => ({ default: m.TokenDetailPage })));
+const MarketplaceBrowsePage = lazy(() =>
+  import("./pages/marketplace/MarketplaceBrowsePage").then((m) => ({ default: m.MarketplaceBrowsePage }))
+);
+const MarketplaceStorePage = lazy(() =>
+  import("./pages/marketplace/MarketplaceStorePage").then((m) => ({ default: m.MarketplaceStorePage }))
+);
+const MarketplaceListingPage = lazy(() =>
+  import("./pages/marketplace/MarketplaceListingPage").then((m) => ({ default: m.MarketplaceListingPage }))
+);
 
 function RouteFallback() {
   return (
@@ -86,6 +95,9 @@ function App() {
           <Route path="crypto/early-signals" element={<FindPage initialTab="signals" />} />
           <Route path="crypto/wallets" element={<FindPage initialTab="wallets" />} />
           <Route path="build" element={<BuildHubPage />} />
+          <Route path="shop" element={<MarketplaceBrowsePage />} />
+          <Route path="shop/store/:slug" element={<MarketplaceStorePage />} />
+          <Route path="shop/l/:slug" element={<MarketplaceListingPage />} />
           <Route path="earn" element={<EarnShellPage />} />
           <Route path="community" element={<CommunityShellPage />} />
           <Route path="p/:userId" element={<PublicProfilePage />} />

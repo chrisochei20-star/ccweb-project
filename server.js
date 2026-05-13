@@ -27,7 +27,7 @@ const { handleStripeWebhook } = require("./payments/stripeWebhook");
 const { handleStripeCheckoutEscrow } = require("./payments/stripeCheckout");
 const { createPlatformApp } = require("./platformExpress");
 const { sendRawHealth } = require("./server/http/controllers/health.controller");
-const { writeRawOptions } = require("./security/expressHardDefaults");
+const { writeRawOptions, setRawCorsHeaders } = require("./security/expressHardDefaults");
 const { attachChatSocket, closeChatSocket } = require("./server/realtime/chatSocket");
 const monetizationEngine = require("./services/monetizationEngine");
 const monPg = require("./db/persistenceMonetization");
@@ -1027,12 +1027,12 @@ async function handleMarkNotificationsRead(req, res) {
   sendJson(res, 200, { userId, updated });
 }
 
-function handleListCommunityPosts(res) {
+function handleListCommunityPosts(req, res) {
   if (useCommunityPg()) {
     communityPg
       .listPosts()
-      .then((posts) => sendJson(res, 200, { count: posts.length, posts }))
-      .catch((e) => sendJson(res, 500, { error: e.message }));
+      .then((posts) => sendJson(res, 200, { count: posts.length, posts }, req))
+      .catch((e) => sendJson(res, 500, { error: e.message }, req));
     return;
   }
   const counts = new Map();
@@ -1042,18 +1042,18 @@ function handleListCommunityPosts(res) {
   const posts = Array.from(communityPosts.values())
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
     .map((p) => ({ ...p, commentCount: counts.get(p.id) || 0 }));
-  sendJson(res, 200, { count: posts.length, posts });
+  sendJson(res, 200, { count: posts.length, posts }, req);
 }
 
-function handleListTrendingCommunityPosts(res) {
+function handleListTrendingCommunityPosts(req, res) {
   if (useCommunityPg()) {
     communityPg
       .listTrendingPosts(40)
-      .then((posts) => sendJson(res, 200, { count: posts.length, posts }))
-      .catch((e) => sendJson(res, 500, { error: e.message }));
+      .then((posts) => sendJson(res, 200, { count: posts.length, posts }, req))
+      .catch((e) => sendJson(res, 500, { error: e.message }, req));
     return;
   }
-  handleListCommunityPosts(res);
+  handleListCommunityPosts(req, res);
 }
 
 async function handleCreateCommunityPost(req, res) {
@@ -1061,7 +1061,7 @@ async function handleCreateCommunityPost(req, res) {
   try {
     body = await readJsonBody(req);
   } catch {
-    sendJson(res, 400, { error: "Body must be valid JSON." });
+    sendJson(res, 400, { error: "Body must be valid JSON." }, req);
     return;
   }
 
@@ -1069,7 +1069,7 @@ async function handleCreateCommunityPost(req, res) {
   const title = (body.title || "").toString().trim();
   const content = (body.content || "").toString().trim();
   if (!authorUserId || !title || !content) {
-    sendJson(res, 400, { error: "authorUserId, title and content are required." });
+    sendJson(res, 400, { error: "authorUserId, title and content are required." }, req);
     return;
   }
 
@@ -1093,9 +1093,9 @@ async function handleCreateCommunityPost(req, res) {
       });
       growthEngine.recordEvent(author.id, "community_post", { postId: post.id }).catch(() => {});
       if (learningPg.usePostgres()) learningPg.addXpDelta(author.id, 25).catch(() => {});
-      sendJson(res, 201, post);
+      sendJson(res, 201, post, req);
     } catch (e) {
-      sendJson(res, 500, { error: e.message });
+      sendJson(res, 500, { error: e.message }, req);
     }
     return;
   }
@@ -1120,77 +1120,77 @@ async function handleCreateCommunityPost(req, res) {
     metadata: { postId: id, authorUserId: author.id },
   });
 
-  sendJson(res, 201, post);
+  sendJson(res, 201, post, req);
 }
 
-function handleGetCommunityPost(postId, res) {
+function handleGetCommunityPost(req, postId, res) {
   if (useCommunityPg()) {
     communityPg
       .getPostWithComments(postId)
       .then((data) => {
         if (!data) {
-          sendJson(res, 404, { error: "Post not found." });
+          sendJson(res, 404, { error: "Post not found." }, req);
           return;
         }
-        sendJson(res, 200, data);
+        sendJson(res, 200, data, req);
       })
-      .catch((e) => sendJson(res, 500, { error: e.message }));
+      .catch((e) => sendJson(res, 500, { error: e.message }, req));
     return;
   }
   const post = communityPosts.get(postId);
   if (!post) {
-    sendJson(res, 404, { error: "Post not found." });
+    sendJson(res, 404, { error: "Post not found." }, req);
     return;
   }
   const comments = Array.from(communityComments.values())
     .filter((c) => c.postId === postId)
     .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
-  sendJson(res, 200, { post, comments });
+  sendJson(res, 200, { post, comments }, req);
 }
 
-function handleListPostComments(postId, res) {
+function handleListPostComments(req, postId, res) {
   if (useCommunityPg()) {
     communityPg
       .getPostWithComments(postId)
       .then((data) => {
-        if (!data) sendJson(res, 404, { error: "Post not found." });
-        else sendJson(res, 200, { postId, count: data.comments.length, comments: data.comments });
+        if (!data) sendJson(res, 404, { error: "Post not found." }, req);
+        else sendJson(res, 200, { postId, count: data.comments.length, comments: data.comments }, req);
       })
-      .catch((e) => sendJson(res, 500, { error: e.message }));
+      .catch((e) => sendJson(res, 500, { error: e.message }, req));
     return;
   }
   if (!communityPosts.has(postId)) {
-    sendJson(res, 404, { error: "Post not found." });
+    sendJson(res, 404, { error: "Post not found." }, req);
     return;
   }
   const comments = Array.from(communityComments.values())
     .filter((c) => c.postId === postId)
     .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
-  sendJson(res, 200, { postId, count: comments.length, comments });
+  sendJson(res, 200, { postId, count: comments.length, comments }, req);
 }
 
 async function handleCreatePostComment(req, res, postId) {
   if (useCommunityPg()) {
     const exists = await communityPg.getPostWithComments(postId);
     if (!exists) {
-      sendJson(res, 404, { error: "Post not found." });
+      sendJson(res, 404, { error: "Post not found." }, req);
       return;
     }
   } else if (!communityPosts.has(postId)) {
-    sendJson(res, 404, { error: "Post not found." });
+    sendJson(res, 404, { error: "Post not found." }, req);
     return;
   }
   let body;
   try {
     body = await readJsonBody(req);
   } catch {
-    sendJson(res, 400, { error: "Body must be valid JSON." });
+    sendJson(res, 400, { error: "Body must be valid JSON." }, req);
     return;
   }
   const authorUserId = (body.authorUserId || "").toString().trim();
   const text = (body.body || body.content || "").toString().trim();
   if (!authorUserId || !text) {
-    sendJson(res, 400, { error: "authorUserId and body (or content) are required." });
+    sendJson(res, 400, { error: "authorUserId and body (or content) are required." }, req);
     return;
   }
   const author = ensureUser(authorUserId, { displayName: body.authorDisplayName });
@@ -1210,9 +1210,9 @@ async function handleCreatePostComment(req, res, postId) {
         targetUserIds: [post.authorUserId].filter((uid) => uid && uid !== author.id),
         metadata: { postId, commentId: row.id },
       });
-      sendJson(res, 201, row);
+      sendJson(res, 201, row, req);
     } catch (e) {
-      sendJson(res, 500, { error: e.message });
+      sendJson(res, 500, { error: e.message }, req);
     }
     return;
   }
@@ -1235,22 +1235,22 @@ async function handleCreatePostComment(req, res, postId) {
     targetUserIds: [post.authorUserId].filter((uid) => uid && uid !== author.id),
     metadata: { postId, commentId: id },
   });
-  sendJson(res, 201, row);
+  sendJson(res, 201, row, req);
 }
 
-function handleListCommunityChats(requestUrl, res) {
+function handleListCommunityChats(req, requestUrl, res) {
   const channelFilter = (requestUrl.searchParams.get("channel") || "").trim();
   if (useCommunityPg()) {
     communityPg
       .listChats(channelFilter)
-      .then((chats) => sendJson(res, 200, { count: chats.length, chats }))
-      .catch((e) => sendJson(res, 500, { error: e.message }));
+      .then((chats) => sendJson(res, 200, { count: chats.length, chats }, req))
+      .catch((e) => sendJson(res, 500, { error: e.message }, req));
     return;
   }
   const chats = Array.from(communityChats.values())
     .filter((chat) => (channelFilter ? chat.channel === channelFilter : true))
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  sendJson(res, 200, { count: chats.length, chats });
+  sendJson(res, 200, { count: chats.length, chats }, req);
 }
 
 async function handleCreateCommunityChat(req, res) {
@@ -1258,7 +1258,7 @@ async function handleCreateCommunityChat(req, res) {
   try {
     body = await readJsonBody(req);
   } catch {
-    sendJson(res, 400, { error: "Body must be valid JSON." });
+    sendJson(res, 400, { error: "Body must be valid JSON." }, req);
     return;
   }
 
@@ -1266,7 +1266,7 @@ async function handleCreateCommunityChat(req, res) {
   const message = (body.message || "").toString().trim();
   const channel = (body.channel || "general").toString().trim();
   if (!authorUserId || !message) {
-    sendJson(res, 400, { error: "authorUserId and message are required." });
+    sendJson(res, 400, { error: "authorUserId and message are required." }, req);
     return;
   }
 
@@ -1287,9 +1287,9 @@ async function handleCreateCommunityChat(req, res) {
         broadcast: true,
         metadata: { chatId: chat.id, channel, authorUserId: author.id },
       });
-      sendJson(res, 201, chat);
+      sendJson(res, 201, chat, req);
     } catch (e) {
-      sendJson(res, 500, { error: e.message });
+      sendJson(res, 500, { error: e.message }, req);
     }
     return;
   }
@@ -1313,17 +1313,17 @@ async function handleCreateCommunityChat(req, res) {
     metadata: { chatId: id, channel, authorUserId: author.id },
   });
 
-  sendJson(res, 201, chat);
+  sendJson(res, 201, chat, req);
 }
 
-function handleListCommunityReactions(requestUrl, res) {
+function handleListCommunityReactions(req, requestUrl, res) {
   const targetType = (requestUrl.searchParams.get("targetType") || "").trim();
   const targetId = (requestUrl.searchParams.get("targetId") || "").trim();
   if (useCommunityPg()) {
     communityPg
       .listReactions(targetType, targetId)
-      .then((reactions) => sendJson(res, 200, { count: reactions.length, reactions }))
-      .catch((e) => sendJson(res, 500, { error: e.message }));
+      .then((reactions) => sendJson(res, 200, { count: reactions.length, reactions }, req))
+      .catch((e) => sendJson(res, 500, { error: e.message }, req));
     return;
   }
   const reactions = Array.from(communityReactions.values()).filter((reaction) => {
@@ -1335,7 +1335,7 @@ function handleListCommunityReactions(requestUrl, res) {
     }
     return true;
   });
-  sendJson(res, 200, { count: reactions.length, reactions });
+  sendJson(res, 200, { count: reactions.length, reactions }, req);
 }
 
 async function handleCreateCommunityReaction(req, res) {
@@ -1343,7 +1343,7 @@ async function handleCreateCommunityReaction(req, res) {
   try {
     body = await readJsonBody(req);
   } catch {
-    sendJson(res, 400, { error: "Body must be valid JSON." });
+    sendJson(res, 400, { error: "Body must be valid JSON." }, req);
     return;
   }
 
@@ -1352,7 +1352,7 @@ async function handleCreateCommunityReaction(req, res) {
   const targetId = (body.targetId || "").toString().trim();
   const reaction = (body.reaction || "like").toString().trim();
   if (!authorUserId || !targetType || !targetId) {
-    sendJson(res, 400, { error: "authorUserId, targetType and targetId are required." });
+    sendJson(res, 400, { error: "authorUserId, targetType and targetId are required." }, req);
     return;
   }
 
@@ -1379,9 +1379,9 @@ async function handleCreateCommunityReaction(req, res) {
       }
       growthEngine.recordEvent(actor.id, "community_reaction", { targetType, targetId }).catch(() => {});
       if (learningPg.usePostgres()) learningPg.addXpDelta(actor.id, 5).catch(() => {});
-      sendJson(res, 201, record);
+      sendJson(res, 201, record, req);
     } catch (e) {
-      sendJson(res, 500, { error: e.message });
+      sendJson(res, 500, { error: e.message }, req);
     }
     return;
   }
@@ -1409,7 +1409,7 @@ async function handleCreateCommunityReaction(req, res) {
     });
   }
 
-  sendJson(res, 201, record);
+  sendJson(res, 201, record, req);
 }
 
 function handleListBugReports(res) {
@@ -1964,7 +1964,14 @@ async function serveFile(filePath, res) {
   }
 }
 
-function sendJson(res, statusCode, payload) {
+function sendJson(res, statusCode, payload, req) {
+  if (req) {
+    setRawCorsHeaders(req, res, {
+      methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+      headers:
+        "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With, CCWEB-API-Key, X-CCWEB-Admin",
+    });
+  }
   res.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(payload));
 }
@@ -4076,13 +4083,21 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname.startsWith("/api/community") && req.method === "OPTIONS") {
+    writeRawOptions(req, res, {
+      methods: "GET, POST, OPTIONS",
+      headers: "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With",
+    });
+    return;
+  }
+
   if (pathname === "/api/community/posts/trending" && req.method === "GET") {
-    handleListTrendingCommunityPosts(res);
+    handleListTrendingCommunityPosts(req, res);
     return;
   }
 
   if (pathname === "/api/community/posts" && req.method === "GET") {
-    handleListCommunityPosts(res);
+    handleListCommunityPosts(req, res);
     return;
   }
 
@@ -4093,13 +4108,13 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname.match(/^\/api\/community\/posts\/[^/]+$/) && req.method === "GET") {
     const postId = pathname.split("/").pop();
-    handleGetCommunityPost(postId, res);
+    handleGetCommunityPost(req, postId, res);
     return;
   }
 
   if (pathname.match(/^\/api\/community\/posts\/[^/]+\/comments$/) && req.method === "GET") {
     const postId = pathname.split("/")[4];
-    handleListPostComments(postId, res);
+    handleListPostComments(req, postId, res);
     return;
   }
 
@@ -4110,7 +4125,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/community/chats" && req.method === "GET") {
-    handleListCommunityChats(requestUrl, res);
+    handleListCommunityChats(req, requestUrl, res);
     return;
   }
 
@@ -4120,7 +4135,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/community/reactions" && req.method === "GET") {
-    handleListCommunityReactions(requestUrl, res);
+    handleListCommunityReactions(req, requestUrl, res);
     return;
   }
 

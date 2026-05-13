@@ -1441,7 +1441,7 @@ async function handleCreateCommunityPost(req, res) {
       };
     }
   }
-  const tagMerge = [...new Set([...(Array.isArray(body.tags) ? body.tags.map((t) => String(t).toLowerCase()) : []), ...extractHashtagsFromText(`${title}\n${content}`)]))].slice(0, 40);
+  const tagMerge = [...new Set([...(Array.isArray(body.tags) ? body.tags.map((t) => String(t).toLowerCase()) : []), ...extractHashtagsFromText(`${title}\n${content}`)])].slice(0, 40);
   const post = {
     id,
     authorUserId: author.id,

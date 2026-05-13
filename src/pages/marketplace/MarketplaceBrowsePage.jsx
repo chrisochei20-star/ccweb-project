@@ -334,7 +334,20 @@ export function MarketplaceBrowsePage() {
                 ))}
               </div>
             ) : featured.length === 0 ? (
-              <p className="text-sm text-ccweb-muted">No featured listings yet. Creators can publish from the API.</p>
+              <div className="rounded-2xl border border-dashed border-white/15 bg-black/20 p-6 text-center text-sm text-ccweb-muted">
+                <p>No featured listings yet.</p>
+                <p className="mt-2">
+                  Publish from the{" "}
+                  <Link to="/shop/creator/studio" className="font-medium text-ccweb-cyan hover:underline">
+                    creator studio
+                  </Link>{" "}
+                  or browse{" "}
+                  <Link to="/shop" className="font-medium text-ccweb-cyan hover:underline">
+                    all shops
+                  </Link>
+                  .
+                </p>
+              </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {featured.map((item) => (

@@ -1,4 +1,5 @@
 import { apiFetch } from "../lib/apiClient";
+import { fetchWithRetry } from "../lib/uploadWithRetry";
 import { apiUrl } from "../config/env";
 import { getSessionToken } from "../session";
 
@@ -185,12 +186,16 @@ export async function uploadMarketplaceImage(file) {
   if (!t) throw new Error("Sign in to upload.");
   const fd = new FormData();
   fd.append("file", file);
-  const res = await apiFetch(apiUrl("/api/v1/uploads/marketplace/image"), {
-    method: "POST",
-    headers: { Authorization: `Bearer ${t}` },
-    credentials: "include",
-    body: fd,
-  });
+  const res = await fetchWithRetry(
+    () =>
+      apiFetch(apiUrl("/api/v1/uploads/marketplace/image"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${t}` },
+        credentials: "include",
+        body: fd,
+      }),
+    { retries: 4, baseDelayMs: 400 }
+  );
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Upload failed");
   return data;

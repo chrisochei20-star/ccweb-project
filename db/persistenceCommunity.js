@@ -438,7 +438,6 @@ module.exports = {
   listBookmarks,
   listBugs,
   createBug,
-  mapPostLegacy,
   normalizeMediaUrls,
   mergeTags,
 };

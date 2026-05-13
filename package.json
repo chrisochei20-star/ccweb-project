@@ -22,8 +22,10 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:production": "PRODUCTION_E2E=1 playwright test e2e/production-smoke.spec.js --project=chromium",
+    "test:e2e:marketplace": "playwright test e2e/marketplace-hardening.spec.js --project=chromium",
     "record:preview": "PW_SLOW_MO=450 CI=1 playwright test e2e/preview-recording.spec.js --project=chromium",
-    "mobile:sync": "npm run build && npx cap sync"
+    "mobile:sync": "npm run build && npx cap sync",
+    "mobile:android": "npm run build && npx cap sync android"
   },
   "engines": {
     "node": "20.x",

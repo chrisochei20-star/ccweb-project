@@ -235,7 +235,9 @@ export function MarketplaceCreatorStudioPage() {
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-ccweb-violet">Creators</p>
-          <h1 className="text-2xl font-bold text-white md:text-3xl">Publishing studio</h1>
+          <h1 className="text-2xl font-bold text-white md:text-3xl" data-ccweb-e2e="creator-studio-heading">
+            Publishing studio
+          </h1>
           <p className="mt-1 max-w-2xl text-sm text-ccweb-muted">
             Storefront, listings, SKUs, pricing, and AI execution configs. Set{" "}
             <code className="text-ccweb-cyan">CCWEB_MP_REQUIRE_LISTING_REVIEW=1</code> on the server for admin approval before listings go live.
@@ -245,6 +247,17 @@ export function MarketplaceCreatorStudioPage() {
           Open analytics dashboard →
         </Link>
       </header>
+
+      <details className="ccweb-glass rounded-2xl p-4 text-sm text-ccweb-muted open:border-ccweb-cyan/25">
+        <summary className="cursor-pointer select-none font-semibold text-white">First publish checklist (buy → pay → access)</summary>
+        <ol className="mt-3 list-decimal space-y-1.5 pl-5">
+          <li>Save storefront details and banner — mobile shoppers see this first.</li>
+          <li>Create a listing with tags, then add a SKU with a real USD and/or NGN price.</li>
+          <li>Use “Mark published”; if review mode is on, wait for Admin Ops → marketplace approval.</li>
+          <li>Buyers pay on the public listing page; after redirect + verify, “Your access” unlocks the entitlement.</li>
+          <li>Creator cash-out remains under Earn → payouts (Flutterwave transfer flow).</li>
+        </ol>
+      </details>
 
       {!onboarded && (
         <div className="ccweb-glass flex flex-col gap-3 rounded-2xl border border-ccweb-cyan/25 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -297,7 +310,12 @@ export function MarketplaceCreatorStudioPage() {
               <input type="file" accept="image/*" className="hidden" onChange={onUploadBanner} />
             </label>
           </div>
-          <button type="submit" className="ccweb-gradient-btn mt-2 w-fit px-5 py-2 text-sm sm:col-span-2" disabled={busy}>
+          <button
+            type="submit"
+            className="ccweb-gradient-btn mt-2 w-fit px-5 py-2 text-sm sm:col-span-2"
+            disabled={busy}
+            data-ccweb-e2e="creator-studio-save-store"
+          >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save storefront"}
           </button>
         </form>
@@ -340,7 +358,12 @@ export function MarketplaceCreatorStudioPage() {
             <input type="checkbox" checked={publishNow} onChange={(e) => setPublishNow(e.target.checked)} className="rounded border-white/20" />
             Publish immediately (subject to moderation policy)
           </label>
-          <button type="submit" className="ccweb-gradient-btn w-fit px-5 py-2 text-sm sm:col-span-2" disabled={busy}>
+          <button
+            type="submit"
+            className="ccweb-gradient-btn w-fit px-5 py-2 text-sm sm:col-span-2"
+            disabled={busy}
+            data-ccweb-e2e="creator-studio-create-listing"
+          >
             Create listing
           </button>
         </form>

@@ -4,7 +4,7 @@ import { useOutletContext } from "react-router-dom";
 import { apiUrl, assetsUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
 import { compressImageFile } from "../lib/imageCompress";
-import { createChatSocket } from "../lib/chatSocket";
+import { createChatSocket, wireSocketResilience } from "../lib/chatSocket";
 import { toast } from "../lib/toastBus";
 import { getSessionToken } from "../session";
 
@@ -103,6 +103,13 @@ export function ChatPage() {
     if (!user?.id) return;
     const socket = createChatSocket();
     socketRef.current = socket;
+    wireSocketResilience(socket, {
+      onReconnect: () => {
+        loadConversations().catch(() => {});
+        const cur = activeChatRef.current;
+        if (cur) loadMessages(cur).catch(() => {});
+      },
+    });
 
     socket.on("connect", () => {
       loadConversations().catch(() => {});

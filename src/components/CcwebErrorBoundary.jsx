@@ -1,5 +1,6 @@
 import { Component } from "react";
 import { AlertTriangle } from "lucide-react";
+import { postClientErrorReport } from "../api/clientTelemetryApi";
 
 export class CcwebErrorBoundary extends Component {
   constructor(props) {
@@ -9,6 +10,18 @@ export class CcwebErrorBoundary extends Component {
 
   static getDerivedStateFromError(err) {
     return { hasError: true, message: err?.message || "Something went wrong." };
+  }
+
+  componentDidCatch(err, info) {
+    try {
+      postClientErrorReport({
+        message: err?.message || "React render error",
+        stack: `${err?.stack || ""}\n---\n${info?.componentStack || ""}`,
+        digest: err?.digest,
+      });
+    } catch {
+      /* ignore */
+    }
   }
 
   render() {

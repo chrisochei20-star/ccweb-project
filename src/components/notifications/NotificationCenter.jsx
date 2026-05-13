@@ -14,7 +14,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchNotificationSummary, fetchNotifications, markNotificationsRead } from "../../api/notificationsApi";
-import { createChatSocket } from "../../lib/chatSocket";
+import { createChatSocket, wireSocketResilience } from "../../lib/chatSocket";
 import { toast } from "../../lib/toastBus";
 import { Skeleton } from "../ui/Skeleton";
 
@@ -111,11 +111,14 @@ export function NotificationCenterPage() {
 
   useEffect(() => {
     const socket = createChatSocket();
-    if (!socket) return undefined;
     const onUp = () => load(null, false);
+    wireSocketResilience(socket, { onReconnect: onUp });
     socket.on("notifications:update", onUp);
+    socket.connect();
     return () => {
       socket.off("notifications:update", onUp);
+      socket.removeAllListeners();
+      socket.disconnect();
     };
   }, [load]);
 
@@ -304,11 +307,14 @@ export function NotificationBell({ user }) {
   useEffect(() => {
     if (!user) return undefined;
     const socket = createChatSocket();
-    if (!socket) return undefined;
     const onUp = () => refresh();
+    wireSocketResilience(socket, { onReconnect: onUp });
     socket.on("notifications:update", onUp);
+    socket.connect();
     return () => {
       socket.off("notifications:update", onUp);
+      socket.removeAllListeners();
+      socket.disconnect();
     };
   }, [user, refresh]);
 

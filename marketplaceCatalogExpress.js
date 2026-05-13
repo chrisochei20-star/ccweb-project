@@ -14,12 +14,18 @@ function requireDb(req, res, next) {
   next();
 }
 
+/** Short CDN/browser cache for anonymous catalog reads (invalidated by moderation publish). */
+function catalogCache(_req, res, next) {
+  res.set("Cache-Control", "public, max-age=20, stale-while-revalidate=120");
+  next();
+}
+
 function createMarketplaceCatalogRouter({ authJwtMiddleware, optionalJwt }) {
   const opt = typeof optionalJwt === "function" ? optionalJwt : (req, res, next) => next();
   const router = express.Router();
   router.use(requireDb);
 
-  router.get("/featured", async (req, res, next) => {
+  router.get("/featured", catalogCache, async (req, res, next) => {
     try {
       const listings = await mp.listFeaturedListings(Number(req.query.limit) || 12);
       res.json({ listings });
@@ -28,7 +34,7 @@ function createMarketplaceCatalogRouter({ authJwtMiddleware, optionalJwt }) {
     }
   });
 
-  router.get("/trending", async (req, res, next) => {
+  router.get("/trending", catalogCache, async (req, res, next) => {
     try {
       const listings = await mp.listTrendingListings(Number(req.query.limit) || 12);
       res.json({ listings });
@@ -37,7 +43,7 @@ function createMarketplaceCatalogRouter({ authJwtMiddleware, optionalJwt }) {
     }
   });
 
-  router.get("/categories", async (req, res, next) => {
+  router.get("/categories", catalogCache, async (req, res, next) => {
     try {
       const categories = await mp.listDistinctCategoriesPublic(Number(req.query.limit) || 40);
       res.json({ categories });
@@ -46,7 +52,7 @@ function createMarketplaceCatalogRouter({ authJwtMiddleware, optionalJwt }) {
     }
   });
 
-  router.get("/recommendations", opt, async (req, res, next) => {
+  router.get("/recommendations", catalogCache, opt, async (req, res, next) => {
     try {
       const uid = req.ccwebUserId || null;
       const listings = await mp.listRecommendations({ userId: uid, limit: Number(req.query.limit) || 12 });
@@ -56,7 +62,7 @@ function createMarketplaceCatalogRouter({ authJwtMiddleware, optionalJwt }) {
     }
   });
 
-  router.get("/stores/trending", async (req, res, next) => {
+  router.get("/stores/trending", catalogCache, async (req, res, next) => {
     try {
       const stores = await mp.listTrendingStores(Number(req.query.limit) || 12);
       res.json({ stores });
@@ -65,7 +71,7 @@ function createMarketplaceCatalogRouter({ authJwtMiddleware, optionalJwt }) {
     }
   });
 
-  router.get("/search", async (req, res, next) => {
+  router.get("/search", catalogCache, async (req, res, next) => {
     try {
       const listings = await mp.listListingsPublic({
         q: req.query.q,
@@ -81,7 +87,7 @@ function createMarketplaceCatalogRouter({ authJwtMiddleware, optionalJwt }) {
     }
   });
 
-  router.get("/stores/:slug", async (req, res, next) => {
+  router.get("/stores/:slug", catalogCache, async (req, res, next) => {
     try {
       const store = await mp.getStoreBySlug(req.params.slug);
       if (!store) return res.status(404).json({ error: "Store not found." });
@@ -92,7 +98,7 @@ function createMarketplaceCatalogRouter({ authJwtMiddleware, optionalJwt }) {
     }
   });
 
-  router.get("/listings/:slug", async (req, res, next) => {
+  router.get("/listings/:slug", catalogCache, async (req, res, next) => {
     try {
       const bundle = await mp.getListingPublicBundle(req.params.slug);
       if (!bundle) return res.status(404).json({ error: "Listing not found." });

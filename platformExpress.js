@@ -44,6 +44,7 @@ const { createDiscoverRouter } = require("./discoverExpress");
 const { createMarketplaceCatalogRouter } = require("./marketplaceCatalogExpress");
 const { createAdminOpsRouter } = require("./adminOpsExpress");
 const { createTrustRouter } = require("./trustExpress");
+const { createClientTelemetryRouter } = require("./clientTelemetryExpress");
 const pushDevices = require("./db/persistencePushDevices");
 const persistenceAiAgents = require("./db/persistenceAiAgents");
 const { getPool } = require("./db/pool");
@@ -544,6 +545,8 @@ function createPlatformApp(deps) {
 
   const marketplaceCatalogRouter = createMarketplaceCatalogRouter({ authJwtMiddleware, optionalJwt });
   v1.use("/marketplace/catalog", apiRateShort, marketplaceCatalogRouter);
+
+  v1.use("/telemetry", apiRateShort, createClientTelemetryRouter());
 
   const flutterwaveRouter = createFlutterwaveRouter({ authJwtMiddleware });
   v1.use("/payments/flutterwave", apiRateShort, flutterwaveRouter);

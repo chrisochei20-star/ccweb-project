@@ -26,7 +26,7 @@ import { CourseDetailPage } from "./pages/CourseDetailPage";
 import { CourseLessonPage } from "./pages/CourseLessonPage";
 import { AiTutorPage } from "./pages/AiTutorPage";
 import { Skeleton } from "./components/ui/Skeleton";
-import { getSessionToken, setSession } from "./session";
+import { NotificationCenterPage } from "./components/notifications/NotificationCenter";
 import { LearningAdminPage } from "./learning/LearningAdminPage";
 import { LearningSessionPage } from "./learning/LearningSessionPage";
 import { BetaInvitePage, BetaTestUserPage, BetaUserSlugPage } from "./pages/BetaPages";
@@ -84,6 +84,7 @@ function App() {
           <Route path="build" element={<BuildHubPage />} />
           <Route path="earn" element={<EarnShellPage />} />
           <Route path="community" element={<CommunityShellPage />} />
+          <Route path="notifications" element={<NotificationCenterPage />} />
           <Route element={<ProtectedLayout />}>
             <Route path="profile" element={<ProfileShellPage />} />
             <Route path="messages" element={<ChatPage />} />

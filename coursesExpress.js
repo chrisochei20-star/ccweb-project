@@ -10,6 +10,8 @@ const aiExecute = require("./services/aiExecute");
 const { validateImageBuffer } = require("./services/imageMagic");
 const { saveUploadedImage } = require("./services/imageStorage");
 const { imageMulter } = require("./uploadsExpress");
+const persistenceNotifications = require("./db/persistenceNotifications");
+const { broadcastNotificationUpdate } = require("./server/realtime/chatSocket");
 
 function requireAdmin(req, res, next) {
   const key = (req.headers["x-ccweb-admin"] || "").toString().trim();
@@ -157,6 +159,27 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
     try {
       const out = await coursesPg.markLessonComplete(req.ccwebUserId, req.params.lessonId);
       if (!out) return res.status(404).json({ error: "Lesson not found." });
+      if (persistenceNotifications.enabled()) {
+        try {
+          const body =
+            out.lessonTitle && out.courseTitle
+              ? `${out.lessonTitle} · ${out.courseTitle}`
+              : "You completed a lesson.";
+          await persistenceNotifications.createLearnProgressNotification({
+            userId: req.ccwebUserId,
+            title: "Lesson complete",
+            body,
+            payload: {
+              courseSlug: out.courseSlug,
+              lessonId: out.lessonId,
+              progressPct: out.progressPct,
+            },
+          });
+          broadcastNotificationUpdate(req.ccwebUserId, { kind: "learn" });
+        } catch {
+          /* ignore */
+        }
+      }
       res.json(out);
     } catch (e) {
       next(e);

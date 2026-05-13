@@ -21,6 +21,7 @@ const aiExecute = require("./services/aiExecute");
 const monetizationEngine = require("./services/monetizationEngine");
 const betaPg = require("./db/persistenceBeta");
 const chatPg = require("./db/persistenceChat");
+const persistenceNotifications = require("./db/persistenceNotifications");
 const { validateImageBuffer } = require("./services/imageMagic");
 const { saveUploadedImage } = require("./services/imageStorage");
 const { isCloudinaryConfigured } = require("./services/cloudinaryUpload");
@@ -33,6 +34,7 @@ const {
 const {
   broadcastChatMessage,
   broadcastInboxRefresh,
+  broadcastNotificationUpdate,
   onlineStatusForUserIds,
 } = require("./server/realtime/chatSocket");
 const { createCoursesRouter } = require("./coursesExpress");
@@ -159,6 +161,42 @@ function createPlatformApp(deps) {
     }
   });
 
+  usersRouter.post("/:userId/follow", authJwtMiddleware, async (req, res, next) => {
+    try {
+      if (!persistenceNotifications.enabled()) {
+        return res.status(503).json({ error: "Follows require PostgreSQL.", code: "NO_DATABASE" });
+      }
+      const target = (req.params.userId || "").trim();
+      if (!target || target === req.ccwebUserId) {
+        return res.status(400).json({ error: "Invalid follow target." });
+      }
+      const { query } = require("./db/pool");
+      await query(`INSERT INTO ccweb_users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING`, [req.ccwebUserId]);
+      await query(`INSERT INTO ccweb_users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING`, [target]);
+      const ins = await query(
+        `INSERT INTO ccweb_follows (follower_id, following_id) VALUES ($1, $2)
+         ON CONFLICT (follower_id, following_id) DO NOTHING
+         RETURNING follower_id`,
+        [req.ccwebUserId, target]
+      );
+      const isNew = ins.rows.length > 0;
+      if (isNew) {
+        const { ccwebUsers, buildUserProfile } = deps;
+        const prof = await authEngine.ensureUserProfile(ccwebUsers, buildUserProfile, req.ccwebUserId);
+        const dn = prof?.displayName || req.ccwebUserId.slice(0, 8);
+        await persistenceNotifications.createFollowNotification({
+          recipientUserId: target,
+          actorUserId: req.ccwebUserId,
+          actorDisplayName: dn,
+        });
+        broadcastNotificationUpdate(target, { kind: "follow" });
+      }
+      res.status(isNew ? 201 : 200).json({ ok: true, following: true, isNew });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   usersRouter.get("/:id", optionalJwt, async (req, res, next) => {
     try {
       const { sanitizeUser } = deps;
@@ -186,6 +224,69 @@ function createPlatformApp(deps) {
   });
 
   v1.use("/users", usersRouter);
+
+  const notificationsRouter = express.Router();
+
+  notificationsRouter.get("/summary", authJwtMiddleware, async (req, res, next) => {
+    try {
+      if (!persistenceNotifications.enabled()) {
+        return res.json({ unreadCount: 0, source: "disabled" });
+      }
+      const unreadCount = await persistenceNotifications.unreadCount(req.ccwebUserId);
+      res.json({ unreadCount });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  notificationsRouter.get("/", authJwtMiddleware, async (req, res, next) => {
+    try {
+      if (!persistenceNotifications.enabled()) {
+        return res.json({
+          items: [],
+          nextCursor: null,
+          unreadCount: 0,
+          grouped: [],
+          source: "disabled",
+        });
+      }
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 25));
+      const unreadOnly = req.query.unreadOnly === "true" || req.query.unreadOnly === "1";
+      const grouped = req.query.grouped === "1";
+      const cursor = req.query.cursor ? String(req.query.cursor) : null;
+      const data = await persistenceNotifications.listForUser(req.ccwebUserId, {
+        limit,
+        cursor,
+        unreadOnly,
+        includeGrouped: grouped,
+      });
+      res.json(data);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  notificationsRouter.post("/read", authJwtMiddleware, async (req, res, next) => {
+    try {
+      if (!persistenceNotifications.enabled()) {
+        return res.json({ updated: 0 });
+      }
+      const updated = await persistenceNotifications.markRead(req.ccwebUserId, {
+        markAll: req.body?.markAll === true,
+        notificationIds: Array.isArray(req.body?.notificationIds)
+          ? req.body.notificationIds.map(String)
+          : Array.isArray(req.body?.ids)
+            ? req.body.ids.map(String)
+            : [],
+      });
+      broadcastNotificationUpdate(req.ccwebUserId, { read: true });
+      res.json({ updated });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  v1.use("/notifications", apiRateShort, notificationsRouter);
 
   v1.use("/uploads", apiRateShort, createUploadsRouter({ ...deps, authJwtMiddleware }));
 
@@ -259,7 +360,23 @@ function createPlatformApp(deps) {
       broadcastChatMessage(chatId, message);
       broadcastInboxRefresh(req.ccwebUserId, chatId);
       const other = await chatPg.getOtherMember(chatId, req.ccwebUserId);
-      if (other) broadcastInboxRefresh(other, chatId);
+      if (other) {
+        broadcastInboxRefresh(other, chatId);
+        if (persistenceNotifications.enabled()) {
+          try {
+            await persistenceNotifications.createChatMessageNotification({
+              recipientUserId: other,
+              actorUserId: req.ccwebUserId,
+              chatId,
+              preview: body.slice(0, 8000),
+              messageId: message.id,
+            });
+            broadcastNotificationUpdate(other, { kind: "chat" });
+          } catch {
+            /* ignore */
+          }
+        }
+      }
       res.status(201).json({ message });
     } catch (e) {
       next(e);
@@ -298,7 +415,23 @@ function createPlatformApp(deps) {
       broadcastChatMessage(chatId, message);
       broadcastInboxRefresh(req.ccwebUserId, chatId);
       const other = await chatPg.getOtherMember(chatId, req.ccwebUserId);
-      if (other) broadcastInboxRefresh(other, chatId);
+      if (other) {
+        broadcastInboxRefresh(other, chatId);
+        if (persistenceNotifications.enabled()) {
+          try {
+            await persistenceNotifications.createChatMessageNotification({
+              recipientUserId: other,
+              actorUserId: req.ccwebUserId,
+              chatId,
+              preview: "📷 Image",
+              messageId: message.id,
+            });
+            broadcastNotificationUpdate(other, { kind: "chat" });
+          } catch {
+            /* ignore */
+          }
+        }
+      }
       res.status(201).json({ message, url: imageUrl, storage: saved.storage });
     } catch (e) {
       next(e);
@@ -381,6 +514,18 @@ function createPlatformApp(deps) {
         try {
           await learningPg.addXpDelta(req.ccwebUserId, 12);
           await growthEngine.recordEvent(req.ccwebUserId, "ai_tool_used", { agentId });
+          if (persistenceNotifications.enabled()) {
+            await persistenceNotifications.insertRow({
+              recipientUserId: req.ccwebUserId,
+              kind: "earn",
+              title: "AI reward",
+              body: "+12 XP for running an AI agent.",
+              payload: { agentId, xpDelta: 12 },
+              actorUserId: null,
+              groupKey: `earn:agent:${agentId}`,
+            });
+            broadcastNotificationUpdate(req.ccwebUserId, { kind: "earn" });
+          }
         } catch {
           /* ignore */
         }
@@ -461,7 +606,25 @@ function createPlatformApp(deps) {
       const allowed = ["share", "milestone", "scan_completed"];
       if (!allowed.includes(type)) return res.status(400).json({ error: "Invalid event type." });
       await growthEngine.recordEvent(req.ccwebUserId, `client_${type}`, req.body?.metadata || {});
-      if (learningPg.usePostgres() && type === "share") await learningPg.addXpDelta(req.ccwebUserId, 8);
+      if (learningPg.usePostgres() && type === "share") {
+        await learningPg.addXpDelta(req.ccwebUserId, 8);
+        if (persistenceNotifications.enabled()) {
+          try {
+            await persistenceNotifications.insertRow({
+              recipientUserId: req.ccwebUserId,
+              kind: "earn",
+              title: "Growth reward",
+              body: "+8 XP for sharing CCWEB.",
+              payload: { source: "growth_share" },
+              actorUserId: null,
+              groupKey: "earn:growth_share",
+            });
+            broadcastNotificationUpdate(req.ccwebUserId, { kind: "earn" });
+          } catch {
+            /* ignore */
+          }
+        }
+      }
       res.json({ ok: true });
     } catch (e) {
       next(e);

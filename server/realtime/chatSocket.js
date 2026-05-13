@@ -157,6 +157,12 @@ function broadcastInboxRefresh(userId, chatId) {
   ioInstance.to(`user:${userId}`).emit("inbox:refresh", { chatId });
 }
 
+/** Push in-app notification list refresh (unread badge, center). */
+function broadcastNotificationUpdate(userId, payload = {}) {
+  if (!ioInstance || !userId) return;
+  ioInstance.to(`user:${userId}`).emit("notifications:update", payload);
+}
+
 function onlineStatusForUserIds(userIds) {
   const out = {};
   for (const id of userIds) {
@@ -177,6 +183,7 @@ module.exports = {
   getChatIo,
   broadcastChatMessage,
   broadcastInboxRefresh,
+  broadcastNotificationUpdate,
   onlineStatusForUserIds,
   closeChatSocket,
 };

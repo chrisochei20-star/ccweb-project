@@ -28,9 +28,10 @@ const { handleStripeCheckoutEscrow } = require("./payments/stripeCheckout");
 const { createPlatformApp } = require("./platformExpress");
 const { sendRawHealth } = require("./server/http/controllers/health.controller");
 const { writeRawOptions, setRawCorsHeaders } = require("./security/expressHardDefaults");
-const { attachChatSocket, closeChatSocket } = require("./server/realtime/chatSocket");
+const { attachChatSocket, closeChatSocket, broadcastNotificationUpdate } = require("./server/realtime/chatSocket");
 const monetizationEngine = require("./services/monetizationEngine");
 const monPg = require("./db/persistenceMonetization");
+const persistenceNotifications = require("./db/persistenceNotifications");
 
 function useCommunityPg() {
   return Boolean(getPool());
@@ -414,7 +415,39 @@ function createNotification(input = {}) {
     });
   });
 
+  void syncNotificationsToPostgres(record, recipients);
   return record;
+}
+
+async function syncNotificationsToPostgres(record, recipients) {
+  try {
+    const uniq = [...new Set(recipients)];
+    if (persistenceNotifications.enabled()) {
+      await persistenceNotifications.insertFromLegacyEvent(record, uniq);
+    }
+    for (const uid of uniq) {
+      broadcastNotificationUpdate(uid, { tick: true });
+    }
+  } catch (e) {
+    logger.warn({ msg: "notification_pg_sync_failed", err: e.message });
+  }
+}
+
+async function notifyCommunityMentions(text, { actorUserId, actorDisplayName, postId }) {
+  if (!persistenceNotifications.enabled() || !text) return;
+  try {
+    const targets = await persistenceNotifications.findMentionedUserIdsFromText(String(text), actorUserId);
+    if (!targets.length) return;
+    createNotification({
+      type: "mention",
+      title: "You were mentioned",
+      message: `${actorDisplayName || "Someone"} mentioned you in community.`,
+      targetUserIds: targets,
+      metadata: { postId, actorUserId },
+    });
+  } catch (e) {
+    logger.warn({ msg: "community_mention_notify_failed", err: e.message });
+  }
 }
 
 function buildNotificationEnvelope(userId, inboxEntry) {
@@ -917,10 +950,14 @@ function distributeAndNotifyForPayout(room, payout, poolOverride = null) {
 }
 
 function resolveNotificationTargetOwner(targetType, targetId) {
-  if (targetType === "community_post") {
+  const tt = (targetType || "").toString();
+  if (tt === "community_post" || tt === "post") {
     return communityPosts.get(targetId)?.authorUserId || null;
   }
-  if (targetType === "community_chat") {
+  if (tt === "comment") {
+    return communityComments.get(targetId)?.authorUserId || null;
+  }
+  if (tt === "community_chat") {
     return communityChats.get(targetId)?.authorUserId || null;
   }
   if (targetType === "ai_blog") {
@@ -967,56 +1004,108 @@ async function handleUpsertUser(req, res) {
   sendJson(res, existing ? 200 : 201, sanitizeUser(profile));
 }
 
-function handleListNotifications(req, requestUrl, res) {
+async function handleListNotifications(req, requestUrl, res) {
   const tokenUserId = authEngine.getUserIdFromAccess(getBearerToken(req));
-  const userId = (requestUrl.searchParams.get("userId") || tokenUserId || "").trim();
-  if (!userId) {
-    sendJson(res, 400, { error: "userId is required or sign in." });
+  if (!tokenUserId) {
+    sendJson(res, 401, { error: "Authentication required.", code: "UNAUTHORIZED" }, req);
     return;
   }
-  if (tokenUserId && userId !== tokenUserId) {
-    sendJson(res, 403, { error: "Cannot read another user's notifications." });
+
+  if (persistenceNotifications.enabled()) {
+    try {
+      const limit = Math.min(100, Math.max(1, parseInt(requestUrl.searchParams.get("limit"), 10) || 40));
+      const unreadOnly = requestUrl.searchParams.get("unreadOnly") === "true";
+      const grouped = requestUrl.searchParams.get("grouped") === "1";
+      const cursor = requestUrl.searchParams.get("cursor") || null;
+      const data = await persistenceNotifications.listForUser(tokenUserId, {
+        limit,
+        cursor,
+        unreadOnly,
+        includeGrouped: grouped,
+      });
+      sendJson(
+        res,
+        200,
+        {
+          userId: tokenUserId,
+          count: data.items.length,
+          unreadCount: data.unreadCount,
+          notifications: data.items,
+          nextCursor: data.nextCursor,
+          grouped: data.grouped,
+        },
+        req
+      );
+    } catch (e) {
+      sendJson(res, 500, { error: e.message }, req);
+    }
     return;
   }
-  ensureUser(userId);
+
+  ensureUser(tokenUserId);
   const unreadOnly = requestUrl.searchParams.get("unreadOnly") === "true";
-  const inbox = ensureInbox(userId);
+  const inbox = ensureInbox(tokenUserId);
   const items = inbox
-    .map((entry) => buildNotificationEnvelope(userId, entry))
+    .map((entry) => buildNotificationEnvelope(tokenUserId, entry))
     .filter(Boolean)
     .filter((entry) => (unreadOnly ? !entry.read : true))
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  sendJson(res, 200, {
-    userId,
-    count: items.length,
-    unreadCount: items.filter((entry) => !entry.read).length,
-    notifications: items,
-  });
+  sendJson(
+    res,
+    200,
+    {
+      userId: tokenUserId,
+      count: items.length,
+      unreadCount: items.filter((entry) => !entry.read).length,
+      notifications: items,
+      nextCursor: null,
+      grouped: [],
+    },
+    req
+  );
 }
 
 async function handleMarkNotificationsRead(req, res) {
   const tokenUserId = authEngine.getUserIdFromAccess(getBearerToken(req));
+  if (!tokenUserId) {
+    sendJson(res, 401, { error: "Authentication required.", code: "UNAUTHORIZED" }, req);
+    return;
+  }
   let body;
   try {
     body = await readJsonBody(req);
   } catch {
-    sendJson(res, 400, { error: "Body must be valid JSON." });
+    sendJson(res, 400, { error: "Body must be valid JSON." }, req);
     return;
   }
 
-  const userId = (body.userId || tokenUserId || "").toString().trim();
-  if (!userId) {
-    sendJson(res, 400, { error: "userId is required or sign in." });
+  if (persistenceNotifications.enabled()) {
+    try {
+      const updated = await persistenceNotifications.markRead(tokenUserId, {
+        markAll: body.markAll === true,
+        notificationIds: Array.isArray(body.notificationIds)
+          ? body.notificationIds.map((id) => id.toString())
+          : Array.isArray(body.ids)
+            ? body.ids.map((id) => id.toString())
+            : [],
+      });
+      broadcastNotificationUpdate(tokenUserId, { read: true });
+      sendJson(res, 200, { userId: tokenUserId, updated }, req);
+    } catch (e) {
+      sendJson(res, 500, { error: e.message }, req);
+    }
     return;
   }
-  if (tokenUserId && userId !== tokenUserId) {
-    sendJson(res, 403, { error: "Cannot modify another user's notifications." });
-    return;
-  }
-  ensureUser(userId);
-  const inbox = ensureInbox(userId);
+
+  const inbox = ensureInbox(tokenUserId);
   const markAll = body.markAll === true;
-  const selected = new Set(Array.isArray(body.notificationIds) ? body.notificationIds.map((id) => id.toString()) : []);
+  const selected = new Set(
+    Array.isArray(body.notificationIds)
+      ? body.notificationIds.map((id) => id.toString())
+      : Array.isArray(body.ids)
+        ? body.ids.map((id) => id.toString())
+        : []
+  );
   let updated = 0;
   inbox.forEach((entry) => {
     if (!entry.read && (markAll || selected.has(entry.notificationId))) {
@@ -1024,7 +1113,82 @@ async function handleMarkNotificationsRead(req, res) {
       updated += 1;
     }
   });
-  sendJson(res, 200, { userId, updated });
+  broadcastNotificationUpdate(tokenUserId, { read: true });
+  sendJson(res, 200, { userId: tokenUserId, updated }, req);
+}
+
+async function requireCommunityActor(req, res) {
+  const token = getBearerToken(req);
+  const userId = token ? authEngine.getUserIdFromAccess(token) : null;
+  if (!userId) {
+    sendJson(
+      res,
+      401,
+      {
+        error: "Authentication required.",
+        code: "UNAUTHORIZED",
+        detail: "Send Authorization: Bearer <accessToken> for community actions.",
+      },
+      req
+    );
+    return null;
+  }
+  try {
+    const user = await authEngine.ensureUserProfile(ccwebUsers, buildUserProfile, userId);
+    if (!user) {
+      sendJson(res, 401, { error: "Session invalid.", code: "USER_NOT_FOUND" }, req);
+      return null;
+    }
+    const displayName = (user.displayName || "").toString().trim() || userId.slice(0, 8);
+    return { userId: user.id, displayName, user };
+  } catch (e) {
+    logger.error({ msg: "community_actor_resolve_failed", err: e.message });
+    sendJson(res, 401, { error: "Authentication failed.", code: "AUTH_ERROR" }, req);
+    return null;
+  }
+}
+
+function normalizeCommunityChannel(raw) {
+  const allowed = new Set(["general", "trading", "builders", "ai", "support", "announcements"]);
+  const ch = (raw || "general").toString().trim().toLowerCase().slice(0, 48);
+  return allowed.has(ch) ? ch : "general";
+}
+
+const COMMUNITY_REACTION_TYPES = new Set(["post", "comment"]);
+
+function normalizeCommunityReactionType(raw) {
+  const t = (raw || "").toString().trim().toLowerCase();
+  if (t === "community_post") return "post";
+  if (t === "community_comment") return "comment";
+  return t;
+}
+
+function sanitizeCommunityReactionLabel(raw) {
+  const r = (raw || "like").toString().trim().toLowerCase();
+  if (!/^[a-z][a-z0-9_-]{0,31}$/.test(r)) return "like";
+  return r;
+}
+
+async function resolveCommunityReactionOwnerId(targetType, targetId) {
+  const tt = (targetType || "").toString();
+  let ownerId = resolveNotificationTargetOwner(tt, targetId);
+  if (ownerId || !useCommunityPg()) return ownerId;
+  if (tt === "post" || tt === "community_post") {
+    try {
+      const data = await communityPg.getPostWithComments(targetId);
+      return data?.post?.authorUserId || null;
+    } catch {
+      return null;
+    }
+  }
+  if (tt === "comment") {
+    try {
+      return await communityPg.getCommentAuthorUserId(targetId);
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 function handleListCommunityPosts(req, res) {
@@ -1057,6 +1221,9 @@ function handleListTrendingCommunityPosts(req, res) {
 }
 
 async function handleCreateCommunityPost(req, res) {
+  const actor = await requireCommunityActor(req, res);
+  if (!actor) return;
+
   let body;
   try {
     body = await readJsonBody(req);
@@ -1065,15 +1232,14 @@ async function handleCreateCommunityPost(req, res) {
     return;
   }
 
-  const authorUserId = (body.authorUserId || "").toString().trim();
   const title = (body.title || "").toString().trim();
   const content = (body.content || "").toString().trim();
-  if (!authorUserId || !title || !content) {
-    sendJson(res, 400, { error: "authorUserId, title and content are required." }, req);
+  if (!title || !content) {
+    sendJson(res, 400, { error: "title and content are required." }, req);
     return;
   }
 
-  const author = ensureUser(authorUserId, { displayName: body.authorDisplayName });
+  const author = ensureUser(actor.userId, { displayName: actor.displayName });
 
   if (useCommunityPg()) {
     try {
@@ -1090,6 +1256,11 @@ async function handleCreateCommunityPost(req, res) {
         message: `${author.displayName} posted: ${title}`,
         broadcast: true,
         metadata: { postId: post.id, authorUserId: author.id },
+      });
+      void notifyCommunityMentions(`${title}\n${content}`, {
+        actorUserId: author.id,
+        actorDisplayName: author.displayName,
+        postId: post.id,
       });
       growthEngine.recordEvent(author.id, "community_post", { postId: post.id }).catch(() => {});
       if (learningPg.usePostgres()) learningPg.addXpDelta(author.id, 25).catch(() => {});
@@ -1118,6 +1289,11 @@ async function handleCreateCommunityPost(req, res) {
     message: `${author.displayName} posted: ${title}`,
     broadcast: true,
     metadata: { postId: id, authorUserId: author.id },
+  });
+  void notifyCommunityMentions(`${title}\n${content}`, {
+    actorUserId: author.id,
+    actorDisplayName: author.displayName,
+    postId: id,
   });
 
   sendJson(res, 201, post, req);
@@ -1170,6 +1346,9 @@ function handleListPostComments(req, postId, res) {
 }
 
 async function handleCreatePostComment(req, res, postId) {
+  const actor = await requireCommunityActor(req, res);
+  if (!actor) return;
+
   if (useCommunityPg()) {
     const exists = await communityPg.getPostWithComments(postId);
     if (!exists) {
@@ -1187,13 +1366,12 @@ async function handleCreatePostComment(req, res, postId) {
     sendJson(res, 400, { error: "Body must be valid JSON." }, req);
     return;
   }
-  const authorUserId = (body.authorUserId || "").toString().trim();
   const text = (body.body || body.content || "").toString().trim();
-  if (!authorUserId || !text) {
-    sendJson(res, 400, { error: "authorUserId and body (or content) are required." }, req);
+  if (!text) {
+    sendJson(res, 400, { error: "body or content is required." }, req);
     return;
   }
-  const author = ensureUser(authorUserId, { displayName: body.authorDisplayName });
+  const author = ensureUser(actor.userId, { displayName: actor.displayName });
 
   if (useCommunityPg()) {
     try {
@@ -1208,7 +1386,12 @@ async function handleCreatePostComment(req, res, postId) {
         title: "New comment on your post",
         message: `${author.displayName} commented on: ${post.title}`,
         targetUserIds: [post.authorUserId].filter((uid) => uid && uid !== author.id),
-        metadata: { postId, commentId: row.id },
+        metadata: { postId, commentId: row.id, actorUserId: author.id },
+      });
+      void notifyCommunityMentions(text, {
+        actorUserId: author.id,
+        actorDisplayName: author.displayName,
+        postId,
       });
       sendJson(res, 201, row, req);
     } catch (e) {
@@ -1233,7 +1416,12 @@ async function handleCreatePostComment(req, res, postId) {
     title: "New comment on your post",
     message: `${author.displayName} commented on: ${post.title}`,
     targetUserIds: [post.authorUserId].filter((uid) => uid && uid !== author.id),
-    metadata: { postId, commentId: id },
+    metadata: { postId, commentId: id, actorUserId: author.id },
+  });
+  void notifyCommunityMentions(text, {
+    actorUserId: author.id,
+    actorDisplayName: author.displayName,
+    postId,
   });
   sendJson(res, 201, row, req);
 }
@@ -1254,6 +1442,9 @@ function handleListCommunityChats(req, requestUrl, res) {
 }
 
 async function handleCreateCommunityChat(req, res) {
+  const actor = await requireCommunityActor(req, res);
+  if (!actor) return;
+
   let body;
   try {
     body = await readJsonBody(req);
@@ -1262,15 +1453,14 @@ async function handleCreateCommunityChat(req, res) {
     return;
   }
 
-  const authorUserId = (body.authorUserId || "").toString().trim();
   const message = (body.message || "").toString().trim();
-  const channel = (body.channel || "general").toString().trim();
-  if (!authorUserId || !message) {
-    sendJson(res, 400, { error: "authorUserId and message are required." }, req);
+  const channel = normalizeCommunityChannel(body.channel);
+  if (!message) {
+    sendJson(res, 400, { error: "message is required." }, req);
     return;
   }
 
-  const author = ensureUser(authorUserId, { displayName: body.authorDisplayName });
+  const author = ensureUser(actor.userId, { displayName: actor.displayName });
 
   if (useCommunityPg()) {
     try {
@@ -1339,6 +1529,9 @@ function handleListCommunityReactions(req, requestUrl, res) {
 }
 
 async function handleCreateCommunityReaction(req, res) {
+  const actorJwt = await requireCommunityActor(req, res);
+  if (!actorJwt) return;
+
   let body;
   try {
     body = await readJsonBody(req);
@@ -1347,37 +1540,40 @@ async function handleCreateCommunityReaction(req, res) {
     return;
   }
 
-  const authorUserId = (body.authorUserId || "").toString().trim();
-  const targetType = (body.targetType || "").toString().trim();
+  const targetTypeRaw = normalizeCommunityReactionType(body.targetType);
   const targetId = (body.targetId || "").toString().trim();
-  const reaction = (body.reaction || "like").toString().trim();
-  if (!authorUserId || !targetType || !targetId) {
-    sendJson(res, 400, { error: "authorUserId, targetType and targetId are required." }, req);
+  const reaction = sanitizeCommunityReactionLabel(body.reaction);
+  if (!targetTypeRaw || !targetId) {
+    sendJson(res, 400, { error: "targetType and targetId are required." }, req);
+    return;
+  }
+  if (!COMMUNITY_REACTION_TYPES.has(targetTypeRaw)) {
+    sendJson(res, 400, { error: "Invalid targetType. Use post or comment." }, req);
     return;
   }
 
-  const actor = ensureUser(authorUserId, { displayName: body.authorDisplayName });
+  const actor = ensureUser(actorJwt.userId, { displayName: actorJwt.displayName });
 
   if (useCommunityPg()) {
     try {
       const record = await communityPg.createReaction({
         authorUserId: actor.id,
         authorDisplayName: actor.displayName,
-        targetType,
+        targetType: targetTypeRaw,
         targetId,
         reaction,
       });
-      const ownerId = resolveNotificationTargetOwner(targetType, targetId);
+      const ownerId = await resolveCommunityReactionOwnerId(targetTypeRaw, targetId);
       if (ownerId && ownerId !== actor.id) {
         createNotification({
           type: "community_reaction_received",
           title: "New reaction on your CCWEB content",
           message: `${actor.displayName} reacted with ${reaction}.`,
           targetUserIds: [ownerId],
-          metadata: { reactionId: record.id, targetType, targetId, fromUserId: actor.id },
+          metadata: { reactionId: record.id, targetType: targetTypeRaw, targetId, fromUserId: actor.id, reaction },
         });
       }
-      growthEngine.recordEvent(actor.id, "community_reaction", { targetType, targetId }).catch(() => {});
+      growthEngine.recordEvent(actor.id, "community_reaction", { targetType: targetTypeRaw, targetId }).catch(() => {});
       if (learningPg.usePostgres()) learningPg.addXpDelta(actor.id, 5).catch(() => {});
       sendJson(res, 201, record, req);
     } catch (e) {
@@ -1391,21 +1587,21 @@ async function handleCreateCommunityReaction(req, res) {
     id,
     authorUserId: actor.id,
     authorDisplayName: actor.displayName,
-    targetType,
+    targetType: targetTypeRaw,
     targetId,
     reaction,
     createdAt: new Date().toISOString(),
   };
   communityReactions.set(id, record);
 
-  const ownerId = resolveNotificationTargetOwner(targetType, targetId);
+  const ownerId = await resolveCommunityReactionOwnerId(targetTypeRaw, targetId);
   if (ownerId && ownerId !== actor.id) {
     createNotification({
       type: "community_reaction_received",
       title: "New reaction on your CCWEB content",
       message: `${actor.displayName} reacted with ${reaction}.`,
       targetUserIds: [ownerId],
-      metadata: { reactionId: id, targetType, targetId, fromUserId: actor.id },
+      metadata: { reactionId: id, targetType: targetTypeRaw, targetId, fromUserId: actor.id, reaction },
     });
   }
 
@@ -4073,8 +4269,24 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname === "/api/notifications" && req.method === "OPTIONS") {
+    writeRawOptions(req, res, {
+      methods: "GET, OPTIONS",
+      headers: "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With",
+    });
+    return;
+  }
+
+  if (pathname === "/api/notifications/read" && req.method === "OPTIONS") {
+    writeRawOptions(req, res, {
+      methods: "POST, OPTIONS",
+      headers: "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With",
+    });
+    return;
+  }
+
   if (pathname === "/api/notifications" && req.method === "GET") {
-    handleListNotifications(req, requestUrl, res);
+    await handleListNotifications(req, requestUrl, res);
     return;
   }
 

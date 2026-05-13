@@ -127,6 +127,11 @@ async function createComment(postId, body) {
   };
 }
 
+async function getCommentAuthorUserId(commentId) {
+  const { rows } = await query("SELECT author_user_id FROM community_post_comments WHERE id = $1 LIMIT 1", [commentId]);
+  return rows[0]?.author_user_id || null;
+}
+
 async function listChats(channel) {
   const { rows } = await query(
     "SELECT * FROM community_chats WHERE ($1::text = '' OR channel = $1) ORDER BY created_at DESC",
@@ -255,6 +260,7 @@ module.exports = {
   getPostWithComments,
   listComments,
   createComment,
+  getCommentAuthorUserId,
   listChats,
   createChat,
   listReactions,

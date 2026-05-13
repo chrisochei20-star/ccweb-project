@@ -5,6 +5,7 @@ import { uploadProfileAvatar, uploadProfileBanner } from "../api/uploadsApi";
 import { assetsUrl, apiUrl } from "../config/env";
 import { ImageDropZone } from "../components/uploads/ImageDropZone";
 import { apiFetch } from "../lib/apiClient";
+import { toast } from "../lib/toastBus";
 import { getSessionToken, logoutApi, setSession } from "../session";
 
 export function ProfileShellPage() {
@@ -73,8 +74,10 @@ export function ProfileShellPage() {
       setSession(token, data.user, undefined);
       if (data.betaSlug) setBetaSlug(data.betaSlug);
       setMsg(data.betaPublicUrl ? `Profile saved. Share: ${data.betaPublicUrl}` : "Profile saved.");
+      toast.success("Profile saved.");
     } catch (e) {
       setErr(e.message);
+      toast.error(e.message);
     }
   }
 
@@ -84,14 +87,18 @@ export function ProfileShellPage() {
     setBackupCodes(null);
     const token = getSessionToken();
     try {
-      const res = await fetch(apiUrl("/api/auth/2fa/setup"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+      const res = await apiFetch(
+        apiUrl("/api/auth/2fa/setup"),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ step: "begin" }),
         },
-        body: JSON.stringify({ step: "begin" }),
-      });
+        { networkRetries: 1 }
+      );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Setup failed");
       setTotpSecret(data.secret || "");
@@ -99,6 +106,7 @@ export function ProfileShellPage() {
       setTotpStep("scan");
     } catch (e) {
       setErr(e.message);
+      toast.error(e.message);
     }
   }
 
@@ -106,26 +114,33 @@ export function ProfileShellPage() {
     setErr(null);
     const token = getSessionToken();
     try {
-      const res = await fetch(apiUrl("/api/auth/2fa/setup"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+      const res = await apiFetch(
+        apiUrl("/api/auth/2fa/setup"),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ step: "confirm", code: totpCode.trim() }),
         },
-        body: JSON.stringify({ step: "confirm", code: totpCode.trim() }),
-      });
+        { networkRetries: 1 }
+      );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Invalid code");
       setBackupCodes(data.backupCodes || []);
       setTotpStep("done");
       setMsg("Two-factor authentication enabled.");
-      const me = await fetch(apiUrl("/api/auth/me"), { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json());
+      toast.success("Two-factor authentication enabled.");
+      const meRes = await apiFetch(apiUrl("/api/auth/me"), { headers: { Authorization: `Bearer ${token}` } }, { networkRetries: 1 });
+      const me = await meRes.json();
       if (me.user) {
         setUser(me.user);
         setSession(token, me.user, undefined);
       }
     } catch (e) {
       setErr(e.message);
+      toast.error(e.message);
     }
   }
 

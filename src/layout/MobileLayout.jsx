@@ -2,6 +2,7 @@ import { BookOpen, Briefcase, Hammer, MessageCircle, MessageSquare, Search, User
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "../components/shell/ThemeToggle";
+import { NotificationBell } from "../components/notifications/NotificationCenter";
 import { fetchMe, getStoredUser, logoutApi } from "../session";
 import { captureInviteFromSearch, postBetaClientEvent } from "../lib/betaTelemetry";
 
@@ -57,6 +58,7 @@ export function MobileLayout() {
           </NavLink>
           <div className="flex items-center gap-2">
             <ThemeToggle />
+            <NotificationBell user={user} />
             {user ? (
               <>
                 <span className="hidden max-w-[140px] truncate text-xs text-ccweb-muted sm:inline">{user.displayName}</span>

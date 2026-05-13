@@ -124,7 +124,8 @@ async function getDashboardBundle(userId) {
     );
     notifications.unread = nu[0]?.c || 0;
     const { rows: ni } = await query(
-      `SELECT id, kind, title, body, read_at, created_at FROM ccweb_notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 12`,
+      `SELECT id, kind, title, body, read_at, created_at, actor_user_id, group_key, payload
+       FROM ccweb_notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 12`,
       [userId]
     );
     notifications.items = ni;

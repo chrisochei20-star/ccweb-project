@@ -109,8 +109,6 @@ export function CommunityShellPage() {
     setErr(null);
     try {
       await createCommunityPost({
-        authorUserId: user.id,
-        authorDisplayName: user.displayName,
         title: postTitle.trim(),
         content: postBody.trim(),
         tags: [],
@@ -134,8 +132,6 @@ export function CommunityShellPage() {
     setErr(null);
     try {
       await createPostComment(postId, {
-        authorUserId: user.id,
-        authorDisplayName: user.displayName,
         body: text,
       });
       setCommentDraft((prev) => ({ ...prev, [postId]: "" }));
@@ -152,8 +148,6 @@ export function CommunityShellPage() {
     setErr(null);
     try {
       await createCommunityChat({
-        authorUserId: user.id,
-        authorDisplayName: user.displayName,
         channel,
         message: chatMsg.trim(),
       });

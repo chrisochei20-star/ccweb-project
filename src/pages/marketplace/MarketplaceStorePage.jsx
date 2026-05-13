@@ -1,6 +1,6 @@
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { Loader2, Store } from "lucide-react";
+import { BadgeCheck, Loader2, Store } from "lucide-react";
 import { fetchMarketplaceStore } from "../../api/marketplaceCatalogApi";
 import { Skeleton } from "../../components/ui/Skeleton";
 
@@ -70,7 +70,15 @@ export function MarketplaceStorePage() {
               <Store className="h-5 w-5" />
               <span className="text-xs font-semibold uppercase tracking-widest">Storefront</span>
             </div>
-            <h1 className="mt-1 text-2xl font-bold text-white">{store.title}</h1>
+            <h1 className="mt-1 flex flex-wrap items-center gap-2 text-2xl font-bold text-white">
+              {store.title}
+              {store.creatorVerified ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-ccweb-cyan/15 px-2 py-0.5 text-xs font-medium text-ccweb-cyan">
+                  <BadgeCheck className="h-3.5 w-3.5" />
+                  Verified
+                </span>
+              ) : null}
+            </h1>
             {store.tagline ? <p className="text-sm text-ccweb-muted">{store.tagline}</p> : null}
           </div>
           <Link to="/shop" className="text-sm text-ccweb-cyan hover:underline">

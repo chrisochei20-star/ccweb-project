@@ -1,8 +1,14 @@
 import { Link, useOutletContext, useParams, useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, Loader2, ShieldCheck, Wrench } from "lucide-react";
-import { fetchMarketplaceListingBundle, postMarketplaceReview } from "../../api/marketplaceCatalogApi";
+import { ExternalLink, Flag, Loader2, ShieldCheck, Wrench, BookmarkPlus, BadgeCheck } from "lucide-react";
+import {
+  fetchMarketplaceListingBundle,
+  fetchMyMarketplaceEntitlements,
+  postMarketplaceReview,
+  postSaveMarketplaceLibrary,
+} from "../../api/marketplaceCatalogApi";
 import { initializeFlutterwaveCheckout, verifyFlutterwaveTx } from "../../api/flutterwaveApi";
+import { submitTrustReport } from "../../api/trustApi";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { toast } from "../../lib/toastBus";
 
@@ -18,6 +24,9 @@ export function MarketplaceListingPage() {
   const [rating, setRating] = useState(5);
   const [reviewTitle, setReviewTitle] = useState("");
   const [reviewBody, setReviewBody] = useState("");
+  const [myEntitlements, setMyEntitlements] = useState([]);
+  const [libBusy, setLibBusy] = useState(false);
+  const [repBusy, setRepBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!slug) return;
@@ -37,6 +46,24 @@ export function MarketplaceListingPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!user) {
+      setMyEntitlements([]);
+      return;
+    }
+    let c = false;
+    fetchMyMarketplaceEntitlements(60)
+      .then((d) => {
+        if (!c) setMyEntitlements(d.entitlements || []);
+      })
+      .catch(() => {
+        if (!c) setMyEntitlements([]);
+      });
+    return () => {
+      c = true;
+    };
+  }, [user, slug]);
 
   useEffect(() => {
     const paid = searchParams.get("paid");
@@ -97,6 +124,43 @@ export function MarketplaceListingPage() {
     }
   }
 
+  async function handleSaveLibrary() {
+    if (!user || !slug) {
+      toast.error("Sign in to save.");
+      return;
+    }
+    setLibBusy(true);
+    try {
+      await postSaveMarketplaceLibrary(slug);
+      toast.success("Saved to your library.");
+    } catch (e) {
+      toast.error(e.message || "Save failed");
+    } finally {
+      setLibBusy(false);
+    }
+  }
+
+  async function handleReportListing() {
+    if (!user || !bundle?.listing?.id) {
+      toast.error("Sign in to report.");
+      return;
+    }
+    setRepBusy(true);
+    try {
+      await submitTrustReport({
+        targetType: "marketplace_listing",
+        targetId: bundle.listing.id,
+        reasonCode: "spam",
+        details: "Marketplace listing report from product page.",
+      });
+      toast.success("Report submitted. Trust & safety will review.");
+    } catch (e) {
+      toast.error(e.message || "Report failed");
+    } finally {
+      setRepBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="mx-auto max-w-3xl space-y-4 px-3 py-8">
@@ -119,6 +183,8 @@ export function MarketplaceListingPage() {
   }
 
   const { listing, skus, defaultAi, reviews, reviewStats } = bundle;
+  const access = myEntitlements.filter((e) => e.listingSlug === slug);
+  const tags = Array.isArray(listing.tags) ? listing.tags : [];
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-3 pb-12 pt-4">
@@ -134,6 +200,12 @@ export function MarketplaceListingPage() {
             <Link to={`/shop/store/${encodeURIComponent(listing.storeSlug)}`} className="hover:text-white hover:underline">
               {listing.storeTitle}
             </Link>
+            {listing.storeCreatorVerified ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-ccweb-cyan/15 px-2 py-0.5 text-ccweb-cyan">
+                <BadgeCheck className="h-3.5 w-3.5" />
+                Verified creator
+              </span>
+            ) : null}
             {reviewStats?.count > 0 ? (
               <span>
                 ★ {reviewStats.avgRating.toFixed(1)} · {reviewStats.count} reviews
@@ -142,8 +214,41 @@ export function MarketplaceListingPage() {
               <span>No reviews yet</span>
             )}
           </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {user && (
+              <button
+                type="button"
+                disabled={libBusy}
+                onClick={handleSaveLibrary}
+                className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
+              >
+                <BookmarkPlus className="h-3.5 w-3.5" />
+                {libBusy ? "Saving…" : "Save to library"}
+              </button>
+            )}
+            {user && (
+              <button
+                type="button"
+                disabled={repBusy}
+                onClick={handleReportListing}
+                className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/10 disabled:opacity-50"
+              >
+                <Flag className="h-3.5 w-3.5" />
+                {repBusy ? "…" : "Report listing"}
+              </button>
+            )}
+          </div>
           <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">{listing.title}</h1>
           {listing.subtitle ? <p className="mt-1 text-sm text-ccweb-muted">{listing.subtitle}</p> : null}
+          {tags.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {tags.map((tg) => (
+                <span key={tg} className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] uppercase text-ccweb-muted">
+                  #{tg}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -151,6 +256,21 @@ export function MarketplaceListingPage() {
         <h2 className="font-semibold text-white">About</h2>
         <p className="mt-2 whitespace-pre-wrap text-sm text-ccweb-muted">{listing.description}</p>
       </section>
+
+      {user && access.length > 0 && (
+        <section className="ccweb-glass rounded-2xl border border-ccweb-green/25 p-5">
+          <h2 className="font-semibold text-ccweb-green">Your access</h2>
+          <ul className="mt-2 space-y-1 text-sm text-ccweb-muted">
+            {access.map((a) => (
+              <li key={a.id}>
+                Active entitlement
+                {a.validUntil ? ` · renew / review by ${new Date(a.validUntil).toLocaleDateString()}` : " · lifetime access"}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-ccweb-muted">Use Build → AI agents with the published config below while your access is valid.</p>
+        </section>
+      )}
 
       <section className="ccweb-glass rounded-2xl p-5">
         <div className="flex items-center gap-2 font-semibold text-white">
@@ -194,7 +314,11 @@ export function MarketplaceListingPage() {
 
       <section className="ccweb-glass rounded-2xl p-5">
         <h2 className="font-semibold text-white">Purchase</h2>
-        <p className="mt-1 text-xs text-ccweb-muted">Flutterwave · USD or NGN · entitlements unlock after successful charge.</p>
+        <p className="mt-1 text-xs text-ccweb-muted">
+          Secure checkout via Flutterwave. After payment you are redirected back here with{" "}
+          <code className="text-ccweb-cyan">?paid=1&amp;tx_ref=…</code> — we verify automatically when you are signed in. Entitlements
+          appear under &quot;Your access&quot; and in Earn → wallet activity.
+        </p>
         {(skus || []).length === 0 ? (
           <p className="mt-3 text-sm text-ccweb-muted">No SKUs configured for this listing.</p>
         ) : (

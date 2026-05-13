@@ -58,6 +58,12 @@ const MarketplaceStorePage = lazy(() =>
 const MarketplaceListingPage = lazy(() =>
   import("./pages/marketplace/MarketplaceListingPage").then((m) => ({ default: m.MarketplaceListingPage }))
 );
+const MarketplaceCreatorStudioPage = lazy(() =>
+  import("./pages/marketplace/MarketplaceCreatorStudioPage").then((m) => ({ default: m.MarketplaceCreatorStudioPage }))
+);
+const MarketplaceCreatorDashboardPage = lazy(() =>
+  import("./pages/marketplace/MarketplaceCreatorDashboardPage").then((m) => ({ default: m.MarketplaceCreatorDashboardPage }))
+);
 
 function RouteFallback() {
   return (
@@ -98,6 +104,8 @@ function App() {
           <Route path="shop" element={<MarketplaceBrowsePage />} />
           <Route path="shop/store/:slug" element={<MarketplaceStorePage />} />
           <Route path="shop/l/:slug" element={<MarketplaceListingPage />} />
+          <Route path="shop/creator/studio" element={<MarketplaceCreatorStudioPage />} />
+          <Route path="shop/creator/dashboard" element={<MarketplaceCreatorDashboardPage />} />
           <Route path="earn" element={<EarnShellPage />} />
           <Route path="community" element={<CommunityShellPage />} />
           <Route path="p/:userId" element={<PublicProfilePage />} />

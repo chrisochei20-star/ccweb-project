@@ -82,6 +82,15 @@ export function BuildHubPage() {
         </Link>
       </div>
 
+      <div className="flex flex-wrap gap-4 text-sm">
+        <Link to="/shop/creator/studio" className="font-medium text-ccweb-cyan hover:underline">
+          Creator publishing studio →
+        </Link>
+        <Link to="/shop/creator/dashboard" className="font-medium text-ccweb-violet hover:underline">
+          Creator analytics dashboard →
+        </Link>
+      </div>
+
       <section className="ccweb-glass rounded-2xl p-5">
         <h3 className="flex items-center gap-2 font-semibold text-white">
           <History className="h-5 w-5 text-ccweb-cyan" />

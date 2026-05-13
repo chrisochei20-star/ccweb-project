@@ -24,6 +24,7 @@ const REQUIRED_TABLES = [
   "ccweb_course_bookmarks",
   "ccweb_ai_conversations",
   "ccweb_ai_messages",
+  "ccweb_agent_runs",
   "ccweb_user_ai_memory",
   "ccweb_wallets",
   "ccweb_earnings",

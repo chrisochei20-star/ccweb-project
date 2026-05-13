@@ -137,6 +137,23 @@ async function listTrendingPosts(limit = 30) {
   }));
 }
 
+async function searchPosts(q, limit = 20) {
+  const needle = String(q || "").trim().slice(0, 120);
+  if (!needle) return [];
+  const lim = Math.min(50, Math.max(1, limit));
+  const safe = needle.replace(/[%_\\]/g, " ").trim();
+  if (!safe) return [];
+  const like = `%${safe}%`;
+  const { rows } = await query(
+    `SELECT ${POST_SELECT} ${POST_FROM}
+     WHERE p.title ILIKE $1 OR p.content ILIKE $1
+     ORDER BY p.created_at DESC
+     LIMIT $2`,
+    [like, lim]
+  );
+  return rows.map((r) => shapePost(r));
+}
+
 async function getPostRow(postId) {
   const { rows } = await query(`SELECT ${POST_SELECT} ${POST_FROM} WHERE p.id = $1`, [postId]);
   return rows[0] || null;
@@ -395,6 +412,7 @@ module.exports = {
   listPosts,
   listPostsByAuthor,
   listTrendingPosts,
+  searchPosts,
   createPost,
   getPostWithComments,
   getPostRow,

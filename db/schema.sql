@@ -559,9 +559,12 @@ CREATE TABLE IF NOT EXISTS ccweb_lessons (
   title TEXT NOT NULL,
   content TEXT NOT NULL DEFAULT '',
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  video_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE ccweb_lessons ADD COLUMN IF NOT EXISTS video_url TEXT;
 
 CREATE INDEX IF NOT EXISTS ccweb_lessons_course_pos ON ccweb_lessons (course_id, position);
 
@@ -654,6 +657,22 @@ CREATE TABLE IF NOT EXISTS ccweb_ai_messages (
 );
 
 CREATE INDEX IF NOT EXISTS ccweb_ai_messages_conv_created ON ccweb_ai_messages (conversation_id, created_at);
+
+CREATE TABLE IF NOT EXISTS ccweb_agent_runs (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES ccweb_users(id) ON DELETE CASCADE,
+  agent_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'completed',
+  input_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  output_preview TEXT NOT NULL DEFAULT '',
+  provider TEXT,
+  model TEXT,
+  usage_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  mock BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_agent_runs_user_created ON ccweb_agent_runs (user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS ccweb_user_ai_memory (
   user_id TEXT PRIMARY KEY REFERENCES ccweb_users(id) ON DELETE CASCADE,

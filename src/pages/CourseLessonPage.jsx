@@ -10,6 +10,13 @@ import {
   postQuizSubmit,
   streamTutor,
 } from "../api/coursesApi";
+import { assetsUrl } from "../config/env";
+
+function lessonVideoUrl(les) {
+  if (!les) return null;
+  const u = les.videoUrl || les.metadata?.videoUrl;
+  return u ? String(u).trim() : null;
+}
 
 export function CourseLessonPage() {
   const { slug, lessonId } = useParams();
@@ -178,6 +185,31 @@ export function CourseLessonPage() {
         <h1 className="text-xl font-bold text-white">{lesson?.title || "Lesson"}</h1>
         <p className="mt-1 text-xs text-ccweb-muted">{course?.title}</p>
       </header>
+
+      {(() => {
+        const vid = lessonVideoUrl(lesson);
+        if (!vid) return null;
+        const inline = /\.(mp4|webm)(\?|$)/i.test(vid) || vid.includes("/video/");
+        return (
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/40">
+            {inline ? (
+              <video key={vid} controls playsInline className="aspect-video w-full bg-black" src={assetsUrl(vid)} />
+            ) : (
+              <div className="p-4 text-sm text-ccweb-muted">
+                <a
+                  href={vid.startsWith("http") ? vid : assetsUrl(vid)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-ccweb-cyan underline"
+                >
+                  Open video lesson
+                </a>
+                <span className="ml-2 text-xs">(MP4/WebM URLs play inline here.)</span>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <article className="ccweb-glass rounded-2xl p-5">
         <div className="prose prose-invert max-w-none whitespace-pre-wrap text-sm leading-relaxed text-white/90">

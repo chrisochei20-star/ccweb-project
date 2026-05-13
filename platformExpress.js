@@ -39,6 +39,9 @@ const {
   onlineStatusForUserIds,
 } = require("./server/realtime/chatSocket");
 const { createCoursesRouter } = require("./coursesExpress");
+const { createDiscoverRouter } = require("./discoverExpress");
+const persistenceAiAgents = require("./db/persistenceAiAgents");
+const { getPool } = require("./db/pool");
 
 function createPlatformApp(deps) {
   const app = express();
@@ -531,6 +534,9 @@ function createPlatformApp(deps) {
   const coursesRouter = createCoursesRouter({ authJwtMiddleware, optionalJwt });
   v1.use("/courses", apiRateShort, coursesRouter);
 
+  const discoverRouter = createDiscoverRouter({ optionalJwt });
+  v1.use("/discover", apiRateShort, discoverRouter);
+
   const agentRuns = [];
   const catalogAgents = [
     {
@@ -550,6 +556,18 @@ function createPlatformApp(deps) {
   ];
 
   const agentsRouter = express.Router();
+
+  agentsRouter.get("/runs", authJwtMiddleware, async (req, res, next) => {
+    try {
+      if (!persistenceAiAgents.usePostgres()) {
+        return res.json({ runs: agentRuns.filter((r) => r.userId === req.ccwebUserId).slice(0, 80), source: "memory" });
+      }
+      const runs = await persistenceAiAgents.listRuns(req.ccwebUserId, Number(req.query.limit) || 40);
+      res.json({ runs, source: "postgres" });
+    } catch (e) {
+      next(e);
+    }
+  });
 
   agentsRouter.post("/create", authJwtMiddleware, async (req, res, next) => {
     try {
@@ -633,6 +651,22 @@ function createPlatformApp(deps) {
       };
       agentRuns.unshift({ ...result, userId: req.ccwebUserId });
       if (agentRuns.length > 500) agentRuns.pop();
+      if (getPool()) {
+        try {
+          await persistenceAiAgents.insertRun({
+            userId: req.ccwebUserId,
+            agentId,
+            input,
+            outputPreview: ai.text.slice(0, 4000),
+            provider: ai.provider,
+            model: ai.model,
+            usage: ai.usage,
+            mock: Boolean(ai.mock),
+          });
+        } catch {
+          /* ignore persistence errors */
+        }
+      }
       res.status(200).json(result);
     } catch (e) {
       if (e.code === "AI_NOT_CONFIGURED") return res.status(503).json({ error: e.message, code: e.code });

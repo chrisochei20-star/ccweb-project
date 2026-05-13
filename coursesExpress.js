@@ -110,6 +110,27 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
     }
   });
 
+  router.post("/me/enroll/:courseId", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const enrollment = await coursesPg.enrollUser(req.ccwebUserId, req.params.courseId);
+      if (!enrollment) return res.status(404).json({ error: "Course not found or not published." });
+      res.status(201).json({ ok: true, enrollment });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post("/me/enroll-slug/:slug", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const course = await coursesPg.getCourseBySlug(req.params.slug);
+      if (!course) return res.status(404).json({ error: "Course not found." });
+      const enrollment = await coursesPg.enrollUser(req.ccwebUserId, course.id);
+      res.status(201).json({ ok: true, enrollment, courseId: course.id });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   router.get("/me/progress", authJwtMiddleware, async (req, res, next) => {
     try {
       const progress = await coursesPg.listProgress(req.ccwebUserId);

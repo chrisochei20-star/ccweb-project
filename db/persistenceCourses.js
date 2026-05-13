@@ -111,32 +111,37 @@ async function getCourseBySlug(slug, { includeUnpublished = false } = {}) {
 async function listLessons(courseId) {
   if (!usePostgres()) return [];
   const { rows } = await query(
-    `SELECT id, course_id, position, title, content, metadata, created_at FROM ccweb_lessons WHERE course_id = $1 ORDER BY position ASC, created_at ASC`,
+    `SELECT id, course_id, position, title, content, metadata, video_url, created_at FROM ccweb_lessons WHERE course_id = $1 ORDER BY position ASC, created_at ASC`,
     [courseId]
   );
-  return rows.map((r) => ({
-    id: r.id,
-    courseId: r.course_id,
-    position: r.position,
-    title: r.title,
-    content: r.content,
-    metadata: parseMeta(r.metadata),
-    createdAt: r.created_at,
-  }));
+  return rows.map((r) => {
+    const meta = parseMeta(r.metadata);
+    return {
+      id: r.id,
+      courseId: r.course_id,
+      position: r.position,
+      title: r.title,
+      content: r.content,
+      metadata: meta,
+      videoUrl: r.video_url || meta.videoUrl || null,
+      createdAt: r.created_at,
+    };
+  });
 }
 
 async function getLesson(lessonId) {
   if (!usePostgres()) return null;
   const { rows } = await query(`SELECT * FROM ccweb_lessons WHERE id = $1`, [lessonId]);
   const r = rows[0];
-  if (!r) return null;
+  const meta = parseMeta(r.metadata);
   return {
     id: r.id,
     courseId: r.course_id,
     position: r.position,
     title: r.title,
     content: r.content,
-    metadata: parseMeta(r.metadata),
+    metadata: meta,
+    videoUrl: r.video_url || meta.videoUrl || null,
     createdAt: r.created_at,
   };
 }
@@ -207,6 +212,20 @@ async function markLessonComplete(userId, lessonId) {
     lessonTitle: lesson.title,
     progressPct: pct,
   };
+}
+
+async function enrollUser(userId, courseId) {
+  if (!usePostgres() || !userId || !courseId) return null;
+  await ensureCcwebUser(userId);
+  const course = await getCourseById(courseId);
+  if (!course || !course.published) return null;
+  await query(
+    `INSERT INTO ccweb_course_enrollment (user_id, course_id, progress_pct, updated_at)
+     VALUES ($1,$2,0,NOW())
+     ON CONFLICT (user_id, course_id) DO NOTHING`,
+    [userId, courseId]
+  );
+  return getEnrollment(userId, courseId);
 }
 
 async function getEnrollment(userId, courseId) {
@@ -425,17 +444,22 @@ async function adminUpsertLesson(payload) {
   const content = String(payload.content || "").slice(0, 500000);
   const position = Number(payload.position) || 0;
   const meta = typeof payload.metadata === "object" ? payload.metadata : {};
+  const videoUrl =
+    payload.videoUrl != null && String(payload.videoUrl).trim()
+      ? String(payload.videoUrl).trim().slice(0, 2000)
+      : null;
   await query(
-    `INSERT INTO ccweb_lessons (id, course_id, position, title, content, metadata, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6::jsonb,NOW())
+    `INSERT INTO ccweb_lessons (id, course_id, position, title, content, metadata, video_url, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,NOW())
      ON CONFLICT (id) DO UPDATE SET
        course_id = EXCLUDED.course_id,
        position = EXCLUDED.position,
        title = EXCLUDED.title,
        content = EXCLUDED.content,
        metadata = EXCLUDED.metadata,
+       video_url = COALESCE(EXCLUDED.video_url, ccweb_lessons.video_url),
        updated_at = NOW()`,
-    [id, courseId, position, title, content, JSON.stringify(meta)]
+    [id, courseId, position, title, content, JSON.stringify(meta), videoUrl]
   );
   return id;
 }
@@ -492,6 +516,7 @@ module.exports = {
   listRecommended,
   getTutorContext,
   getEnrollment,
+  enrollUser,
   adminUpsertCourse,
   adminUpsertLesson,
   adminUpsertQuiz,

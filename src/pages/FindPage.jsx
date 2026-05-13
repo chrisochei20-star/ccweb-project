@@ -2,11 +2,12 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ShareActions } from "../components/ShareCard";
 import { apiUrl } from "../config/env";
+import { fetchDiscover } from "../api/discoverApi";
 
 export function FindPage({ initialTab = "scanner" }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get("tab");
-  const validTabs = ["scanner", "signals", "trending", "wallets", "alerts"];
+  const validTabs = ["scanner", "signals", "trending", "ccweb", "wallets", "alerts"];
   const initial = tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : initialTab;
   const [tab, setTab] = useState(initial);
 
@@ -31,6 +32,9 @@ export function FindPage({ initialTab = "scanner" }) {
   const [loadingDiscover, setLoadingDiscover] = useState(false);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [smDisclosure, setSmDisclosure] = useState(false);
+  const [ccwebDiscover, setCcwebDiscover] = useState(null);
+  const [ccwebQ, setCcwebQ] = useState("");
+  const [loadingCcwebDiscover, setLoadingCcwebDiscover] = useState(false);
 
   function goTab(next) {
     setTab(next);
@@ -90,6 +94,17 @@ export function FindPage({ initialTab = "scanner" }) {
     setLoadingDiscover(false);
   }
 
+  async function loadCcwebDiscover(q = "") {
+    setLoadingCcwebDiscover(true);
+    try {
+      const data = await fetchDiscover({ q: q.trim(), limit: 24 });
+      setCcwebDiscover(data);
+    } catch {
+      setCcwebDiscover(null);
+    }
+    setLoadingCcwebDiscover(false);
+  }
+
   async function loadAlerts() {
     setLoadingAlerts(true);
     try {
@@ -141,6 +156,7 @@ export function FindPage({ initialTab = "scanner" }) {
     if (tab === "signals" && !signals.length) loadSignals();
     if (tab === "trending" && !smartMoney) loadSmartMoney();
     if (tab === "trending" && !discover) loadDiscover();
+    if (tab === "ccweb") loadCcwebDiscover("");
     if (tab === "wallets" && !smartMoney) loadSmartMoney();
     if (tab === "alerts" && !alerts) loadAlerts();
   }, [tab]);
@@ -170,6 +186,7 @@ export function FindPage({ initialTab = "scanner" }) {
           ["scanner", "Token Scanner"],
           ["signals", "Early Signals"],
           ["trending", "Trending & Discovery"],
+          ["ccweb", "Courses & community"],
           ["wallets", "Wallets & Smart Money"],
           ["alerts", "Alerts"],
         ].map(([key, label]) => (
@@ -520,6 +537,68 @@ export function FindPage({ initialTab = "scanner" }) {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {tab === "ccweb" && (
+        <div className="find-ccweb-tab">
+          <div className="panel glass-panel">
+            <h3>Courses &amp; community discovery</h3>
+            <p className="muted">
+              Unified PostgreSQL search via <code className="text-ccweb-cyan">GET /api/v1/discover</code>. Empty search shows trending
+              community posts and top catalog courses.
+            </p>
+            <div className="find-scan-form find-scan-form-stack">
+              <input
+                type="text"
+                value={ccwebQ}
+                onChange={(e) => setCcwebQ(e.target.value)}
+                placeholder="Search course titles / post text…"
+                onKeyDown={(e) => e.key === "Enter" && loadCcwebDiscover(ccwebQ)}
+              />
+              <button type="button" className="btn btn-primary" onClick={() => loadCcwebDiscover(ccwebQ)} disabled={loadingCcwebDiscover}>
+                {loadingCcwebDiscover ? "Loading…" : "Search"}
+              </button>
+            </div>
+            {ccwebDiscover && (
+              <div style={{ marginTop: "1.25rem" }} className="find-trends-grid">
+                <div className="find-trend-card panel glass-panel">
+                  <h4>Courses</h4>
+                  {(ccwebDiscover.courses || []).length === 0 ? (
+                    <p className="muted small-print">No matching courses.</p>
+                  ) : (
+                    <ul className="muted small-print" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                      {(ccwebDiscover.courses || []).map((c) => (
+                        <li key={c.id} style={{ marginBottom: "0.5rem" }}>
+                          <Link to={`/courses/${encodeURIComponent(c.slug)}`} className="font-semibold text-white hover:underline">
+                            {c.title}
+                          </Link>
+                          <span className="muted"> · {c.categorySlug}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div className="find-trend-card panel glass-panel">
+                  <h4>Community posts</h4>
+                  {(ccwebDiscover.posts || []).length === 0 ? (
+                    <p className="muted small-print">No matching posts.</p>
+                  ) : (
+                    <ul className="muted small-print" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                      {(ccwebDiscover.posts || []).map((p) => (
+                        <li key={p.id} style={{ marginBottom: "0.5rem" }}>
+                          <Link to="/community" className="font-semibold text-white hover:underline">
+                            {p.authorDisplayName}
+                          </Link>
+                          <span> — {p.title?.slice(0, 96)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

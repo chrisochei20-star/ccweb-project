@@ -24,6 +24,7 @@ export function CourseAdminDashboard() {
   const [lessonTitle, setLessonTitle] = useState("Lesson 1");
   const [lessonContent, setLessonContent] = useState("# Hello\n\nLesson body (markdown-style plain text).");
   const [lessonPos, setLessonPos] = useState(0);
+  const [lessonVideoUrl, setLessonVideoUrl] = useState("");
 
   const [thumbCourseId, setThumbCourseId] = useState("");
   const [thumbBusy, setThumbBusy] = useState(false);
@@ -118,6 +119,7 @@ export function CourseAdminDashboard() {
         title: lessonTitle,
         content: lessonContent,
         position: Number(lessonPos) || 0,
+        videoUrl: lessonVideoUrl.trim() || undefined,
       });
       setMsg(`Lesson saved. id: ${data.lessonId}`);
       if (data.lessonId) setQuizLessonId(data.lessonId);
@@ -272,6 +274,12 @@ export function CourseAdminDashboard() {
             placeholder="position"
             value={lessonPos}
             onChange={(e) => setLessonPos(e.target.value)}
+          />
+          <input
+            className="ccweb-input font-mono text-sm"
+            placeholder="Video URL (MP4/WebM or https link — optional)"
+            value={lessonVideoUrl}
+            onChange={(e) => setLessonVideoUrl(e.target.value)}
           />
           <button type="submit" className="btn btn-primary" disabled={busy}>
             Upsert lesson

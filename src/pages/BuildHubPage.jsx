@@ -1,14 +1,45 @@
-import { LayoutDashboard, Link2, Workflow } from "lucide-react";
-import { Link } from "react-router-dom";
+import { History, LayoutDashboard, Link2, Workflow } from "lucide-react";
+import { Link, useOutletContext } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { fetchAgentRuns } from "../api/agentsApi";
+import { Skeleton } from "../components/ui/Skeleton";
 
 export function BuildHubPage() {
+  const { user } = useOutletContext() || {};
+  const [runs, setRuns] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!user) {
+      setRuns([]);
+      return;
+    }
+    let c = false;
+    setLoading(true);
+    setError(null);
+    fetchAgentRuns(20)
+      .then((list) => {
+        if (!c) setRuns(list);
+      })
+      .catch((e) => {
+        if (!c) setError(e.message || "Could not load runs");
+      })
+      .finally(() => {
+        if (!c) setLoading(false);
+      });
+    return () => {
+      c = true;
+    };
+  }, [user]);
+
   return (
     <div className="mx-auto max-w-3xl space-y-5 px-3 pb-6 pt-3 md:max-w-5xl">
       <header>
         <p className="text-xs font-semibold uppercase tracking-widest text-ccweb-violet">Build</p>
         <h1 className="mt-1 text-2xl font-bold text-white md:text-3xl">Ship faster on CCWEB</h1>
         <p className="mt-1 max-w-2xl text-sm text-ccweb-muted">
-          Visual DApp builder, AI agents, and automation workflows — connected to the same APIs you use in production.
+          Visual DApp builder, AI agents with persisted run history on PostgreSQL, and automation workflows.
         </p>
       </header>
 
@@ -41,6 +72,42 @@ export function BuildHubPage() {
           <span className="mt-4 text-sm font-medium text-ccweb-green group-hover:underline">Start onboarding →</span>
         </Link>
       </div>
+
+      <section className="ccweb-glass rounded-2xl p-5">
+        <h3 className="flex items-center gap-2 font-semibold text-white">
+          <History className="h-5 w-5 text-ccweb-cyan" />
+          Recent AI runs
+        </h3>
+        <p className="mt-1 text-xs text-ccweb-muted">
+          Successful <code className="text-ccweb-cyan">POST /api/v1/agents/run</code> calls are stored in{" "}
+          <code className="text-ccweb-cyan">ccweb_agent_runs</code> when PostgreSQL is enabled.
+        </p>
+        {!user && <p className="mt-3 text-sm text-ccweb-muted">Sign in to load your run history.</p>}
+        {user && loading && (
+          <div className="mt-4 space-y-2">
+            <Skeleton className="h-12 w-full rounded-lg" />
+            <Skeleton className="h-12 w-full rounded-lg" />
+          </div>
+        )}
+        {user && error && <p className="mt-3 text-sm text-rose-300">{error}</p>}
+        {user && !loading && runs.length === 0 && (
+          <p className="mt-3 text-sm text-ccweb-muted">No runs yet — execute an agent from the AI Agents page.</p>
+        )}
+        {user && !loading && runs.length > 0 && (
+          <ul className="mt-4 max-h-72 space-y-2 overflow-y-auto text-sm">
+            {runs.map((r) => (
+              <li key={r.id} className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="font-mono text-xs text-ccweb-cyan">{r.agentId}</span>
+                  <span className="text-[10px] text-ccweb-muted">{new Date(r.createdAt).toLocaleString()}</span>
+                </div>
+                <p className="mt-1 line-clamp-2 text-white/85">{r.outputPreview}</p>
+                {r.mock && <p className="mt-1 text-[10px] uppercase text-amber-200/90">Mock model</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="ccweb-glass rounded-2xl p-5">
         <h3 className="font-semibold text-white">Workflow automation</h3>

@@ -58,6 +58,38 @@ export async function fetchLessonQuiz(lessonId) {
   return data.quiz;
 }
 
+export async function postEnrollCourseSlug(slug) {
+  const res = await apiFetch(apiUrl(`/api/v1/courses/me/enroll-slug/${encodeURIComponent(slug)}`), {
+    method: "POST",
+    headers: authHeaders(),
+    credentials: "include",
+    body: JSON.stringify({}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Enrollment failed");
+  return data;
+}
+
+export async function fetchMyProgress() {
+  const res = await apiFetch(apiUrl("/api/v1/courses/me/progress"), {
+    headers: authHeaders(),
+    credentials: "include",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Progress failed");
+  return data.progress || [];
+}
+
+export async function fetchMyCertificates() {
+  const res = await apiFetch(apiUrl("/api/v1/courses/me/certificates"), {
+    headers: authHeaders(),
+    credentials: "include",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Certificates failed");
+  return data.certificates || [];
+}
+
 export async function postLessonComplete(lessonId) {
   const res = await apiFetch(apiUrl(`/api/v1/courses/me/lessons/${encodeURIComponent(lessonId)}/complete`), {
     method: "POST",

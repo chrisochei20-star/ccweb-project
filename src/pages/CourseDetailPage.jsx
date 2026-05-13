@@ -6,8 +6,10 @@ import {
   fetchCourseDetail,
   fetchMyBookmarks,
   postBookmark,
+  postEnrollCourseSlug,
 } from "../api/coursesApi";
 import { assetsUrl } from "../config/env";
+import { toast } from "../lib/toastBus";
 
 export function CourseDetailPage() {
   const { slug } = useParams();
@@ -67,6 +69,21 @@ export function CourseDetailPage() {
     }
   }
 
+  async function enroll() {
+    if (!user || !slug) return;
+    setErr(null);
+    try {
+      await postEnrollCourseSlug(slug);
+      const d = await fetchCourseDetail(slug);
+      setData(d);
+      toast.success("Enrolled. Complete lessons to earn your certificate.");
+    } catch (e) {
+      const m = e.message || "Enrollment failed";
+      setErr(m);
+      toast.error(m);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center gap-2 text-ccweb-muted">
@@ -111,6 +128,11 @@ export function CourseDetailPage() {
               <p className="mt-2 text-sm text-emerald-200/90">
                 Your progress: {Math.round(enrollment.progressPct || 0)}%
               </p>
+            )}
+            {!enrollment && user && (
+              <button type="button" className="mt-3 ccweb-outline-btn text-sm" onClick={enroll}>
+                Enroll in this course
+              </button>
             )}
           </div>
           {user && (

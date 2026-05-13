@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+/* CCWEB design tokens — premium dark / glass / gradients */
+@theme {
+  --color-ccweb-bg: #030712;
+  --color-ccweb-surface: rgba(12, 22, 48, 0.65);
+  --color-ccweb-card: rgba(10, 19, 40, 0.55);
+  --color-ccweb-border: rgba(117, 160, 214, 0.22);
+  --color-ccweb-cyan: #22d3ee;
+  --color-ccweb-violet: #a78bfa;
+  --color-ccweb-green: #34d399;
+  --color-ccweb-rose: #fb7185;
+  --color-ccweb-muted: #94a3b8;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::selection {
+    background: rgba(34, 211, 238, 0.28);
+    color: #f8fafc;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

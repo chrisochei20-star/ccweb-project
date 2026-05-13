@@ -4,8 +4,71 @@ const fs = require("fs/promises");
 const path = require("path");
 const { URL } = require("url");
 const cryptoSafety = require("./cryptoSafety");
+const liveIntel = require("./intel/liveCryptoIntel");
+const { createIntelligenceApp } = require("./intelligenceExpress");
+const { createDeveloperApp } = require("./developerExpress");
+const developerPlatform = require("./developerPlatform");
+const { isValidEvmAddress } = require("./developerWeb3");
+const authEngine = require("./auth/authEngine");
+const { createAuthApp } = require("./auth/authExpress");
+const { createGrowthApp } = require("./growthExpress");
+const telemetryHub = require("./telemetryHub");
+const communityPg = require("./db/persistenceCommunity");
+const { getPool } = require("./db/pool");
+const pgGrowth = require("./db/persistenceGrowth");
+const learningPg = require("./db/persistenceLearning");
+const growthEngine = require("./db/persistenceGrowthEngine");
+const { migrate } = require("./db/migrate");
+const { validateOrExit } = require("./productionGate");
+const { logger } = require("./logging/logger");
+const { checkApiRateLimit } = require("./security/apiRateLimit");
+const { createSocialApp } = require("./social/socialRouter");
+const { handleStripeWebhook } = require("./payments/stripeWebhook");
+const { handleStripeCheckoutEscrow } = require("./payments/stripeCheckout");
+const { createPlatformApp } = require("./platformExpress");
+const { sendRawHealth } = require("./server/http/controllers/health.controller");
+const { writeRawOptions, setRawCorsHeaders } = require("./security/expressHardDefaults");
+const { attachChatSocket, closeChatSocket, broadcastNotificationUpdate } = require("./server/realtime/chatSocket");
+const monetizationEngine = require("./services/monetizationEngine");
+const monPg = require("./db/persistenceMonetization");
+const persistenceNotifications = require("./db/persistenceNotifications");
+
+function useCommunityPg() {
+  return Boolean(getPool());
+}
+
+const socialApp = createSocialApp();
+
+/** In-memory transcript for CCWEB SSE learning channel (per stream room). */
+const learningChannelMessages = new Map();
+const learningStreamSseClients = new Map();
+
+function learningBroadcast(roomId, event) {
+  const set = learningStreamSseClients.get(roomId);
+  if (!set || !set.size) return;
+  const payload = JSON.stringify({ ts: new Date().toISOString(), ...event });
+  for (const clientRes of set) {
+    try {
+      clientRes.write(`data: ${payload}\n\n`);
+    } catch {
+      /* ignore broken pipe */
+    }
+  }
+}
+
+function appendLearningChannelMessage(roomId, msg) {
+  const list = learningChannelMessages.get(roomId) || [];
+  list.push(msg);
+  while (list.length > 200) list.shift();
+  learningChannelMessages.set(roomId, list);
+}
 
 const PORT = Number(process.env.PORT || 3000);
+/** Render / Docker / cloud load balancers require binding all interfaces (not only localhost). */
+const HOST = (process.env.HOST || "0.0.0.0").trim() || "0.0.0.0";
+const CCWEB_ADMIN_KEY = (process.env.CCWEB_ADMIN_KEY || "").trim();
+const intelligenceApp = createIntelligenceApp();
+const growthApp = createGrowthApp();
 const PLATFORM_FEE_RATE = 0.08;
 
 const deals = new Map();
@@ -18,8 +81,12 @@ const ccwebUsers = new Map();
 const notifications = new Map();
 const notificationInbox = new Map();
 const communityPosts = new Map();
+const communityComments = new Map();
 const communityChats = new Map();
 const communityReactions = new Map();
+const communityBugReports = new Map();
+/** In-memory bookmarks when PostgreSQL community tables are not used (`userId|||postId`). */
+const communityBookmarkKeys = new Set();
 const aiBlogs = new Map();
 const dappDeployments = new Map();
 const dappPayments = new Map();
@@ -32,8 +99,10 @@ let nextStreamPayoutId = 1;
 let nextStreamDistributionId = 1;
 let nextNotificationId = 1;
 let nextCommunityPostId = 1;
+let nextCommunityCommentId = 1;
 let nextCommunityChatId = 1;
 let nextCommunityReactionId = 1;
+let nextCommunityBugReportId = 1;
 let nextAiBlogId = 1;
 let nextDappDeploymentId = 1;
 let nextDappPaymentId = 1;
@@ -223,12 +292,32 @@ function buildUserProfile(input, existing = null) {
   const fallbackId = existing?.id || `user-${crypto.randomUUID().slice(0, 8)}`;
   const id = (input.id || input.userId || fallbackId).toString().trim();
   const displayName = (input.displayName || existing?.displayName || id).toString().trim();
+  const email = (input.email !== undefined ? input.email : existing?.email) || null;
+  const avatarUrl =
+    input.avatarUrl !== undefined ? input.avatarUrl || null : existing?.avatarUrl ?? null;
+  const bannerUrl =
+    input.bannerUrl !== undefined ? input.bannerUrl || null : existing?.bannerUrl ?? null;
+  const bio = input.bio !== undefined ? String(input.bio || "").slice(0, 2000) : existing?.bio ?? "";
+  const headline = input.headline !== undefined ? String(input.headline || "").slice(0, 200) : existing?.headline ?? "";
+  const websiteUrl =
+    input.websiteUrl !== undefined ? String(input.websiteUrl || "").trim().slice(0, 500) : existing?.websiteUrl ?? "";
+  const twitterHandle =
+    input.twitterHandle !== undefined
+      ? String(input.twitterHandle || "").trim().replace(/^@+/, "").slice(0, 80)
+      : existing?.twitterHandle ?? "";
   return {
     id,
+    email: email ? String(email).trim().toLowerCase() : null,
     displayName,
     isOrganic: input.isOrganic === undefined ? existing?.isOrganic ?? true : Boolean(input.isOrganic),
     roles: Array.isArray(input.roles) && input.roles.length ? input.roles : existing?.roles || ["member"],
     pushEnabled: input.pushEnabled === undefined ? existing?.pushEnabled ?? true : Boolean(input.pushEnabled),
+    avatarUrl,
+    bannerUrl,
+    bio,
+    headline,
+    websiteUrl,
+    twitterHandle,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
   };
@@ -237,14 +326,24 @@ function buildUserProfile(input, existing = null) {
 function sanitizeUser(user) {
   return {
     id: user.id,
+    email: user.email || null,
     displayName: user.displayName,
     isOrganic: user.isOrganic,
     roles: user.roles,
     pushEnabled: user.pushEnabled,
+    avatarUrl: user.avatarUrl || null,
+    bannerUrl: user.bannerUrl || null,
+    bio: user.bio || "",
+    headline: user.headline || "",
+    websiteUrl: user.websiteUrl || "",
+    twitterHandle: user.twitterHandle || "",
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
 }
+
+const authApp = createAuthApp({ ccwebUsers, buildUserProfile, sanitizeUser });
+const platformApp = createPlatformApp({ ccwebUsers, buildUserProfile, sanitizeUser });
 
 function ensureUser(userId, options = {}) {
   const normalizedId = (userId || "").toString().trim();
@@ -334,7 +433,39 @@ function createNotification(input = {}) {
     });
   });
 
+  void syncNotificationsToPostgres(record, recipients);
   return record;
+}
+
+async function syncNotificationsToPostgres(record, recipients) {
+  try {
+    const uniq = [...new Set(recipients)];
+    if (persistenceNotifications.enabled()) {
+      await persistenceNotifications.insertFromLegacyEvent(record, uniq);
+    }
+    for (const uid of uniq) {
+      broadcastNotificationUpdate(uid, { tick: true });
+    }
+  } catch (e) {
+    logger.warn({ msg: "notification_pg_sync_failed", err: e.message });
+  }
+}
+
+async function notifyCommunityMentions(text, { actorUserId, actorDisplayName, postId }) {
+  if (!persistenceNotifications.enabled() || !text) return;
+  try {
+    const targets = await persistenceNotifications.findMentionedUserIdsFromText(String(text), actorUserId);
+    if (!targets.length) return;
+    createNotification({
+      type: "mention",
+      title: "You were mentioned",
+      message: `${actorDisplayName || "Someone"} mentioned you in community.`,
+      targetUserIds: targets,
+      metadata: { postId, actorUserId },
+    });
+  } catch (e) {
+    logger.warn({ msg: "community_mention_notify_failed", err: e.message });
+  }
 }
 
 function buildNotificationEnvelope(userId, inboxEntry) {
@@ -429,6 +560,266 @@ function closeRoomAttendances(roomId, reason = "room_finished") {
   });
   streamAttendances.set(roomId, attendeesMap);
   return changed;
+}
+
+async function finalizeLearningRevenueForRoom(roomId) {
+  if (!learningPg.usePostgres()) return;
+  const sess = await learningPg.getSessionByStreamRoomId(roomId);
+  if (!sess || sess.revenue_closed) return;
+  const attendeesMap = streamAttendances.get(roomId) || new Map();
+  const all = Array.from(attendeesMap.values());
+  await learningPg.finalizeSessionRevenue(roomId, all);
+  for (const a of all) {
+    const sub = await learningPg.getActiveSubscription(a.userId);
+    if (!sub) {
+      await learningPg.consumeAccessHours(sess.id, a.userId, (Number(a.watchMinutes) || 0) / 60);
+    }
+  }
+  await learningPg.markSessionRevenueClosed(roomId);
+}
+
+function checkLearningAdmin(req) {
+  const key = (req.headers["x-ccweb-admin"] || "").toString().trim();
+  return Boolean(CCWEB_ADMIN_KEY && key && key === CCWEB_ADMIN_KEY);
+}
+
+function generateTutorReply(userText) {
+  const t = userText.toLowerCase();
+  if (t.includes("web3")) {
+    return "Web3 is the read–write–own web: users control assets and identity via wallets and open protocols. Want a concrete example (DeFi, NFTs, or identity)?";
+  }
+  if (t.includes("defi") || t.includes("yield")) {
+    return "DeFi uses smart contracts for lending, trading, and liquidity. Always verify contract risk, audits, and liquidity before interacting with real funds.";
+  }
+  if (t.includes("blockchain") || t.includes("chain")) {
+    return "A blockchain is a replicated ledger secured by consensus. Transactions are grouped into blocks and linked cryptographically.";
+  }
+  return "Here is a concise answer based on your message. For deeper dives, pick a track (AI, Blockchain, Web3, Crypto, Business) and I will structure a mini-lesson with checkpoints.";
+}
+
+async function handleLearningAccessQuote(requestUrl, res) {
+  const streamRoomId = (requestUrl.searchParams.get("streamRoomId") || "").trim();
+  const hours = Math.max(0.25, Math.min(24, Number(requestUrl.searchParams.get("hours") || 1)));
+  if (!streamRoomId) {
+    sendJson(res, 400, { error: "streamRoomId required." });
+    return;
+  }
+  const room = streamRooms.get(streamRoomId);
+  if (!room) {
+    sendJson(res, 404, { error: "Stream room not found." });
+    return;
+  }
+  if (!learningPg.usePostgres()) {
+    const hourly = Number(process.env.CCWEB_LEARNING_HOURLY_USD || 4.99);
+    const pct = Number(room.platformRevenueSharePercent || 25);
+    const gross = +(hours * hourly).toFixed(2);
+    const platform = +((gross * pct) / 100).toFixed(2);
+    sendJson(res, 200, {
+      postgres: false,
+      streamRoomId,
+      hours,
+      hourlyRateUsd: hourly,
+      platformFeePercent: pct,
+      estimatedTotalUsd: gross,
+      estimatedPlatformUsd: platform,
+      estimatedCreatorUsd: +(gross - platform).toFixed(2),
+      note: "Set DATABASE_URL for Stripe paywall and revenue ledger.",
+    });
+    return;
+  }
+  const sess = await learningPg.getSessionByStreamRoomId(streamRoomId);
+  if (!sess) {
+    sendJson(res, 404, { error: "Learning session not synced yet. Open the room once after creation." });
+    return;
+  }
+  const hourly = learningPg.money(sess.hourly_rate_usd);
+  const platformPct = learningPg.money(sess.platform_fee_percent);
+  const gross = learningPg.money(hours * hourly);
+  const platform = learningPg.money((gross * platformPct) / 100);
+  const creator = learningPg.money(gross - platform);
+  sendJson(res, 200, {
+    postgres: true,
+    streamRoomId,
+    sessionId: sess.id,
+    hours,
+    hourlyRateUsd: hourly,
+    platformFeePercent: platformPct,
+    estimatedTotalUsd: gross,
+    estimatedPlatformUsd: platform,
+    estimatedCreatorUsd: creator,
+  });
+}
+
+async function handleLearningMe(requestUrl, res) {
+  const userId = (requestUrl.searchParams.get("userId") || "").trim();
+  if (!userId) {
+    sendJson(res, 400, { error: "userId required." });
+    return;
+  }
+  if (!learningPg.usePostgres()) {
+    sendJson(res, 200, { postgres: false, profile: null });
+    return;
+  }
+  const profile = await learningPg.userLearningProfile(userId);
+  sendJson(res, 200, { postgres: true, profile });
+}
+
+async function handleLearningSessionsList(requestUrl, res) {
+  const status = (requestUrl.searchParams.get("status") || "all").trim();
+  const limitRaw = requestUrl.searchParams.get("limit") || "50";
+  const limit = Number(limitRaw);
+  if (!learningPg.usePostgres()) {
+    sendJson(res, 200, {
+      postgres: false,
+      count: 0,
+      sessions: [],
+      note: "Set DATABASE_URL to persist learning sessions and revenue analytics.",
+    });
+    return;
+  }
+  try {
+    const sessions = await learningPg.listLearningSessions({
+      status,
+      limit: Number.isFinite(limit) ? limit : 50,
+    });
+    sendJson(res, 200, { postgres: true, count: sessions.length, sessions });
+  } catch (e) {
+    logger.error({ msg: "learning_sessions_list_fail", err: e.message });
+    sendJson(res, 500, { error: e.message || "Failed to list sessions." });
+  }
+}
+
+async function handleLearningAdminAnalytics(req, res) {
+  if (!checkLearningAdmin(req)) {
+    sendJson(res, 403, { error: "Admin key required (X-CCWEB-Admin)." });
+    return;
+  }
+  if (!learningPg.usePostgres()) {
+    sendJson(res, 503, { error: "PostgreSQL required for learning analytics." });
+    return;
+  }
+  const summary = await learningPg.analyticsSummary();
+  const live = await learningPg.listLiveSessionsWithStreamIds();
+  const recentLedger = await learningPg.listRecentLedger(40);
+  const u = new URL(req.url || "/", "https://ccweb.internal");
+  const revenueOverview = await monPg.adminRevenueOverview({
+    meteringDays: Number(u.searchParams.get("meteringDays")) || 90,
+    trendDays: Number(u.searchParams.get("trendDays")) || 14,
+  });
+  sendJson(res, 200, { summary, liveSessions: live, recentLedger, monetization: revenueOverview });
+}
+
+async function handleLearningSessionDetail(streamRoomId, res) {
+  if (!learningPg.usePostgres()) {
+    sendJson(res, 503, { error: "PostgreSQL required." });
+    return;
+  }
+  const detail = await learningPg.getLearningSessionDetail(streamRoomId);
+  if (!detail) {
+    sendJson(res, 404, { error: "Learning session not found." });
+    return;
+  }
+  sendJson(res, 200, detail);
+}
+
+async function handleLearningChannelPost(req, res, streamRoomId) {
+  if (!streamRooms.has(streamRoomId)) {
+    sendJson(res, 404, { error: "Stream room not found." });
+    return;
+  }
+  let body = {};
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+  const text = (body.message || "").toString().trim().slice(0, 2000);
+  const userId = (body.userId || "").toString().trim();
+  const displayName = (body.displayName || "").toString().trim() || userId;
+  if (!text || !userId) {
+    sendJson(res, 400, { error: "userId and message required." });
+    return;
+  }
+  const msg = {
+    id: `lch_${crypto.randomBytes(6).toString("hex")}`,
+    streamRoomId,
+    userId,
+    displayName,
+    message: text,
+    type: (body.type || "chat").toString().slice(0, 32),
+    at: new Date().toISOString(),
+  };
+  appendLearningChannelMessage(streamRoomId, msg);
+  learningBroadcast(streamRoomId, { type: "channel_message", message: msg });
+  sendJson(res, 201, msg);
+}
+
+function handleLearningChannelGet(streamRoomId, res) {
+  if (!streamRooms.has(streamRoomId)) {
+    sendJson(res, 404, { error: "Stream room not found." });
+    return;
+  }
+  sendJson(res, 200, { messages: learningChannelMessages.get(streamRoomId) || [] });
+}
+
+function handleLearningSse(req, res, streamRoomId) {
+  if (!streamRooms.has(streamRoomId)) {
+    sendJson(res, 404, { error: "Stream room not found." });
+    return;
+  }
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "Access-Control-Allow-Origin": "*",
+  });
+  res.write(": ccweb-learning-sse\n\n");
+  let set = learningStreamSseClients.get(streamRoomId);
+  if (!set) {
+    set = new Set();
+    learningStreamSseClients.set(streamRoomId, set);
+  }
+  set.add(res);
+  const ping = setInterval(() => {
+    try {
+      res.write(": ping\n\n");
+    } catch {
+      clearInterval(ping);
+    }
+  }, 25000);
+  req.on("close", () => {
+    clearInterval(ping);
+    set.delete(res);
+    if (!set.size) learningStreamSseClients.delete(streamRoomId);
+  });
+}
+
+async function handleLearningTutorMessage(req, res) {
+  let body = {};
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." });
+    return;
+  }
+  const userId = (body.userId || "").toString().trim();
+  const text = (body.message || "").toString().trim().slice(0, 4000);
+  if (!userId || !text) {
+    sendJson(res, 400, { error: "userId and message required." });
+    return;
+  }
+  let xpGained = 0;
+  if (learningPg.usePostgres()) {
+    await learningPg.recordTutorEvent(userId, text.length, 3);
+    xpGained = 3;
+  }
+  const replyText = generateTutorReply(text);
+  sendJson(res, 200, {
+    user: { role: "user", text, at: new Date().toISOString() },
+    assistant: { role: "assistant", text: replyText, at: new Date().toISOString() },
+    xpGained,
+  });
 }
 
 function buildDistributionResponse(distribution) {
@@ -577,10 +968,14 @@ function distributeAndNotifyForPayout(room, payout, poolOverride = null) {
 }
 
 function resolveNotificationTargetOwner(targetType, targetId) {
-  if (targetType === "community_post") {
+  const tt = (targetType || "").toString();
+  if (tt === "community_post" || tt === "post") {
     return communityPosts.get(targetId)?.authorUserId || null;
   }
-  if (targetType === "community_chat") {
+  if (tt === "comment") {
+    return communityComments.get(targetId)?.authorUserId || null;
+  }
+  if (tt === "community_chat") {
     return communityChats.get(targetId)?.authorUserId || null;
   }
   if (targetType === "ai_blog") {
@@ -605,6 +1000,7 @@ function handleListUsers(res) {
 }
 
 async function handleUpsertUser(req, res) {
+  const tokenUserId = authEngine.getUserIdFromAccess(getBearerToken(req));
   let body;
   try {
     body = await readJsonBody(req);
@@ -614,6 +1010,11 @@ async function handleUpsertUser(req, res) {
   }
 
   const requestedId = (body.id || body.userId || "").toString().trim();
+  if (requestedId && tokenUserId && requestedId !== tokenUserId) {
+    sendJson(res, 403, { error: "Cannot modify another user's profile." });
+    return;
+  }
+
   const existing = requestedId ? ccwebUsers.get(requestedId) : null;
   const profile = buildUserProfile(body, existing);
   ccwebUsers.set(profile.id, profile);
@@ -621,46 +1022,108 @@ async function handleUpsertUser(req, res) {
   sendJson(res, existing ? 200 : 201, sanitizeUser(profile));
 }
 
-function handleListNotifications(requestUrl, res) {
-  const userId = (requestUrl.searchParams.get("userId") || "").trim();
-  if (!userId) {
-    sendJson(res, 400, { error: "userId is required." });
+async function handleListNotifications(req, requestUrl, res) {
+  const tokenUserId = authEngine.getUserIdFromAccess(getBearerToken(req));
+  if (!tokenUserId) {
+    sendJson(res, 401, { error: "Authentication required.", code: "UNAUTHORIZED" }, req);
     return;
   }
-  ensureUser(userId);
+
+  if (persistenceNotifications.enabled()) {
+    try {
+      const limit = Math.min(100, Math.max(1, parseInt(requestUrl.searchParams.get("limit"), 10) || 40));
+      const unreadOnly = requestUrl.searchParams.get("unreadOnly") === "true";
+      const grouped = requestUrl.searchParams.get("grouped") === "1";
+      const cursor = requestUrl.searchParams.get("cursor") || null;
+      const data = await persistenceNotifications.listForUser(tokenUserId, {
+        limit,
+        cursor,
+        unreadOnly,
+        includeGrouped: grouped,
+      });
+      sendJson(
+        res,
+        200,
+        {
+          userId: tokenUserId,
+          count: data.items.length,
+          unreadCount: data.unreadCount,
+          notifications: data.items,
+          nextCursor: data.nextCursor,
+          grouped: data.grouped,
+        },
+        req
+      );
+    } catch (e) {
+      sendJson(res, 500, { error: e.message }, req);
+    }
+    return;
+  }
+
+  ensureUser(tokenUserId);
   const unreadOnly = requestUrl.searchParams.get("unreadOnly") === "true";
-  const inbox = ensureInbox(userId);
+  const inbox = ensureInbox(tokenUserId);
   const items = inbox
-    .map((entry) => buildNotificationEnvelope(userId, entry))
+    .map((entry) => buildNotificationEnvelope(tokenUserId, entry))
     .filter(Boolean)
     .filter((entry) => (unreadOnly ? !entry.read : true))
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  sendJson(res, 200, {
-    userId,
-    count: items.length,
-    unreadCount: items.filter((entry) => !entry.read).length,
-    notifications: items,
-  });
+  sendJson(
+    res,
+    200,
+    {
+      userId: tokenUserId,
+      count: items.length,
+      unreadCount: items.filter((entry) => !entry.read).length,
+      notifications: items,
+      nextCursor: null,
+      grouped: [],
+    },
+    req
+  );
 }
 
 async function handleMarkNotificationsRead(req, res) {
+  const tokenUserId = authEngine.getUserIdFromAccess(getBearerToken(req));
+  if (!tokenUserId) {
+    sendJson(res, 401, { error: "Authentication required.", code: "UNAUTHORIZED" }, req);
+    return;
+  }
   let body;
   try {
     body = await readJsonBody(req);
   } catch {
-    sendJson(res, 400, { error: "Body must be valid JSON." });
+    sendJson(res, 400, { error: "Body must be valid JSON." }, req);
     return;
   }
 
-  const userId = (body.userId || "").toString().trim();
-  if (!userId) {
-    sendJson(res, 400, { error: "userId is required." });
+  if (persistenceNotifications.enabled()) {
+    try {
+      const updated = await persistenceNotifications.markRead(tokenUserId, {
+        markAll: body.markAll === true,
+        notificationIds: Array.isArray(body.notificationIds)
+          ? body.notificationIds.map((id) => id.toString())
+          : Array.isArray(body.ids)
+            ? body.ids.map((id) => id.toString())
+            : [],
+      });
+      broadcastNotificationUpdate(tokenUserId, { read: true });
+      sendJson(res, 200, { userId: tokenUserId, updated }, req);
+    } catch (e) {
+      sendJson(res, 500, { error: e.message }, req);
+    }
     return;
   }
-  ensureUser(userId);
-  const inbox = ensureInbox(userId);
+
+  const inbox = ensureInbox(tokenUserId);
   const markAll = body.markAll === true;
-  const selected = new Set(Array.isArray(body.notificationIds) ? body.notificationIds.map((id) => id.toString()) : []);
+  const selected = new Set(
+    Array.isArray(body.notificationIds)
+      ? body.notificationIds.map((id) => id.toString())
+      : Array.isArray(body.ids)
+        ? body.ids.map((id) => id.toString())
+        : []
+  );
   let updated = 0;
   inbox.forEach((entry) => {
     if (!entry.read && (markAll || selected.has(entry.notificationId))) {
@@ -668,40 +1131,328 @@ async function handleMarkNotificationsRead(req, res) {
       updated += 1;
     }
   });
-  sendJson(res, 200, { userId, updated });
+  broadcastNotificationUpdate(tokenUserId, { read: true });
+  sendJson(res, 200, { userId: tokenUserId, updated }, req);
 }
 
-function handleListCommunityPosts(res) {
-  const posts = Array.from(communityPosts.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  sendJson(res, 200, { count: posts.length, posts });
+async function requireCommunityActor(req, res) {
+  const token = getBearerToken(req);
+  const userId = token ? authEngine.getUserIdFromAccess(token) : null;
+  if (!userId) {
+    sendJson(
+      res,
+      401,
+      {
+        error: "Authentication required.",
+        code: "UNAUTHORIZED",
+        detail: "Send Authorization: Bearer <accessToken> for community actions.",
+      },
+      req
+    );
+    return null;
+  }
+  try {
+    const user = await authEngine.ensureUserProfile(ccwebUsers, buildUserProfile, userId);
+    if (!user) {
+      sendJson(res, 401, { error: "Session invalid.", code: "USER_NOT_FOUND" }, req);
+      return null;
+    }
+    const displayName = (user.displayName || "").toString().trim() || userId.slice(0, 8);
+    return { userId: user.id, displayName, user };
+  } catch (e) {
+    logger.error({ msg: "community_actor_resolve_failed", err: e.message });
+    sendJson(res, 401, { error: "Authentication failed.", code: "AUTH_ERROR" }, req);
+    return null;
+  }
+}
+
+function normalizeCommunityChannel(raw) {
+  const allowed = new Set(["general", "trading", "builders", "ai", "support", "announcements"]);
+  const ch = (raw || "general").toString().trim().toLowerCase().slice(0, 48);
+  return allowed.has(ch) ? ch : "general";
+}
+
+const COMMUNITY_REACTION_TYPES = new Set(["post", "comment"]);
+
+function normalizeCommunityReactionType(raw) {
+  const t = (raw || "").toString().trim().toLowerCase();
+  if (t === "community_post") return "post";
+  if (t === "community_comment") return "comment";
+  return t;
+}
+
+function sanitizeCommunityReactionLabel(raw) {
+  const r = (raw || "like").toString().trim().toLowerCase();
+  if (!/^[a-z][a-z0-9_-]{0,31}$/.test(r)) return "like";
+  return r;
+}
+
+async function resolveCommunityReactionOwnerId(targetType, targetId) {
+  const tt = (targetType || "").toString();
+  let ownerId = resolveNotificationTargetOwner(tt, targetId);
+  if (ownerId || !useCommunityPg()) return ownerId;
+  if (tt === "post" || tt === "community_post") {
+    try {
+      const data = await communityPg.getPostWithComments(targetId);
+      return data?.post?.authorUserId || null;
+    } catch {
+      return null;
+    }
+  }
+  if (tt === "comment") {
+    try {
+      return await communityPg.getCommentAuthorUserId(targetId);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function handleListCommunityPosts(req, res) {
+  if (useCommunityPg()) {
+    communityPg
+      .listPosts()
+      .then((posts) => sendJson(res, 200, { count: posts.length, posts }, req))
+      .catch((e) => sendJson(res, 500, { error: e.message }, req));
+    return;
+  }
+  const counts = new Map();
+  for (const c of communityComments.values()) {
+    counts.set(c.postId, (counts.get(c.postId) || 0) + 1);
+  }
+  const posts = Array.from(communityPosts.values())
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .map((p) => ({
+      ...p,
+      tags: p.tags || [],
+      mediaUrls: p.mediaUrls || [],
+      repostOfId: p.repostOfId || null,
+      originalPost: p.originalPost || null,
+      hashtags: p.hashtags || extractHashtagsFromText(`${p.title}\n${p.content}`),
+      commentCount: counts.get(p.id) || 0,
+    }));
+  sendJson(res, 200, { count: posts.length, posts }, req);
+}
+
+function handleListTrendingCommunityPosts(req, res) {
+  if (useCommunityPg()) {
+    communityPg
+      .listTrendingPosts(40)
+      .then((posts) => sendJson(res, 200, { count: posts.length, posts }, req))
+      .catch((e) => sendJson(res, 500, { error: e.message }, req));
+    return;
+  }
+  handleListCommunityPosts(req, res);
+}
+
+function bookmarkMemKey(userId, postId) {
+  return `${userId}|||${postId}`;
+}
+
+function handleListCommunityPostsByUser(req, res, userId) {
+  const id = (userId || "").toString().trim();
+  if (!id) {
+    sendJson(res, 400, { error: "userId required." }, req);
+    return;
+  }
+  if (useCommunityPg()) {
+    communityPg
+      .listPostsByAuthor(id, 80)
+      .then((posts) => sendJson(res, 200, { userId: id, count: posts.length, posts }, req))
+      .catch((e) => sendJson(res, 500, { error: e.message }, req));
+    return;
+  }
+  const counts = new Map();
+  for (const c of communityComments.values()) {
+    counts.set(c.postId, (counts.get(c.postId) || 0) + 1);
+  }
+  const posts = Array.from(communityPosts.values())
+    .filter((p) => p.authorUserId === id)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .map((p) => ({
+      ...p,
+      tags: p.tags || [],
+      mediaUrls: p.mediaUrls || [],
+      repostOfId: p.repostOfId || null,
+      originalPost: p.originalPost || null,
+      hashtags: p.hashtags || extractHashtagsFromText(`${p.title}\n${p.content}`),
+      commentCount: counts.get(p.id) || 0,
+    }));
+  sendJson(res, 200, { userId: id, count: posts.length, posts }, req);
+}
+
+async function handleCommunityBookmark(req, res, postId, method) {
+  const actor = await requireCommunityActor(req, res);
+  if (!actor) return;
+  const pid = (postId || "").toString().trim();
+  if (!pid) {
+    sendJson(res, 400, { error: "postId required." }, req);
+    return;
+  }
+  if (useCommunityPg()) {
+    try {
+      if (method === "POST") await communityPg.addBookmark(actor.userId, pid);
+      else await communityPg.removeBookmark(actor.userId, pid);
+      sendJson(res, 200, { ok: true }, req);
+    } catch (e) {
+      sendJson(res, 500, { error: e.message }, req);
+    }
+    return;
+  }
+  const key = bookmarkMemKey(actor.userId, pid);
+  if (method === "POST") communityBookmarkKeys.add(key);
+  else communityBookmarkKeys.delete(key);
+  sendJson(res, 200, { ok: true }, req);
+}
+
+async function handleListCommunityBookmarks(req, res) {
+  const actor = await requireCommunityActor(req, res);
+  if (!actor) return;
+  if (useCommunityPg()) {
+    communityPg
+      .listBookmarks(actor.userId, 80)
+      .then((posts) => sendJson(res, 200, { count: posts.length, posts }, req))
+      .catch((e) => sendJson(res, 500, { error: e.message }, req));
+    return;
+  }
+  const counts = new Map();
+  for (const c of communityComments.values()) {
+    counts.set(c.postId, (counts.get(c.postId) || 0) + 1);
+  }
+  const posts = [];
+  for (const key of communityBookmarkKeys) {
+    const [uid, pid] = key.split("|||");
+    if (uid !== actor.userId || !pid) continue;
+    const p = communityPosts.get(pid);
+    if (!p) continue;
+    posts.push({
+      ...p,
+      tags: p.tags || [],
+      mediaUrls: p.mediaUrls || [],
+      repostOfId: p.repostOfId || null,
+      originalPost: p.originalPost || null,
+      hashtags: p.hashtags || extractHashtagsFromText(`${p.title}\n${p.content}`),
+      commentCount: counts.get(p.id) || 0,
+    });
+  }
+  posts.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  sendJson(res, 200, { count: posts.length, posts }, req);
 }
 
 async function handleCreateCommunityPost(req, res) {
+  const actor = await requireCommunityActor(req, res);
+  if (!actor) return;
+
   let body;
   try {
     body = await readJsonBody(req);
   } catch {
-    sendJson(res, 400, { error: "Body must be valid JSON." });
+    sendJson(res, 400, { error: "Body must be valid JSON." }, req);
     return;
   }
 
-  const authorUserId = (body.authorUserId || "").toString().trim();
-  const title = (body.title || "").toString().trim();
-  const content = (body.content || "").toString().trim();
-  if (!authorUserId || !title || !content) {
-    sendJson(res, 400, { error: "authorUserId, title and content are required." });
+  const repostOfId = (body.repostOfId || "").toString().trim() || null;
+  let title = (body.title || "").toString().trim();
+  let content = (body.content || "").toString().trim();
+  const mediaUrls = Array.isArray(body.mediaUrls)
+    ? body.mediaUrls.map((u) => String(u || "").trim()).filter((u) => u && (u.startsWith("http") || u.startsWith("/")))
+    : [];
+
+  if (repostOfId) {
+    let parentContent = "";
+    if (useCommunityPg()) {
+      try {
+        const pr = await communityPg.getPostRow(repostOfId);
+        if (!pr) {
+          sendJson(res, 404, { error: "Original post not found for repost.", code: "REPOST_PARENT_MISSING" }, req);
+          return;
+        }
+        parentContent = (pr.content || "").toString();
+      } catch (e) {
+        sendJson(res, 500, { error: e.message }, req);
+        return;
+      }
+    } else {
+      const parent = communityPosts.get(repostOfId);
+      if (!parent) {
+        sendJson(res, 404, { error: "Original post not found for repost.", code: "REPOST_PARENT_MISSING" }, req);
+        return;
+      }
+      parentContent = (parent.content || "").toString();
+    }
+    if (!title) title = "Repost";
+    if (!content) content = parentContent.trim().slice(0, 4000) || " ";
+  }
+
+  if (!title || !content) {
+    sendJson(res, 400, { error: "title and content are required (unless repostOfId is set)." }, req);
     return;
   }
 
-  const author = ensureUser(authorUserId, { displayName: body.authorDisplayName });
+  const author = ensureUser(actor.userId, { displayName: actor.displayName });
+
+  if (useCommunityPg()) {
+    try {
+      const post = await communityPg.createPost({
+        authorUserId: author.id,
+        authorDisplayName: author.displayName,
+        title,
+        content,
+        tags: Array.isArray(body.tags) ? body.tags.map((tag) => tag.toString()) : [],
+        mediaUrls,
+        repostOfId,
+      });
+      createNotification({
+        type: "community_post_created",
+        title: "New community post",
+        message: `${author.displayName} posted: ${title}`,
+        broadcast: true,
+        metadata: { postId: post.id, authorUserId: author.id },
+      });
+      void notifyCommunityMentions(`${title}\n${content}`, {
+        actorUserId: author.id,
+        actorDisplayName: author.displayName,
+        postId: post.id,
+      });
+      growthEngine.recordEvent(author.id, "community_post", { postId: post.id }).catch(() => {});
+      if (learningPg.usePostgres()) learningPg.addXpDelta(author.id, 25).catch(() => {});
+      sendJson(res, 201, post, req);
+    } catch (e) {
+      const code = e.code === "REPOST_PARENT_MISSING" ? 404 : 500;
+      sendJson(res, code, { error: e.message }, req);
+    }
+    return;
+  }
+
   const id = `post-${String(nextCommunityPostId++).padStart(4, "0")}`;
+  let originalPost = null;
+  if (repostOfId) {
+    const p = communityPosts.get(repostOfId);
+    if (p) {
+      originalPost = {
+        id: p.id,
+        title: p.title,
+        content: p.content,
+        authorDisplayName: p.authorDisplayName,
+        authorUserId: p.authorUserId,
+        createdAt: p.createdAt,
+        mediaUrls: p.mediaUrls || [],
+      };
+    }
+  }
+  const tagMerge = [...new Set([...(Array.isArray(body.tags) ? body.tags.map((t) => String(t).toLowerCase()) : []), ...extractHashtagsFromText(`${title}\n${content}`)]))].slice(0, 40);
   const post = {
     id,
     authorUserId: author.id,
     authorDisplayName: author.displayName,
     title,
     content,
-    tags: Array.isArray(body.tags) ? body.tags.map((tag) => tag.toString()) : [],
+    tags: tagMerge,
+    hashtags: extractHashtagsFromText(`${title}\n${content}`),
+    mediaUrls: mediaUrls.slice(0, 10),
+    repostOfId,
+    originalPost,
     createdAt: new Date().toISOString(),
   };
   communityPosts.set(id, post);
@@ -713,36 +1464,208 @@ async function handleCreateCommunityPost(req, res) {
     broadcast: true,
     metadata: { postId: id, authorUserId: author.id },
   });
+  void notifyCommunityMentions(`${title}\n${content}`, {
+    actorUserId: author.id,
+    actorDisplayName: author.displayName,
+    postId: id,
+  });
 
-  sendJson(res, 201, post);
+  sendJson(res, 201, { ...post, commentCount: 0 }, req);
 }
 
-function handleListCommunityChats(requestUrl, res) {
-  const channelFilter = (requestUrl.searchParams.get("channel") || "").trim();
-  const chats = Array.from(communityChats.values())
-    .filter((chat) => (channelFilter ? chat.channel === channelFilter : true))
-    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  sendJson(res, 200, { count: chats.length, chats });
+function extractHashtagsFromText(text) {
+  const re = /#([\p{L}\p{N}_]{2,40})/gu;
+  const s = new Set();
+  let m;
+  while ((m = re.exec(String(text || ""))) !== null) s.add(m[1].toLowerCase());
+  return [...s];
 }
 
-async function handleCreateCommunityChat(req, res) {
+function handleGetCommunityPost(req, postId, res) {
+  if (useCommunityPg()) {
+    communityPg
+      .getPostWithComments(postId)
+      .then((data) => {
+        if (!data) {
+          sendJson(res, 404, { error: "Post not found." }, req);
+          return;
+        }
+        sendJson(res, 200, data, req);
+      })
+      .catch((e) => sendJson(res, 500, { error: e.message }, req));
+    return;
+  }
+  const post = communityPosts.get(postId);
+  if (!post) {
+    sendJson(res, 404, { error: "Post not found." }, req);
+    return;
+  }
+  const comments = Array.from(communityComments.values())
+    .filter((c) => c.postId === postId)
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  sendJson(res, 200, { post, comments }, req);
+}
+
+function handleListPostComments(req, postId, res) {
+  if (useCommunityPg()) {
+    communityPg
+      .getPostWithComments(postId)
+      .then((data) => {
+        if (!data) sendJson(res, 404, { error: "Post not found." }, req);
+        else sendJson(res, 200, { postId, count: data.comments.length, comments: data.comments }, req);
+      })
+      .catch((e) => sendJson(res, 500, { error: e.message }, req));
+    return;
+  }
+  if (!communityPosts.has(postId)) {
+    sendJson(res, 404, { error: "Post not found." }, req);
+    return;
+  }
+  const comments = Array.from(communityComments.values())
+    .filter((c) => c.postId === postId)
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  sendJson(res, 200, { postId, count: comments.length, comments }, req);
+}
+
+async function handleCreatePostComment(req, res, postId) {
+  const actor = await requireCommunityActor(req, res);
+  if (!actor) return;
+
+  if (useCommunityPg()) {
+    const exists = await communityPg.getPostWithComments(postId);
+    if (!exists) {
+      sendJson(res, 404, { error: "Post not found." }, req);
+      return;
+    }
+  } else if (!communityPosts.has(postId)) {
+    sendJson(res, 404, { error: "Post not found." }, req);
+    return;
+  }
   let body;
   try {
     body = await readJsonBody(req);
   } catch {
-    sendJson(res, 400, { error: "Body must be valid JSON." });
+    sendJson(res, 400, { error: "Body must be valid JSON." }, req);
+    return;
+  }
+  const text = (body.body || body.content || "").toString().trim();
+  if (!text) {
+    sendJson(res, 400, { error: "body or content is required." }, req);
+    return;
+  }
+  const author = ensureUser(actor.userId, { displayName: actor.displayName });
+
+  if (useCommunityPg()) {
+    try {
+      const row = await communityPg.createComment(postId, {
+        authorUserId: author.id,
+        authorDisplayName: author.displayName,
+        body: text.slice(0, 2000),
+      });
+      const post = (await communityPg.getPostWithComments(postId)).post;
+      createNotification({
+        type: "community_post_comment",
+        title: "New comment on your post",
+        message: `${author.displayName} commented on: ${post.title}`,
+        targetUserIds: [post.authorUserId].filter((uid) => uid && uid !== author.id),
+        metadata: { postId, commentId: row.id, actorUserId: author.id },
+      });
+      void notifyCommunityMentions(text, {
+        actorUserId: author.id,
+        actorDisplayName: author.displayName,
+        postId,
+      });
+      sendJson(res, 201, row, req);
+    } catch (e) {
+      sendJson(res, 500, { error: e.message }, req);
+    }
     return;
   }
 
-  const authorUserId = (body.authorUserId || "").toString().trim();
+  const id = `cmt-${String(nextCommunityCommentId++).padStart(5, "0")}`;
+  const row = {
+    id,
+    postId,
+    authorUserId: author.id,
+    authorDisplayName: author.displayName,
+    body: text.slice(0, 2000),
+    createdAt: new Date().toISOString(),
+  };
+  communityComments.set(id, row);
+  const post = communityPosts.get(postId);
+  createNotification({
+    type: "community_post_comment",
+    title: "New comment on your post",
+    message: `${author.displayName} commented on: ${post.title}`,
+    targetUserIds: [post.authorUserId].filter((uid) => uid && uid !== author.id),
+    metadata: { postId, commentId: id, actorUserId: author.id },
+  });
+  void notifyCommunityMentions(text, {
+    actorUserId: author.id,
+    actorDisplayName: author.displayName,
+    postId,
+  });
+  sendJson(res, 201, row, req);
+}
+
+function handleListCommunityChats(req, requestUrl, res) {
+  const channelFilter = (requestUrl.searchParams.get("channel") || "").trim();
+  if (useCommunityPg()) {
+    communityPg
+      .listChats(channelFilter)
+      .then((chats) => sendJson(res, 200, { count: chats.length, chats }, req))
+      .catch((e) => sendJson(res, 500, { error: e.message }, req));
+    return;
+  }
+  const chats = Array.from(communityChats.values())
+    .filter((chat) => (channelFilter ? chat.channel === channelFilter : true))
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  sendJson(res, 200, { count: chats.length, chats }, req);
+}
+
+async function handleCreateCommunityChat(req, res) {
+  const actor = await requireCommunityActor(req, res);
+  if (!actor) return;
+
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." }, req);
+    return;
+  }
+
   const message = (body.message || "").toString().trim();
-  const channel = (body.channel || "general").toString().trim();
-  if (!authorUserId || !message) {
-    sendJson(res, 400, { error: "authorUserId and message are required." });
+  const channel = normalizeCommunityChannel(body.channel);
+  if (!message) {
+    sendJson(res, 400, { error: "message is required." }, req);
     return;
   }
 
-  const author = ensureUser(authorUserId, { displayName: body.authorDisplayName });
+  const author = ensureUser(actor.userId, { displayName: actor.displayName });
+
+  if (useCommunityPg()) {
+    try {
+      const chat = await communityPg.createChat({
+        channel,
+        authorUserId: author.id,
+        authorDisplayName: author.displayName,
+        message,
+      });
+      createNotification({
+        type: "community_chat_message",
+        title: `Chat update in #${channel}`,
+        message: `${author.displayName}: ${message.slice(0, 120)}`,
+        broadcast: true,
+        metadata: { chatId: chat.id, channel, authorUserId: author.id },
+      });
+      sendJson(res, 201, chat, req);
+    } catch (e) {
+      sendJson(res, 500, { error: e.message }, req);
+    }
+    return;
+  }
+
   const id = `chat-${String(nextCommunityChatId++).padStart(5, "0")}`;
   const chat = {
     id,
@@ -762,12 +1685,19 @@ async function handleCreateCommunityChat(req, res) {
     metadata: { chatId: id, channel, authorUserId: author.id },
   });
 
-  sendJson(res, 201, chat);
+  sendJson(res, 201, chat, req);
 }
 
-function handleListCommunityReactions(requestUrl, res) {
+function handleListCommunityReactions(req, requestUrl, res) {
   const targetType = (requestUrl.searchParams.get("targetType") || "").trim();
   const targetId = (requestUrl.searchParams.get("targetId") || "").trim();
+  if (useCommunityPg()) {
+    communityPg
+      .listReactions(targetType, targetId)
+      .then((reactions) => sendJson(res, 200, { count: reactions.length, reactions }, req))
+      .catch((e) => sendJson(res, 500, { error: e.message }, req));
+    return;
+  }
   const reactions = Array.from(communityReactions.values()).filter((reaction) => {
     if (targetType && reaction.targetType !== targetType) {
       return false;
@@ -777,10 +1707,102 @@ function handleListCommunityReactions(requestUrl, res) {
     }
     return true;
   });
-  sendJson(res, 200, { count: reactions.length, reactions });
+  sendJson(res, 200, { count: reactions.length, reactions }, req);
 }
 
 async function handleCreateCommunityReaction(req, res) {
+  const actorJwt = await requireCommunityActor(req, res);
+  if (!actorJwt) return;
+
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    sendJson(res, 400, { error: "Body must be valid JSON." }, req);
+    return;
+  }
+
+  const targetTypeRaw = normalizeCommunityReactionType(body.targetType);
+  const targetId = (body.targetId || "").toString().trim();
+  const reaction = sanitizeCommunityReactionLabel(body.reaction);
+  if (!targetTypeRaw || !targetId) {
+    sendJson(res, 400, { error: "targetType and targetId are required." }, req);
+    return;
+  }
+  if (!COMMUNITY_REACTION_TYPES.has(targetTypeRaw)) {
+    sendJson(res, 400, { error: "Invalid targetType. Use post or comment." }, req);
+    return;
+  }
+
+  const actor = ensureUser(actorJwt.userId, { displayName: actorJwt.displayName });
+
+  if (useCommunityPg()) {
+    try {
+      const record = await communityPg.createReaction({
+        authorUserId: actor.id,
+        authorDisplayName: actor.displayName,
+        targetType: targetTypeRaw,
+        targetId,
+        reaction,
+      });
+      const ownerId = await resolveCommunityReactionOwnerId(targetTypeRaw, targetId);
+      if (ownerId && ownerId !== actor.id) {
+        createNotification({
+          type: "community_reaction_received",
+          title: "New reaction on your CCWEB content",
+          message: `${actor.displayName} reacted with ${reaction}.`,
+          targetUserIds: [ownerId],
+          metadata: { reactionId: record.id, targetType: targetTypeRaw, targetId, fromUserId: actor.id, reaction },
+        });
+      }
+      growthEngine.recordEvent(actor.id, "community_reaction", { targetType: targetTypeRaw, targetId }).catch(() => {});
+      if (learningPg.usePostgres()) learningPg.addXpDelta(actor.id, 5).catch(() => {});
+      sendJson(res, 201, record, req);
+    } catch (e) {
+      sendJson(res, 500, { error: e.message }, req);
+    }
+    return;
+  }
+
+  const id = `react-${String(nextCommunityReactionId++).padStart(5, "0")}`;
+  const record = {
+    id,
+    authorUserId: actor.id,
+    authorDisplayName: actor.displayName,
+    targetType: targetTypeRaw,
+    targetId,
+    reaction,
+    createdAt: new Date().toISOString(),
+  };
+  communityReactions.set(id, record);
+
+  const ownerId = await resolveCommunityReactionOwnerId(targetTypeRaw, targetId);
+  if (ownerId && ownerId !== actor.id) {
+    createNotification({
+      type: "community_reaction_received",
+      title: "New reaction on your CCWEB content",
+      message: `${actor.displayName} reacted with ${reaction}.`,
+      targetUserIds: [ownerId],
+      metadata: { reactionId: id, targetType: targetTypeRaw, targetId, fromUserId: actor.id, reaction },
+    });
+  }
+
+  sendJson(res, 201, record, req);
+}
+
+function handleListBugReports(res) {
+  if (useCommunityPg()) {
+    communityPg
+      .listBugs()
+      .then((reports) => sendJson(res, 200, { count: reports.length, reports }))
+      .catch((e) => sendJson(res, 500, { error: e.message }));
+    return;
+  }
+  const reports = Array.from(communityBugReports.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  sendJson(res, 200, { count: reports.length, reports });
+}
+
+async function handleCreateBugReport(req, res) {
   let body;
   try {
     body = await readJsonBody(req);
@@ -789,45 +1811,57 @@ async function handleCreateCommunityReaction(req, res) {
     return;
   }
 
-  const authorUserId = (body.authorUserId || "").toString().trim();
-  const targetType = (body.targetType || "").toString().trim();
-  const targetId = (body.targetId || "").toString().trim();
-  const reaction = (body.reaction || "like").toString().trim();
-  if (!authorUserId || !targetType || !targetId) {
-    sendJson(res, 400, { error: "authorUserId, targetType and targetId are required." });
+  const reporterUserId = (body.reporterUserId || "").toString().trim();
+  const title = (body.title || "").toString().trim();
+  const description = (body.description || "").toString().trim();
+  const pathStr = (body.path || "").toString().trim();
+  if (!title || !description) {
+    sendJson(res, 400, { error: "title and description are required." });
     return;
   }
 
-  const actor = ensureUser(authorUserId, { displayName: body.authorDisplayName });
-  const id = `react-${String(nextCommunityReactionId++).padStart(5, "0")}`;
-  const record = {
-    id,
-    authorUserId: actor.id,
-    authorDisplayName: actor.displayName,
-    targetType,
-    targetId,
-    reaction,
-    createdAt: new Date().toISOString(),
-  };
-  communityReactions.set(id, record);
+  const reporter = reporterUserId ? ensureUser(reporterUserId, { displayName: body.reporterDisplayName }) : null;
 
-  const ownerId = resolveNotificationTargetOwner(targetType, targetId);
-  if (ownerId && ownerId !== actor.id) {
-    createNotification({
-      type: "community_reaction_received",
-      title: "New reaction on your CCWEB content",
-      message: `${actor.displayName} reacted with ${reaction}.`,
-      targetUserIds: [ownerId],
-      metadata: { reactionId: id, targetType, targetId, fromUserId: actor.id },
-    });
+  if (useCommunityPg()) {
+    try {
+      const record = await communityPg.createBug({
+        reporterUserId: reporter?.id || null,
+        reporterDisplayName: reporter?.displayName || null,
+        title: title.slice(0, 160),
+        description: description.slice(0, 4000),
+        path: pathStr.slice(0, 400),
+        severity: (body.severity || "normal").toString().trim().slice(0, 32),
+      });
+      telemetryHub.recordEvent({
+        name: "bug_report_submitted",
+        path: record.path || "/",
+        metadata: { bugId: record.id, severity: record.severity },
+      });
+      sendJson(res, 201, record);
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+    return;
   }
 
+  const id = `bug-${String(nextCommunityBugReportId++).padStart(5, "0")}`;
+  const record = {
+    id,
+    reporterUserId: reporter?.id || null,
+    reporterDisplayName: reporter?.displayName || null,
+    title: title.slice(0, 160),
+    description: description.slice(0, 4000),
+    path: pathStr.slice(0, 400),
+    severity: (body.severity || "normal").toString().trim().slice(0, 32),
+    createdAt: new Date().toISOString(),
+  };
+  communityBugReports.set(id, record);
+  telemetryHub.recordEvent({
+    name: "bug_report_submitted",
+    path: record.path || "/",
+    metadata: { bugId: id, severity: record.severity },
+  });
   sendJson(res, 201, record);
-}
-
-function handleListAiBlogs(res) {
-  const blogs = Array.from(aiBlogs.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  sendJson(res, 200, { count: blogs.length, blogs });
 }
 
 async function handleCreateAiBlog(req, res) {
@@ -977,6 +2011,38 @@ async function handleUpsertStreamAttendance(pathname, req, res) {
     }
   }
 
+  if (learningPg.usePostgres() && requestedActive && !isRoomFinished(room)) {
+    const sess = await learningPg.getSessionByStreamRoomId(roomId);
+    if (sess) {
+      const gate = await learningPg.userHasActiveAccess(sess.id, user.id);
+      if (!gate.ok) {
+        sendJson(res, 402, {
+          error: "Payment or subscription required to join this paid session.",
+          code: "LEARNING_PAYWALL",
+          streamRoomId: roomId,
+        });
+        return;
+      }
+      if (gate.via === "credits") {
+        const prevMin = Number(existing?.watchMinutes || 0);
+        const nextMin = Math.max(0, safeNumber(body.watchMinutes, prevMin));
+        const delta = nextMin - prevMin;
+        if (delta > 0) {
+          const debit = await learningPg.debitCreditsForMinutes(user.id, delta, Number(sess.hourly_rate_usd));
+          if (!debit.ok) {
+            sendJson(res, 402, {
+              error: "Insufficient learning credits for additional watch time.",
+              code: "LEARNING_CREDITS",
+              neededCents: debit.neededCents,
+              balanceCents: debit.balanceCents,
+            });
+            return;
+          }
+        }
+      }
+    }
+  }
+
   const watchMinutes = Math.max(0, safeNumber(body.watchMinutes, existing?.watchMinutes || 0));
   const interactionScore = Math.max(
     0,
@@ -1008,6 +2074,22 @@ async function handleUpsertStreamAttendance(pathname, req, res) {
   streamAttendances.set(roomId, attendeesMap);
   updateRoomMetricsFromAttendance(room);
   streamRooms.set(roomId, room);
+
+  if (learningPg.usePostgres()) {
+    const sess = await learningPg.getSessionByStreamRoomId(roomId);
+    if (sess) {
+      await learningPg.upsertParticipation(sess.id, roomId, user.id, watchMinutes, interactionScore);
+      if (watchMinutes >= 5) {
+        growthEngine.recordEvent(user.id, "session_attended", { roomId, watchMinutes }).catch(() => {});
+      }
+    }
+  }
+
+  learningBroadcast(roomId, {
+    type: "attendance",
+    attendance: entry,
+    metrics: room.metrics,
+  });
 
   const ownerId = (room.createdBy || "").toString().trim();
   if (ownerId) {
@@ -1070,6 +2152,7 @@ async function handleFinishStreamRoom(pathname, req, res) {
   const closed = closeRoomAttendances(roomId, "room_finished");
   updateRoomMetricsFromAttendance(room);
   streamRooms.set(roomId, room);
+  await finalizeLearningRevenueForRoom(roomId);
 
   const recipientSet = new Set([
     room.createdBy,
@@ -1094,6 +2177,107 @@ async function handleFinishStreamRoom(pathname, req, res) {
     closedAttendances: closed.length,
     finishedBy,
   });
+}
+
+/** For Public API /v1 — returns { error, status } or { room } without writing HTTP. */
+async function createStreamingSessionForDeveloperApi(body) {
+  const result = createRoomFromPayload(body || {});
+  if (result.error) {
+    return { error: result.error, status: result.status || 400 };
+  }
+  const room = result.room;
+  const owner = ensureUser(room.createdBy, { displayName: (body || {}).createdByDisplayName });
+  if (!streamAttendances.has(room.id)) {
+    streamAttendances.set(room.id, new Map());
+  }
+  updateRoomMetricsFromAttendance(room);
+  streamRooms.set(room.id, room);
+  try {
+    await learningPg.upsertSessionFromStreamRoom(room);
+  } catch (e) {
+    logger.warn({ msg: "learning_session_upsert_fail", err: e.message });
+  }
+  if (owner) {
+    createNotification({
+      type: "ai_streaming_room_created",
+      title: "AI live stream activated",
+      message: `${room.roomName} is now live with topic: ${room.topic}.`,
+      targetUserIds: [owner.id],
+      metadata: {
+        roomId: room.id,
+        roomName: room.roomName,
+        topic: room.topic,
+        platformRevenueSharePercent: room.platformRevenueSharePercent,
+        expectedSessionMinutes: room.tutoringSchedule.expectedSessionMinutes,
+        tutoringIntervalMinutes: room.tutoringSchedule.tutoringIntervalMinutes,
+        estimatedEndAt: room.tutoringSchedule.estimatedEndAt,
+      },
+    });
+  }
+  createNotification({
+    type: "ai_streaming_live_alert",
+    title: "New CCWEB AI live stream",
+    message: `${room.roomName} started: ${room.topic}.`,
+    broadcast: true,
+    metadata: {
+      roomId: room.id,
+      roomName: room.roomName,
+      topic: room.topic,
+      createdBy: room.createdBy,
+      expectedSessionMinutes: room.tutoringSchedule.expectedSessionMinutes,
+      tutoringIntervalMinutes: room.tutoringSchedule.tutoringIntervalMinutes,
+      estimatedEndAt: room.tutoringSchedule.estimatedEndAt,
+    },
+  });
+  return { room: buildStreamRoomResponse(room) };
+}
+
+/** For Public API /v1 — finish by room id. */
+async function finishStreamingSessionForDeveloperApi(roomId, body) {
+  const room = streamRooms.get(roomId);
+  if (!room) {
+    return { error: "Streaming room not found.", status: 404 };
+  }
+  const b = body || {};
+  if (isRoomFinished(room)) {
+    return {
+      room: buildStreamRoomResponse(room),
+      closedAttendances: 0,
+      message: "Room already finished.",
+    };
+  }
+  const finishedBy = (b.finishedBy || room.createdBy || "system").toString().trim();
+  const now = new Date().toISOString();
+  room.status = "finished";
+  room.finishedAt = now;
+  room.updatedAt = now;
+  room.tutoringSchedule = {
+    ...room.tutoringSchedule,
+    actualEndedAt: now,
+  };
+  const closed = closeRoomAttendances(roomId, "room_finished");
+  updateRoomMetricsFromAttendance(room);
+  streamRooms.set(roomId, room);
+  await finalizeLearningRevenueForRoom(roomId);
+  const recipientSet = new Set([room.createdBy, ...closed.map((entry) => entry.userId)]);
+  createNotification({
+    type: "ai_streaming_room_finished",
+    title: "AI live stream finished",
+    message: `${room.roomName} has finished. You can now join another stream.`,
+    targetUserIds: Array.from(recipientSet).filter(Boolean),
+    metadata: {
+      roomId: room.id,
+      roomName: room.roomName,
+      finishedAt: room.finishedAt,
+      finishedBy,
+      closedAttendances: closed.length,
+    },
+  });
+  return {
+    room: buildStreamRoomResponse(room),
+    closedAttendances: closed.length,
+    finishedBy,
+  };
 }
 
 function handleListStreamDistributions(requestUrl, res) {
@@ -1158,9 +2342,30 @@ async function serveFile(filePath, res) {
   }
 }
 
-function sendJson(res, statusCode, payload) {
+function sendJson(res, statusCode, payload, req) {
+  if (req) {
+    setRawCorsHeaders(req, res, {
+      methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+      headers:
+        "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With, CCWEB-API-Key, X-CCWEB-Admin",
+    });
+  }
   res.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(payload));
+}
+
+function sendJsonCors(res, statusCode, payload) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  sendJson(res, statusCode, payload);
+}
+
+function getBearerToken(req) {
+  const h = req.headers && req.headers.authorization;
+  if (!h || typeof h !== "string") return null;
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  return m ? m[1].trim() : null;
 }
 
 async function readJsonBody(req) {
@@ -1862,6 +3067,8 @@ function buildStreamingAiHost(hostName, tracks) {
 }
 
 function buildStreamRoomResponse(room) {
+  const lkUrl = (process.env.LIVEKIT_URL || process.env.LIVEKIT_WS_URL || "").toString().trim();
+  const streamingMode = lkUrl ? "livekit-webstream" : "ccweb_sse";
   return {
     id: room.id,
     roomName: room.roomName,
@@ -1870,12 +3077,17 @@ function buildStreamRoomResponse(room) {
     topic: room.topic,
     createdBy: room.createdBy,
     status: room.status,
-    streamingMode: "livekit-webstream",
-    livekit: {
-      wsUrl: room.livekitWsUrl,
-      token: room.livekitToken,
-      roomSidHint: room.roomSidHint,
-    },
+    streamingMode,
+    learningChannelUrl: `/api/learning/sessions/${room.id}/channel`,
+    learningEventsUrl: `/api/learning/sessions/${room.id}/events`,
+    hourlyParticipationUsd: room.hourlyParticipationUsd != null ? Number(room.hourlyParticipationUsd) : undefined,
+    livekit: lkUrl
+      ? {
+          wsUrl: lkUrl,
+          token: room.livekitToken,
+          roomSidHint: room.roomSidHint,
+        }
+      : null,
     aiHost: room.aiHost,
     tutoringSchedule: room.tutoringSchedule,
     finishedAt: room.finishedAt || null,
@@ -1932,6 +3144,8 @@ function createRoomFromPayload(body) {
 
   const id = `stream-${String(nextStreamRoomId++).padStart(4, "0")}`;
   const livekitToken = generateLivekitToken();
+  const lkUrl = (process.env.LIVEKIT_URL || process.env.LIVEKIT_WS_URL || "").toString().trim();
+  const hourlyParticipationUsd = Math.max(0, safeNumber(body.hourlyParticipationUsd, Number(process.env.CCWEB_LEARNING_HOURLY_USD || 4.99)));
   const room = {
     id,
     roomName,
@@ -1941,9 +3155,10 @@ function createRoomFromPayload(body) {
     createdBy,
     status: "live",
     finishedAt: null,
-    livekitWsUrl: "wss://livekit.ccweb-stream.example",
+    livekitWsUrl: lkUrl || null,
     livekitToken,
     roomSidHint: `${id}-lk`,
+    hourlyParticipationUsd,
     aiHost: buildStreamingAiHost((body.aiHostName || "").toString().trim(), tracks),
     autoPlan,
     tutoringSchedule: {
@@ -1959,8 +3174,8 @@ function createRoomFromPayload(body) {
     creatorRevenueSharePercent,
     metrics: {
       concurrentViewers: autoPlan.projectedActiveAttenders,
-      avgWatchMinutes: Math.round(12 + Math.random() * 18),
-      engagementRatePercent: Math.round(52 + Math.random() * 35),
+      avgWatchMinutes: 0,
+      engagementRatePercent: 0,
       estimatedOrganicRevenueUsd: autoPlan.estimatedGrossRevenueUsd,
     },
     createdAt: now,
@@ -1996,52 +3211,12 @@ async function handleCreateStreamRoom(req, res) {
     return;
   }
 
-  const result = createRoomFromPayload(body);
-  if (result.error) {
-    sendJson(res, result.status || 400, { error: result.error });
+  const out = await createStreamingSessionForDeveloperApi(body);
+  if (out.error) {
+    sendJson(res, out.status || 400, { error: out.error });
     return;
   }
-  const room = result.room;
-  const owner = ensureUser(room.createdBy, { displayName: body.createdByDisplayName });
-  if (!streamAttendances.has(room.id)) {
-    streamAttendances.set(room.id, new Map());
-  }
-  updateRoomMetricsFromAttendance(room);
-  streamRooms.set(room.id, room);
-
-  if (owner) {
-    createNotification({
-      type: "ai_streaming_room_created",
-      title: "AI live stream activated",
-      message: `${room.roomName} is now live with topic: ${room.topic}.`,
-      targetUserIds: [owner.id],
-      metadata: {
-        roomId: room.id,
-        roomName: room.roomName,
-        topic: room.topic,
-        platformRevenueSharePercent: room.platformRevenueSharePercent,
-        expectedSessionMinutes: room.tutoringSchedule.expectedSessionMinutes,
-        tutoringIntervalMinutes: room.tutoringSchedule.tutoringIntervalMinutes,
-        estimatedEndAt: room.tutoringSchedule.estimatedEndAt,
-      },
-    });
-  }
-  createNotification({
-    type: "ai_streaming_live_alert",
-    title: "New CCWEB AI live stream",
-    message: `${room.roomName} started: ${room.topic}.`,
-    broadcast: true,
-    metadata: {
-      roomId: room.id,
-      roomName: room.roomName,
-      topic: room.topic,
-      createdBy: room.createdBy,
-      expectedSessionMinutes: room.tutoringSchedule.expectedSessionMinutes,
-      tutoringIntervalMinutes: room.tutoringSchedule.tutoringIntervalMinutes,
-      estimatedEndAt: room.tutoringSchedule.estimatedEndAt,
-    },
-  });
-  sendJson(res, 201, buildStreamRoomResponse(room));
+  sendJson(res, 201, out.room);
 }
 
 function handleListStreamRooms(res) {
@@ -2296,6 +3471,7 @@ function seedUsers() {
 
 seedUsers();
 seedApplicants();
+developerPlatform.ensureDefaultProject();
 
 const DAPP_TEMPLATES = [
   {
@@ -2403,6 +3579,135 @@ function recordTransaction(type, data) {
   return tx;
 }
 
+/**
+ * Shared DApp deployment (HTTP + Public API). Returns deployment object.
+ * @param {object} body
+ * @param {string} [ccwebProjectId]
+ */
+async function runDappDeployCore(body, ccwebProjectId) {
+  const {
+    templateId,
+    network,
+    paymentToken,
+    contractName,
+    contractSymbol,
+    walletAddress,
+    parameters,
+    idempotencyKey,
+  } = body || {};
+
+  if (idempotencyKey) {
+    const existing = processedIdempotencyKeys.get(idempotencyKey);
+    if (existing) {
+      return { ...existing, _idempotent: true };
+    }
+  }
+
+  if (!templateId) throw Object.assign(new Error("templateId is required."), { status: 400 });
+  if (!network) throw Object.assign(new Error("network is required."), { status: 400 });
+  if (!paymentToken) throw Object.assign(new Error("paymentToken is required."), { status: 400 });
+  if (!walletAddress) throw Object.assign(new Error("walletAddress is required."), { status: 400 });
+  if (network === "solana") {
+    const s = walletAddress.trim();
+    if (s.startsWith("0x")) {
+      throw Object.assign(new Error("Use a Solana-style address for Solana deployments, not an EVM 0x address."), {
+        status: 400,
+      });
+    }
+    if (s.length < 8) {
+      throw Object.assign(new Error("walletAddress is too short for Solana."), { status: 400 });
+    }
+  } else if (!isValidEvmAddress(walletAddress)) {
+    throw Object.assign(new Error("walletAddress must be a valid EVM address (0x…) for this network."), { status: 400 });
+  }
+
+  const template = DAPP_TEMPLATES.find((t) => t.id === templateId);
+  if (!template) throw Object.assign(new Error(`Template '${templateId}' not found.`), { status: 404 });
+  if (!template.networks.includes(network)) {
+    throw Object.assign(new Error(`Template '${templateId}' does not support network '${network}'.`), { status: 400 });
+  }
+
+  const tokenUpper = paymentToken.toUpperCase();
+  if (!TOKEN_PRICES[tokenUpper]) {
+    throw Object.assign(new Error(`Unsupported payment token '${paymentToken}'.`), { status: 400 });
+  }
+
+  const price = TOKEN_PRICES[tokenUpper];
+  const feeUsd = template.baseFeeUsd;
+  const feeInToken = formatMoney(feeUsd / price.usd);
+
+  const deploymentId = `deploy-${String(nextDappDeploymentId++).padStart(4, "0")}`;
+  const paymentId = `pay-${String(nextDappPaymentId++).padStart(4, "0")}`;
+  const txHash = `0x${crypto.randomBytes(32).toString("hex")}`;
+  const contractAddress = `0x${crypto.randomBytes(20).toString("hex")}`;
+  const now = new Date().toISOString();
+
+  const payment = {
+    id: paymentId,
+    deploymentId,
+    token: tokenUpper,
+    network: price.network,
+    amountToken: feeInToken,
+    amountUsd: feeUsd,
+    priceAtTime: price.usd,
+    walletAddress,
+    txHash,
+    status: "confirmed",
+    confirmedAt: now,
+  };
+  dappPayments.set(paymentId, payment);
+
+  const deployment = {
+    id: deploymentId,
+    ccwebProjectId: ccwebProjectId || null,
+    templateId,
+    templateName: template.name,
+    category: template.category,
+    network,
+    contractName: contractName || template.name,
+    contractSymbol: contractSymbol || templateId.toUpperCase(),
+    contractAddress,
+    walletAddress,
+    parameters: parameters || {},
+    payment,
+    status: "deployed",
+    deployedAt: now,
+    explorerUrl: `${SUPPORTED_NETWORKS.find((n) => n.id === network)?.explorer || ""}/address/${contractAddress}`,
+    features: template.features,
+    estimatedGas: template.estimatedGas,
+  };
+  dappDeployments.set(deploymentId, deployment);
+
+  recordTransaction("payment", {
+    deploymentId,
+    paymentId,
+    token: tokenUpper,
+    amountToken: feeInToken,
+    amountUsd: feeUsd,
+    walletAddress,
+    txHash,
+    network,
+    status: "confirmed",
+    description: `Payment for ${template.name} deployment`,
+  });
+  recordTransaction("deployment", {
+    deploymentId,
+    templateId,
+    templateName: template.name,
+    contractAddress,
+    network,
+    walletAddress,
+    status: "deployed",
+    description: `Deployed ${contractName || template.name} to ${network}`,
+  });
+
+  if (idempotencyKey) {
+    processedIdempotencyKeys.set(idempotencyKey, deployment);
+  }
+
+  return deployment;
+}
+
 function handleDappTemplates(res) {
   sendJson(res, 200, { count: DAPP_TEMPLATES.length, templates: DAPP_TEMPLATES });
 }
@@ -2438,81 +3743,14 @@ async function handleDappDeploy(req, res) {
     return;
   }
 
-  const { templateId, network, paymentToken, contractName, contractSymbol, walletAddress, parameters, idempotencyKey } = body;
-
-  if (idempotencyKey) {
-    const existing = processedIdempotencyKeys.get(idempotencyKey);
-    if (existing) {
-      sendJson(res, 200, { ...existing, _idempotent: true });
-      return;
-    }
+  try {
+    const deployment = await runDappDeployCore(body);
+    const code = deployment._idempotent ? 200 : 201;
+    sendJson(res, code, deployment);
+  } catch (e) {
+    const code = e.status || 400;
+    sendJson(res, code, { error: e.message || "Deploy failed." });
   }
-
-  if (!templateId) { sendJson(res, 400, { error: "templateId is required." }); return; }
-  if (!network) { sendJson(res, 400, { error: "network is required." }); return; }
-  if (!paymentToken) { sendJson(res, 400, { error: "paymentToken is required." }); return; }
-  if (!walletAddress) { sendJson(res, 400, { error: "walletAddress is required." }); return; }
-
-  const template = DAPP_TEMPLATES.find((t) => t.id === templateId);
-  if (!template) { sendJson(res, 404, { error: `Template '${templateId}' not found.` }); return; }
-  if (!template.networks.includes(network)) { sendJson(res, 400, { error: `Template '${templateId}' does not support network '${network}'.` }); return; }
-
-  const tokenUpper = paymentToken.toUpperCase();
-  if (!TOKEN_PRICES[tokenUpper]) { sendJson(res, 400, { error: `Unsupported payment token '${paymentToken}'.` }); return; }
-
-  const price = TOKEN_PRICES[tokenUpper];
-  const feeUsd = template.baseFeeUsd;
-  const feeInToken = formatMoney(feeUsd / price.usd);
-
-  const deploymentId = `deploy-${String(nextDappDeploymentId++).padStart(4, "0")}`;
-  const paymentId = `pay-${String(nextDappPaymentId++).padStart(4, "0")}`;
-  const txHash = `0x${crypto.randomBytes(32).toString("hex")}`;
-  const contractAddress = `0x${crypto.randomBytes(20).toString("hex")}`;
-  const now = new Date().toISOString();
-
-  const payment = {
-    id: paymentId,
-    deploymentId,
-    token: tokenUpper,
-    network: price.network,
-    amountToken: feeInToken,
-    amountUsd: feeUsd,
-    priceAtTime: price.usd,
-    walletAddress,
-    txHash,
-    status: "confirmed",
-    confirmedAt: now,
-  };
-  dappPayments.set(paymentId, payment);
-
-  const deployment = {
-    id: deploymentId,
-    templateId,
-    templateName: template.name,
-    category: template.category,
-    network,
-    contractName: contractName || template.name,
-    contractSymbol: contractSymbol || templateId.toUpperCase(),
-    contractAddress,
-    walletAddress,
-    parameters: parameters || {},
-    payment,
-    status: "deployed",
-    deployedAt: now,
-    explorerUrl: `${SUPPORTED_NETWORKS.find((n) => n.id === network)?.explorer || ""}/address/${contractAddress}`,
-    features: template.features,
-    estimatedGas: template.estimatedGas,
-  };
-  dappDeployments.set(deploymentId, deployment);
-
-  recordTransaction("payment", { deploymentId, paymentId, token: tokenUpper, amountToken: feeInToken, amountUsd: feeUsd, walletAddress, txHash, network, status: "confirmed", description: `Payment for ${template.name} deployment` });
-  recordTransaction("deployment", { deploymentId, templateId, templateName: template.name, contractAddress, network, walletAddress, status: "deployed", description: `Deployed ${contractName || template.name} to ${network}` });
-
-  if (idempotencyKey) {
-    processedIdempotencyKeys.set(idempotencyKey, deployment);
-  }
-
-  sendJson(res, 201, deployment);
 }
 
 function handleDappDeployments(requestUrl, res) {
@@ -2669,9 +3907,22 @@ async function handleDappRetryDeployment(req, res) {
   sendJson(res, 200, deployment);
 }
 
+async function gateScanFind(req) {
+  const token = getBearerToken(req);
+  const uid = token ? authEngine.getUserIdFromAccess(token) : null;
+  if (!uid) return { ok: true, anonymous: true };
+  const gate = await monetizationEngine.enforcePaywall(uid, "scan");
+  if (!gate.ok) return { ok: false, monetization: gate };
+  return { ok: true, userId: uid, monetization: gate };
+}
+
+async function finishScanGate(gate) {
+  if (gate.userId && gate.ok) await monetizationEngine.afterSuccessfulUse(gate.userId, "scan");
+}
+
 // ─── FIND Pillar: Crypto Safety Scanner, Alpha Engine, On-chain Intel ───
 
-function handleCryptoScan(requestUrl, res) {
+async function handleCryptoScan(requestUrl, res, req) {
   const token = (requestUrl.searchParams.get("token") || "").toUpperCase().trim();
   const address = (requestUrl.searchParams.get("address") || "").trim();
 
@@ -2680,27 +3931,51 @@ function handleCryptoScan(requestUrl, res) {
     return;
   }
 
-  sendJson(res, 200, cryptoSafety.buildTokenScanFromQuery(token, address));
+  const g = await gateScanFind(req || {});
+  if (!g.ok) {
+    sendJson(res, 402, {
+      error: "Token scan allowance exhausted.",
+      code: "MON_LIMIT",
+      monetization: g.monetization,
+    });
+    return;
+  }
+
+  try {
+    const scan = await liveIntel.buildTokenScan(token, address);
+    await finishScanGate(g);
+    sendJson(res, 200, { ...scan, monetization: g.monetization?.payPerUse ? { chargedCreditsCents: g.monetization.chargedCreditsCents } : undefined });
+  } catch (e) {
+    sendJson(res, e.status || 400, { error: e.message || "Scan failed" });
+  }
 }
 
-function handleEarlySignals(res) {
-  const feed = cryptoSafety.getIntelligenceFeed();
-  sendJson(res, 200, {
-    count: feed.signals.length,
-    signals: feed.signals,
-    updatedAt: feed.updatedAt,
-    disclaimer: feed.disclaimer,
-  });
+async function handleEarlySignals(res) {
+  try {
+    const feed = await liveIntel.getIntelligenceFeed();
+    sendJson(res, 200, {
+      count: feed.signals.length,
+      signals: feed.signals,
+      updatedAt: feed.updatedAt,
+      disclaimer: feed.disclaimer,
+    });
+  } catch (e) {
+    sendJson(res, 500, { error: e.message || "Feed failed" });
+  }
 }
 
-function handleSmartMoney(res) {
-  const feed = cryptoSafety.getIntelligenceFeed();
-  sendJson(res, 200, {
-    wallets: feed.smartMoney.wallets,
-    trends: feed.smartMoney.trends,
-    updatedAt: feed.updatedAt,
-    disclaimer: feed.disclaimer,
-  });
+async function handleSmartMoney(res) {
+  try {
+    const feed = await liveIntel.getIntelligenceFeed();
+    sendJson(res, 200, {
+      wallets: feed.smartMoney.wallets,
+      trends: feed.smartMoney.trends,
+      updatedAt: feed.updatedAt,
+      disclaimer: feed.disclaimer,
+    });
+  } catch (e) {
+    sendJson(res, 500, { error: e.message || "Smart money failed" });
+  }
 }
 
 async function handleScanTokenPost(req, res) {
@@ -2719,7 +3994,23 @@ async function handleScanTokenPost(req, res) {
     return;
   }
 
-  sendJson(res, 200, cryptoSafety.buildTokenScanFromQuery(token, address));
+  const g = await gateScanFind(req);
+  if (!g.ok) {
+    sendJson(res, 402, {
+      error: "Token scan allowance exhausted.",
+      code: "MON_LIMIT",
+      monetization: g.monetization,
+    });
+    return;
+  }
+
+  try {
+    const scan = await liveIntel.buildTokenScan(token, address);
+    await finishScanGate(g);
+    sendJson(res, 200, { ...scan, monetization: g.monetization?.payPerUse ? { chargedCreditsCents: g.monetization.chargedCreditsCents } : undefined });
+  } catch (e) {
+    sendJson(res, e.status || 400, { error: e.message || "Scan failed" });
+  }
 }
 
 async function handleScanWalletPost(req, res) {
@@ -2732,28 +4023,86 @@ async function handleScanWalletPost(req, res) {
   }
 
   const address = body.address || body.wallet;
-  const result = cryptoSafety.buildWalletScan(address);
-  if (result.error) {
-    sendJson(res, 400, result);
+
+  const g = await gateScanFind(req);
+  if (!g.ok) {
+    sendJson(res, 402, {
+      error: "Wallet scan allowance exhausted.",
+      code: "MON_LIMIT",
+      monetization: g.monetization,
+    });
     return;
   }
-  sendJson(res, 200, result);
+
+  try {
+    const result = await liveIntel.buildWalletScan(address);
+    if (result.error) {
+      sendJson(res, 400, result);
+      return;
+    }
+    await finishScanGate(g);
+    sendJson(res, 200, { ...result, monetization: g.monetization?.payPerUse ? { chargedCreditsCents: g.monetization.chargedCreditsCents } : undefined });
+  } catch (e) {
+    sendJson(res, 500, { error: e.message || "Wallet scan failed" });
+  }
 }
 
-function handleScanWalletGet(requestUrl, res) {
+async function handleScanWalletGet(requestUrl, res, req) {
   const address = requestUrl.searchParams.get("address") || requestUrl.searchParams.get("wallet");
-  const result = cryptoSafety.buildWalletScan(address);
-  if (result.error) {
-    sendJson(res, 400, result);
+
+  const g = await gateScanFind(req || {});
+  if (!g.ok) {
+    sendJson(res, 402, {
+      error: "Wallet scan allowance exhausted.",
+      code: "MON_LIMIT",
+      monetization: g.monetization,
+    });
     return;
   }
-  sendJson(res, 200, result);
+
+  try {
+    const result = await liveIntel.buildWalletScan(address);
+    if (result.error) {
+      sendJson(res, 400, result);
+      return;
+    }
+    await finishScanGate(g);
+    sendJson(res, 200, { ...result, monetization: g.monetization?.payPerUse ? { chargedCreditsCents: g.monetization.chargedCreditsCents } : undefined });
+  } catch (e) {
+    sendJson(res, 500, { error: e.message || "Wallet scan failed" });
+  }
 }
 
-function handleDiscoverTokens(requestUrl, res) {
+async function handleDiscoverTokens(requestUrl, res, req) {
   const chain = requestUrl.searchParams.get("chain") || "";
   const minSignalStrength = requestUrl.searchParams.get("minSignalStrength");
-  sendJson(res, 200, cryptoSafety.discoverTokens({ chain, minSignalStrength }));
+
+  const g = await gateScanFind(req || {});
+  if (!g.ok) {
+    sendJson(res, 402, {
+      error: "Discovery allowance exhausted (same quota as scans).",
+      code: "MON_LIMIT",
+      monetization: g.monetization,
+    });
+    return;
+  }
+
+  try {
+    const data = await liveIntel.discoverTokens({ chain, minSignalStrength });
+    await finishScanGate(g);
+    sendJson(res, 200, { ...data, monetization: g.monetization?.payPerUse ? { chargedCreditsCents: g.monetization.chargedCreditsCents } : undefined });
+  } catch (e) {
+    sendJson(res, 500, { error: e.message || "Discovery failed" });
+  }
+}
+
+async function handleCryptoAlerts(res) {
+  try {
+    const snap = liveIntel.getAlertsSnapshot();
+    sendJson(res, 200, snap);
+  } catch (e) {
+    sendJson(res, 500, { error: e.message || "Alerts failed" });
+  }
 }
 
 async function handleTrackWallet(req, res) {
@@ -2766,7 +4115,7 @@ async function handleTrackWallet(req, res) {
 
   const address = body.address || body.wallet;
   const action = body.action || "register";
-  const result = cryptoSafety.trackWallet(address, action, body);
+  const result = await cryptoSafety.trackWallet(address, action, body);
   if (result.error) {
     sendJson(res, 400, result);
     return;
@@ -2774,8 +4123,16 @@ async function handleTrackWallet(req, res) {
   sendJson(res, 200, result);
 }
 
-function handleCryptoAlerts(res) {
-  sendJson(res, 200, cryptoSafety.getAlertsSnapshot());
+function delegatePlatform(req, res) {
+  platformApp(req, res, () => {
+    sendJson(res, 404, { error: "API v1 route not found." });
+  });
+}
+
+function delegateAuth(req, res) {
+  authApp(req, res, () => {
+    sendJson(res, 404, { error: "Auth route not found." });
+  });
 }
 
 // ─── BUILD Pillar: AI Agents ───
@@ -2791,18 +4148,249 @@ function handleAiAgents(res) {
   sendJson(res, 200, { count: agents.length, agents });
 }
 
+function delegateIntelligence(req, res) {
+  const origUrl = req.url || "/";
+  const stripped = origUrl.startsWith("/api/intelligence")
+    ? origUrl.slice("/api/intelligence".length) || "/"
+    : origUrl;
+  req.url = stripped;
+  intelligenceApp(req, res, () => {
+    req.url = origUrl;
+    sendJson(res, 404, { error: "Intelligence route not found." });
+  });
+}
+
+function delegateGrowth(req, res) {
+  const origUrl = req.url || "/";
+  const stripped = origUrl.startsWith("/api/growth") ? origUrl.slice("/api/growth".length) || "/" : origUrl;
+  req.url = stripped;
+  growthApp(req, res, () => {
+    req.url = origUrl;
+    sendJson(res, 404, { error: "Growth hub route not found." });
+  });
+}
+
+function delegateSocial(req, res) {
+  const origUrl = req.url || "/";
+  const stripped = origUrl.startsWith("/api/social") ? origUrl.slice("/api/social".length) || "/" : origUrl;
+  req.url = stripped;
+  socialApp(req, res, () => {
+    req.url = origUrl;
+    sendJson(res, 404, { error: "Social route not found." });
+  });
+}
+
+const developerApp = createDeveloperApp({
+  streamRoomsGetter: () => Array.from(streamRooms.values()).map(buildStreamRoomResponse),
+  createStreamingSession: createStreamingSessionForDeveloperApi,
+  finishStreamingSession: finishStreamingSessionForDeveloperApi,
+  dappTemplatesGetter: () => ({ count: DAPP_TEMPLATES.length, templates: DAPP_TEMPLATES }),
+  dappDeployHandler: (body, projectId) => runDappDeployCore(body, projectId),
+  listUsersForAdmin: () => Array.from(ccwebUsers.values()).map(sanitizeUser),
+});
+
+function delegateDeveloper(req, res) {
+  developerApp(req, res, () => {
+    sendJson(res, 404, { error: "Developer route not found." });
+  });
+}
+
 const server = http.createServer(async (req, res) => {
+  const reqStart = Date.now();
+  res.on("finish", () => {
+    logger.info({
+      msg: "http_request",
+      method: req.method,
+      path: (req.url || "").split("?")[0],
+      status: res.statusCode,
+      durationMs: Date.now() - reqStart,
+    });
+  });
+
   if (!req.url) {
     sendJson(res, 400, { error: "Invalid request URL." });
     return;
   }
 
-  const requestUrl = new URL(req.url, `http://localhost:${PORT}`);
+  const requestUrl = new URL(req.url, "https://ccweb.internal");
   const { pathname } = requestUrl;
 
-  if (pathname === "/health") {
-    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ status: "ok" }));
+  if (pathname === "/health" || pathname === "/api/health") {
+    if (req.method === "OPTIONS") {
+      writeRawOptions(req, res, {
+        methods: "GET, OPTIONS",
+        headers: "Accept, Content-Type, Authorization, Cookie",
+      });
+      return;
+    }
+    if (req.method === "GET") {
+      sendRawHealth(res, req);
+      return;
+    }
+  }
+
+  if (pathname === "/" && req.method === "OPTIONS") {
+    writeRawOptions(req, res, {
+      methods: "GET, OPTIONS",
+      headers: "Accept, Content-Type, Authorization, Cookie",
+    });
+    return;
+  }
+
+  if (pathname === "/" && req.method === "GET") {
+    const accept = String(req.headers.accept || "");
+    const wantsHtml = /\btext\/html\b/i.test(accept);
+    if (!wantsHtml) {
+      sendRawHealth(res, req);
+      return;
+    }
+  }
+
+  if (
+    (pathname.startsWith("/api") || pathname.startsWith("/v1")) &&
+    pathname !== "/api/payments/stripe/webhook"
+  ) {
+    // CORS preflight must not consume API rate limit — browsers may send many OPTIONS first.
+    if ((req.method || "GET") !== "OPTIONS") {
+      const rl = checkApiRateLimit(req);
+      if (!rl.ok) {
+        res.setHeader("Retry-After", String(rl.retryAfterSec));
+        sendJson(res, 429, { error: "Too many requests", retryAfterSec: rl.retryAfterSec });
+        return;
+      }
+    }
+  }
+
+  if (pathname === "/api/payments/stripe/webhook" && req.method === "POST") {
+    await handleStripeWebhook(req, res);
+    return;
+  }
+
+  if (pathname === "/api/payments/stripe/checkout/escrow" && req.method === "POST") {
+    await handleStripeCheckoutEscrow(req, res, readJsonBody, sendJson);
+    return;
+  }
+
+  if (pathname === "/api/payments/stripe/checkout/learning" && req.method === "POST") {
+    await handleLearningStripeCheckout(req, res, readJsonBody, sendJson);
+    return;
+  }
+
+  if (pathname === "/api/learning/access/quote" && req.method === "GET") {
+    handleLearningAccessQuote(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/learning/me" && req.method === "GET") {
+    await handleLearningMe(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/learning/sessions" && req.method === "GET") {
+    await handleLearningSessionsList(requestUrl, res);
+    return;
+  }
+
+  if (pathname === "/api/learning/admin/analytics" && req.method === "GET") {
+    await handleLearningAdminAnalytics(req, res);
+    return;
+  }
+
+  if (pathname === "/api/learning/tutor/message" && req.method === "POST") {
+    await handleLearningTutorMessage(req, res);
+    return;
+  }
+
+  const learnSseMatch = pathname.match(/^\/api\/learning\/sessions\/([^/]+)\/events$/);
+  if (learnSseMatch && req.method === "GET") {
+    handleLearningSse(req, res, learnSseMatch[1]);
+    return;
+  }
+
+  const learnChMatch = pathname.match(/^\/api\/learning\/sessions\/([^/]+)\/channel$/);
+  if (learnChMatch && req.method === "GET") {
+    handleLearningChannelGet(learnChMatch[1], res);
+    return;
+  }
+  if (learnChMatch && req.method === "POST") {
+    await handleLearningChannelPost(req, res, learnChMatch[1]);
+    return;
+  }
+
+  const learnDetailMatch = pathname.match(/^\/api\/learning\/sessions\/([^/]+)\/detail$/);
+  if (learnDetailMatch && req.method === "GET") {
+    await handleLearningSessionDetail(learnDetailMatch[1], res);
+    return;
+  }
+
+  if (pathname.startsWith("/api/intelligence") && ["GET", "POST", "DELETE", "OPTIONS"].includes(req.method || "GET")) {
+    if (req.method === "OPTIONS") {
+      writeRawOptions(req, res, {
+        methods: "GET, POST, DELETE, OPTIONS",
+        headers: "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With",
+      });
+      return;
+    }
+    delegateIntelligence(req, res);
+    return;
+  }
+
+  if (pathname.startsWith("/api/growth") && ["GET", "POST", "OPTIONS"].includes(req.method || "GET")) {
+    if (req.method === "OPTIONS") {
+      writeRawOptions(req, res, {
+        methods: "GET, POST, OPTIONS",
+        headers: "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With",
+      });
+      return;
+    }
+    delegateGrowth(req, res);
+    return;
+  }
+
+  if (pathname.startsWith("/api/social") && ["GET", "POST", "OPTIONS"].includes(req.method || "GET")) {
+    if (req.method === "OPTIONS") {
+      writeRawOptions(req, res, {
+        methods: "GET, POST, OPTIONS",
+        headers: "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With",
+      });
+      return;
+    }
+    delegateSocial(req, res);
+    return;
+  }
+
+  if (
+    (pathname.startsWith("/v1") || pathname.startsWith("/api/developer")) &&
+    ["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"].includes(req.method || "GET")
+  ) {
+    if (req.method === "OPTIONS") {
+      writeRawOptions(req, res, {
+        methods: "GET, POST, DELETE, PUT, PATCH, OPTIONS",
+        headers: "Content-Type, Authorization, CCWEB-API-Key, Cookie, Accept, Origin, X-Requested-With",
+      });
+      return;
+    }
+    delegateDeveloper(req, res);
+    return;
+  }
+
+  if (pathname.startsWith("/api/v1") && ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"].includes(req.method || "GET")) {
+    if (req.method === "OPTIONS") {
+      writeRawOptions(req, res, {
+        methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        headers: "Content-Type, Authorization, X-CCWEB-Admin, Cookie, Accept, Origin, X-Requested-With",
+      });
+      return;
+    }
+    delegatePlatform(req, res);
+    return;
+  }
+
+  if (
+    (pathname.startsWith("/api/auth") || pathname.startsWith("/auth")) &&
+    ["GET", "POST", "OPTIONS"].includes(req.method || "GET")
+  ) {
+    delegateAuth(req, res);
     return;
   }
 
@@ -2863,8 +4451,24 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname === "/api/notifications" && req.method === "OPTIONS") {
+    writeRawOptions(req, res, {
+      methods: "GET, OPTIONS",
+      headers: "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With",
+    });
+    return;
+  }
+
+  if (pathname === "/api/notifications/read" && req.method === "OPTIONS") {
+    writeRawOptions(req, res, {
+      methods: "POST, OPTIONS",
+      headers: "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With",
+    });
+    return;
+  }
+
   if (pathname === "/api/notifications" && req.method === "GET") {
-    handleListNotifications(requestUrl, res);
+    await handleListNotifications(req, requestUrl, res);
     return;
   }
 
@@ -2873,8 +4477,38 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname.startsWith("/api/community") && req.method === "OPTIONS") {
+    writeRawOptions(req, res, {
+      methods: "GET, POST, DELETE, OPTIONS",
+      headers: "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With",
+    });
+    return;
+  }
+
+  if (pathname === "/api/community/bookmarks" && req.method === "GET") {
+    await handleListCommunityBookmarks(req, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/community\/posts\/by-user\/[^/]+$/) && req.method === "GET") {
+    const userId = pathname.split("/").pop();
+    handleListCommunityPostsByUser(req, res, userId);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/community\/posts\/[^/]+\/bookmark$/) && (req.method === "POST" || req.method === "DELETE")) {
+    const postId = pathname.split("/")[4];
+    await handleCommunityBookmark(req, res, postId, req.method);
+    return;
+  }
+
+  if (pathname === "/api/community/posts/trending" && req.method === "GET") {
+    handleListTrendingCommunityPosts(req, res);
+    return;
+  }
+
   if (pathname === "/api/community/posts" && req.method === "GET") {
-    handleListCommunityPosts(res);
+    handleListCommunityPosts(req, res);
     return;
   }
 
@@ -2883,8 +4517,26 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname.match(/^\/api\/community\/posts\/[^/]+$/) && req.method === "GET") {
+    const postId = pathname.split("/").pop();
+    handleGetCommunityPost(req, postId, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/community\/posts\/[^/]+\/comments$/) && req.method === "GET") {
+    const postId = pathname.split("/")[4];
+    handleListPostComments(req, postId, res);
+    return;
+  }
+
+  if (pathname.match(/^\/api\/community\/posts\/[^/]+\/comments$/) && req.method === "POST") {
+    const postId = pathname.split("/")[4];
+    await handleCreatePostComment(req, res, postId);
+    return;
+  }
+
   if (pathname === "/api/community/chats" && req.method === "GET") {
-    handleListCommunityChats(requestUrl, res);
+    handleListCommunityChats(req, requestUrl, res);
     return;
   }
 
@@ -2894,7 +4546,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/community/reactions" && req.method === "GET") {
-    handleListCommunityReactions(requestUrl, res);
+    handleListCommunityReactions(req, requestUrl, res);
     return;
   }
 
@@ -3052,12 +4704,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/find/scan" && req.method === "GET") {
-    handleCryptoScan(requestUrl, res);
-    return;
-  }
-
-  if (pathname === "/api/find/scan" && req.method === "GET") {
-    handleCryptoScan(requestUrl, res);
+    handleCryptoScan(requestUrl, res, req);
     return;
   }
 
@@ -3077,7 +4724,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/scan-token" && req.method === "GET") {
-    handleCryptoScan(requestUrl, res);
+    handleCryptoScan(requestUrl, res, req);
     return;
   }
 
@@ -3087,12 +4734,12 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/scan-wallet" && req.method === "GET") {
-    handleScanWalletGet(requestUrl, res);
+    handleScanWalletGet(requestUrl, res, req);
     return;
   }
 
   if (pathname === "/api/discover-tokens" && req.method === "GET") {
-    handleDiscoverTokens(requestUrl, res);
+    handleDiscoverTokens(requestUrl, res, req);
     return;
   }
 
@@ -3124,6 +4771,74 @@ const server = http.createServer(async (req, res) => {
   await serveFile(filePath, res);
 });
 
-server.listen(PORT, () => {
-  console.log(`ccweb-project app running on http://localhost:${PORT}`);
+attachChatSocket(server);
+
+async function bootServer() {
+  if (process.env.NODE_ENV === "production") {
+    validateOrExit();
+  }
+
+  if (getPool() && process.env.CCWEB_SKIP_MIGRATIONS !== "1") {
+    try {
+      await migrate();
+      const { runDemoSeed } = require("./db/seed");
+      await runDemoSeed();
+    } catch (e) {
+      logger.error({ msg: "migrate_failed", err: e.message, stack: e.stack });
+      if (process.env.CCWEB_ALLOW_START_WITHOUT_DB === "1") {
+        logger.warn({
+          msg: "starting_without_migrations",
+          detail: "CCWEB_ALLOW_START_WITHOUT_DB=1 — PostgreSQL features may error until db:migrate succeeds.",
+        });
+      } else {
+        process.exit(1);
+      }
+    }
+  } else if (getPool() && process.env.CCWEB_SKIP_MIGRATIONS === "1") {
+    logger.warn({ msg: "migrations_skipped", detail: "CCWEB_SKIP_MIGRATIONS=1" });
+  }
+
+  server.listen(PORT, HOST, () => {
+    logger.info({
+      msg: "server_listen",
+      host: HOST,
+      port: PORT,
+      env: process.env.NODE_ENV || "development",
+    });
+  });
+
+  server.once("error", (err) => {
+    logger.error({ msg: "server_listen_error", err: err.message });
+    process.exit(1);
+  });
+}
+
+process.on("unhandledRejection", (reason) => {
+  const r = reason && typeof reason === "object" ? reason : { message: String(reason) };
+  logger.error({
+    msg: "unhandled_rejection",
+    err: r.message || String(reason),
+    stack: r.stack,
+  });
+});
+
+let shuttingDown = false;
+function gracefulShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info({ msg: "shutdown_begin", signal });
+  closeChatSocket();
+  server.close(() => {
+    logger.info({ msg: "shutdown_complete", signal });
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 25_000).unref();
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+bootServer().catch((e) => {
+  logger.error({ msg: "boot_failed", err: e.message });
+  process.exit(1);
 });

@@ -3,8 +3,8 @@
  */
 
 const express = require("express");
-const trustPg = require("../db/persistenceTrust");
-const flwPg = require("../db/persistenceFlutterwave");
+const trustPg = require("./db/persistenceTrust");
+const flwPg = require("./db/persistenceFlutterwave");
 
 function createTrustRouter({ authJwtMiddleware }) {
   const router = express.Router();

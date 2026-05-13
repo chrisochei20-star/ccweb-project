@@ -851,6 +851,7 @@ CREATE TABLE IF NOT EXISTS ccweb_marketplace_stores (
   banner_url TEXT,
   avatar_url TEXT,
   published BOOLEAN NOT NULL DEFAULT TRUE,
+  creator_verified BOOLEAN NOT NULL DEFAULT FALSE,
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -870,6 +871,8 @@ CREATE TABLE IF NOT EXISTS ccweb_marketplace_listings (
   category_slug TEXT NOT NULL DEFAULT 'general',
   status TEXT NOT NULL DEFAULT 'draft',
   featured BOOLEAN NOT NULL DEFAULT FALSE,
+  moderation_status TEXT NOT NULL DEFAULT 'visible',
+  tags TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
   thumbnail_url TEXT,
   install_hint TEXT NOT NULL DEFAULT '',
   version_published INT NOT NULL DEFAULT 1,
@@ -883,6 +886,19 @@ CREATE TABLE IF NOT EXISTS ccweb_marketplace_listings (
 CREATE INDEX IF NOT EXISTS ccweb_mp_listings_store ON ccweb_marketplace_listings (store_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS ccweb_mp_listings_cat ON ccweb_marketplace_listings (category_slug, status);
 CREATE INDEX IF NOT EXISTS ccweb_mp_listings_featured ON ccweb_marketplace_listings (featured, status) WHERE featured = TRUE AND status = 'published';
+
+CREATE INDEX IF NOT EXISTS ccweb_mp_listings_moderation ON ccweb_marketplace_listings (moderation_status, status) WHERE status = 'published';
+
+CREATE INDEX IF NOT EXISTS ccweb_mp_listings_tags ON ccweb_marketplace_listings USING gin (tags);
+
+CREATE TABLE IF NOT EXISTS ccweb_marketplace_library (
+  user_id TEXT NOT NULL REFERENCES ccweb_users(id) ON DELETE CASCADE,
+  listing_id TEXT NOT NULL REFERENCES ccweb_marketplace_listings(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, listing_id)
+);
+
+CREATE INDEX IF NOT EXISTS ccweb_mp_lib_user ON ccweb_marketplace_library (user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS ccweb_marketplace_skus (
   id TEXT PRIMARY KEY,

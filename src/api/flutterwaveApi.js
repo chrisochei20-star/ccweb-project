@@ -49,3 +49,13 @@ export async function requestFlutterwavePayout(body) {
   if (!res.ok) throw new Error(data.error || "Payout request failed");
   return data;
 }
+
+export async function fetchFlutterwaveCreatorSummary() {
+  const res = await apiFetch(apiUrl("/api/v1/payments/flutterwave/creator/summary"), {
+    headers: authHeaders(),
+    credentials: "include",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Summary failed");
+  return data;
+}

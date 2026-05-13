@@ -41,6 +41,7 @@ const REQUIRED_TABLES = [
   "ccweb_marketplace_skus",
   "ccweb_marketplace_purchases",
   "ccweb_marketplace_entitlements",
+  "ccweb_marketplace_library",
   "ccweb_marketplace_reviews",
   "ccweb_marketplace_ai_versions",
   "ccweb_communities",

@@ -13,7 +13,7 @@ function newId() {
   return `rep_${crypto.randomBytes(8).toString("hex")}`;
 }
 
-const TARGETS = new Set(["post", "comment", "message", "user"]);
+const TARGETS = new Set(["post", "comment", "message", "user", "marketplace_listing"]);
 const REASONS = new Set(["spam", "harassment", "scam", "ip_violation", "self_harm", "other"]);
 
 async function createReport({ reporterUserId, targetType, targetId, reasonCode, body }) {
@@ -92,6 +92,10 @@ async function assertTargetExists(targetType, targetId) {
   }
   if (targetType === "user") {
     const { rows } = await query(`SELECT 1 FROM ccweb_users WHERE id = $1 LIMIT 1`, [targetId]);
+    return rows.length > 0;
+  }
+  if (targetType === "marketplace_listing") {
+    const { rows } = await query(`SELECT 1 FROM ccweb_marketplace_listings WHERE id = $1 LIMIT 1`, [targetId]);
     return rows.length > 0;
   }
   return false;

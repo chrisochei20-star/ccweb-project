@@ -22,6 +22,26 @@ function slugify(raw) {
     .slice(0, 80) || "store";
 }
 
+function normalizeTags(input) {
+  if (!input) return [];
+  const arr = Array.isArray(input) ? input : String(input).split(/[,#]/);
+  const out = [];
+  for (const raw of arr) {
+    const t = String(raw || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, "")
+      .slice(0, 32);
+    if (t && !out.includes(t)) out.push(t);
+    if (out.length >= 16) break;
+  }
+  return out;
+}
+
+function moderationOnPublish() {
+  return String(process.env.CCWEB_MP_REQUIRE_LISTING_REVIEW || "").trim() === "1" ? "pending_review" : "visible";
+}
+
 async function ensureCcwebUser(userId) {
   if (!userId) return;
   await query(`INSERT INTO ccweb_users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING`, [userId]);
@@ -101,6 +121,7 @@ function mapStore(r) {
     bannerUrl: r.banner_url,
     avatarUrl: r.avatar_url,
     published: r.published,
+    creatorVerified: Boolean(r.creator_verified),
     metadata: typeof r.metadata === "object" ? r.metadata : {},
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -117,7 +138,7 @@ async function listPublishedListingsForStore(storeId, limit = 40) {
   const lim = Math.min(100, Math.max(1, limit));
   const { rows } = await query(
     `SELECT l.* FROM ccweb_marketplace_listings l
-     WHERE l.store_id = $1 AND l.status = 'published'
+     WHERE l.store_id = $1 AND l.status = 'published' AND l.moderation_status = 'visible'
      ORDER BY l.featured DESC, l.updated_at DESC LIMIT $2`,
     [storeId, lim]
   );
@@ -142,10 +163,13 @@ async function createListing(ownerUserId, body) {
   const allowed = ["agent", "workflow", "tool", "prompt_pack", "bundle", "digital"];
   const k = allowed.includes(kind) ? kind : "tool";
   const status = body.publish ? "published" : "draft";
+  const tagsArr = normalizeTags(body.tags);
+  const mod0 = status === "published" ? moderationOnPublish() : "visible";
   await query(
     `INSERT INTO ccweb_marketplace_listings (
-       id, store_id, slug, title, subtitle, description, kind, category_slug, status, featured, thumbnail_url, install_hint, metadata
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)`,
+       id, store_id, slug, title, subtitle, description, kind, category_slug, status, featured,
+       moderation_status, tags, thumbnail_url, install_hint, metadata
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::text[],$13,$14,$15::jsonb)`,
     [
       id,
       store.id,
@@ -157,6 +181,8 @@ async function createListing(ownerUserId, body) {
       String(body.categorySlug || "general").slice(0, 64),
       status === "published" ? "published" : "draft",
       Boolean(body.featured),
+      mod0,
+      tagsArr,
       body.thumbnailUrl ? String(body.thumbnailUrl).slice(0, 2000) : null,
       String(body.installHint || "Open Build → AI agents to configure credentials and run.").slice(0, 2000),
       JSON.stringify(body.metadata && typeof body.metadata === "object" ? body.metadata : {}),
@@ -174,6 +200,8 @@ async function updateListing(listingId, ownerUserId, patch) {
     [listingId, ownerUserId]
   );
   if (!rows[0]) return { ok: false, error: "not_found" };
+  const prev = rows[0];
+  const wasPublished = prev.status === "published";
   const p = patch || {};
   await query(
     `UPDATE ccweb_marketplace_listings SET
@@ -203,12 +231,24 @@ async function updateListing(listingId, ownerUserId, patch) {
       p.metadata && typeof p.metadata === "object" ? JSON.stringify(p.metadata) : null,
     ]
   );
+  if (p.tags !== undefined) {
+    const tagsArr = normalizeTags(p.tags);
+    await query(`UPDATE ccweb_marketplace_listings SET tags = $2::text[], updated_at = NOW() WHERE id = $1`, [listingId, tagsArr]);
+  }
+  const nextStatus = p.status != null ? String(p.status).slice(0, 32) : prev.status;
+  if (!wasPublished && nextStatus === "published") {
+    await query(`UPDATE ccweb_marketplace_listings SET moderation_status = $2, updated_at = NOW() WHERE id = $1`, [
+      listingId,
+      moderationOnPublish(),
+    ]);
+  }
   const u = (await query(`SELECT * FROM ccweb_marketplace_listings WHERE id = $1`, [listingId])).rows[0];
   return { ok: true, listing: mapListingRow(u) };
 }
 
 function mapListingRow(r) {
   if (!r) return null;
+  const tags = Array.isArray(r.tags) ? r.tags : [];
   return {
     id: r.id,
     storeId: r.store_id,
@@ -220,6 +260,8 @@ function mapListingRow(r) {
     categorySlug: r.category_slug,
     status: r.status,
     featured: r.featured,
+    moderationStatus: r.moderation_status || "visible",
+    tags,
     thumbnailUrl: r.thumbnail_url,
     installHint: r.install_hint,
     versionPublished: Number(r.version_published),
@@ -232,10 +274,11 @@ function mapListingRow(r) {
 async function getListingBySlug(listingSlug) {
   if (!usePostgres()) return null;
   const { rows } = await query(
-    `SELECT l.*, s.slug AS store_slug, s.title AS store_title, s.owner_user_id AS store_owner_id
+    `SELECT l.*, s.slug AS store_slug, s.title AS store_title, s.owner_user_id AS store_owner_id,
+            COALESCE(s.creator_verified, FALSE) AS store_creator_verified
      FROM ccweb_marketplace_listings l
      JOIN ccweb_marketplace_stores s ON s.id = l.store_id
-     WHERE l.slug = $1 AND l.status = 'published' AND s.published = TRUE
+     WHERE l.slug = $1 AND l.status = 'published' AND s.published = TRUE AND l.moderation_status = 'visible'
      LIMIT 1`,
     [String(listingSlug).trim()]
   );
@@ -245,21 +288,26 @@ async function getListingBySlug(listingSlug) {
   listing.storeSlug = r.store_slug;
   listing.storeTitle = r.store_title;
   listing.storeOwnerId = r.store_owner_id;
+  listing.storeCreatorVerified = Boolean(r.store_creator_verified);
   return listing;
 }
 
-async function listListingsPublic({ q, categorySlug, featuredOnly, limit = 30, offset = 0 } = {}) {
+async function listListingsPublic({ q, categorySlug, featuredOnly, tag, limit = 30, offset = 0 } = {}) {
   if (!usePostgres()) return [];
   const lim = Math.min(80, Math.max(1, limit));
   const off = Math.max(0, Number(offset) || 0);
   const params = [];
-  let where = `l.status = 'published' AND s.published = TRUE`;
+  let where = `l.status = 'published' AND s.published = TRUE AND l.moderation_status = 'visible'`;
   if (categorySlug) {
     params.push(String(categorySlug).trim());
     where += ` AND l.category_slug = $${params.length}`;
   }
   if (featuredOnly) {
     where += ` AND l.featured = TRUE`;
+  }
+  if (tag && String(tag).trim()) {
+    params.push(String(tag).trim().toLowerCase().slice(0, 32));
+    where += ` AND $${params.length} = ANY(l.tags)`;
   }
   if (q && String(q).trim()) {
     params.push(`%${String(q).trim().slice(0, 120).replace(/[%_]/g, " ")}%`);
@@ -292,13 +340,16 @@ async function listTrendingListings(limit = 12) {
   const lim = Math.min(50, Math.max(1, limit));
   const { rows } = await query(
     `SELECT l.*, s.slug AS store_slug, s.title AS store_title,
-            COUNT(p.id)::int AS purchase_count_14d
+            COUNT(DISTINCT p.id)::int AS purchase_count_14d,
+            (SELECT COUNT(*)::int FROM ccweb_marketplace_reviews r
+              WHERE r.listing_id = l.id AND r.status = 'visible') AS review_count
      FROM ccweb_marketplace_listings l
      JOIN ccweb_marketplace_stores s ON s.id = l.store_id
      LEFT JOIN ccweb_marketplace_purchases p ON p.listing_id = l.id AND p.created_at > NOW() - INTERVAL '14 days'
-     WHERE l.status = 'published' AND s.published = TRUE
+     WHERE l.status = 'published' AND s.published = TRUE AND l.moderation_status = 'visible'
      GROUP BY l.id, s.slug, s.title
-     ORDER BY purchase_count_14d DESC, l.updated_at DESC
+     ORDER BY (COUNT(DISTINCT p.id) * 3 + (SELECT COUNT(*)::int FROM ccweb_marketplace_reviews r2 WHERE r2.listing_id = l.id AND r2.status = 'visible')) DESC,
+              l.updated_at DESC
      LIMIT $1`,
     [lim]
   );
@@ -307,13 +358,15 @@ async function listTrendingListings(limit = 12) {
     x.storeSlug = r.store_slug;
     x.storeTitle = r.store_title;
     x.trendPurchaseCount14d = Number(r.purchase_count_14d) || 0;
+    x.trendReviewCount = Number(r.review_count) || 0;
     return x;
   });
 }
 
 async function getSkuById(skuId) {
   const { rows } = await query(
-    `SELECT k.*, l.id AS listing_id, l.store_id, l.slug AS listing_slug, l.title AS listing_title, l.status AS listing_status, s.owner_user_id AS seller_user_id
+    `SELECT k.*, l.id AS listing_id, l.store_id, l.slug AS listing_slug, l.title AS listing_title, l.status AS listing_status,
+            l.moderation_status AS listing_moderation_status, s.owner_user_id AS seller_user_id
      FROM ccweb_marketplace_skus k
      JOIN ccweb_marketplace_listings l ON l.id = k.listing_id
      JOIN ccweb_marketplace_stores s ON s.id = l.store_id
@@ -337,6 +390,7 @@ async function getSkuById(skuId) {
     sellerUserId: r.seller_user_id,
     listingSlug: r.listing_slug,
     listingStatus: r.listing_status,
+    listingModerationStatus: r.listing_moderation_status || "visible",
   };
 }
 
@@ -420,11 +474,12 @@ async function createReview(listingId, authorUserId, { rating, title, body }) {
   return { ok: true, id };
 }
 
-async function listReviewsForListing(listingId, limit = 40) {
+async function listReviewsForListing(listingId, limit = 40, opts = {}) {
   const lim = Math.min(100, Math.max(1, limit));
+  const vis = opts.allStatuses ? "" : "AND status = 'visible'";
   const { rows } = await query(
-    `SELECT id, listing_id, author_user_id, rating, title, body, created_at
-     FROM ccweb_marketplace_reviews WHERE listing_id = $1 AND status = 'visible' ORDER BY created_at DESC LIMIT $2`,
+    `SELECT id, listing_id, author_user_id, rating, title, body, status, created_at
+     FROM ccweb_marketplace_reviews WHERE listing_id = $1 ${vis} ORDER BY created_at DESC LIMIT $2`,
     [listingId, lim]
   );
   return rows.map((x) => ({
@@ -434,6 +489,7 @@ async function listReviewsForListing(listingId, limit = 40) {
     rating: x.rating,
     title: x.title,
     body: x.body,
+    status: x.status,
     createdAt: x.created_at,
   }));
 }
@@ -534,6 +590,7 @@ async function fulfillMarketplaceSkuFromTx(row) {
   if (!skuId) return { applied: false, reason: "no_sku" };
   const sku = await getSkuById(skuId);
   if (!sku || !sku.active || sku.listingStatus !== "published") return { applied: false, reason: "invalid_sku" };
+  if (String(sku.listingModerationStatus || "visible") !== "visible") return { applied: false, reason: "listing_not_public" };
 
   const pid = newId("mpp");
   const ins = await query(
@@ -627,6 +684,322 @@ async function listEntitlementsForUser(userId, limit = 40) {
   }));
 }
 
+async function listDistinctCategoriesPublic(limit = 40) {
+  if (!usePostgres()) return [];
+  const lim = Math.min(80, Math.max(1, limit));
+  const { rows } = await query(
+    `SELECT DISTINCT l.category_slug AS slug, COUNT(*)::int AS listing_count
+     FROM ccweb_marketplace_listings l
+     JOIN ccweb_marketplace_stores s ON s.id = l.store_id
+     WHERE l.status = 'published' AND s.published = TRUE AND l.moderation_status = 'visible'
+     GROUP BY l.category_slug
+     ORDER BY listing_count DESC, slug ASC
+     LIMIT $1`,
+    [lim]
+  );
+  return rows.map((r) => ({ slug: r.slug, listingCount: Number(r.listing_count) || 0 }));
+}
+
+async function listRecommendations({ userId, limit = 12 } = {}) {
+  if (!usePostgres()) return [];
+  const lim = Math.min(40, Math.max(1, limit));
+  if (userId) {
+    const { rows } = await query(
+      `SELECT l.*, s.slug AS store_slug, s.title AS store_title
+       FROM ccweb_marketplace_listings l
+       JOIN ccweb_marketplace_stores s ON s.id = l.store_id
+       WHERE l.status = 'published' AND s.published = TRUE AND l.moderation_status = 'visible'
+         AND l.category_slug IN (
+           SELECT DISTINCT l2.category_slug FROM ccweb_marketplace_library lib
+           JOIN ccweb_marketplace_listings l2 ON l2.id = lib.listing_id
+           WHERE lib.user_id = $1
+         )
+       ORDER BY l.featured DESC, l.updated_at DESC
+       LIMIT $2`,
+      [userId, lim]
+    );
+    if (rows.length > 0) {
+      return rows.map((r) => {
+        const x = mapListingRow(r);
+        x.storeSlug = r.store_slug;
+        x.storeTitle = r.store_title;
+        return x;
+      });
+    }
+  }
+  return listFeaturedListings(lim);
+}
+
+async function listTrendingStores(limit = 12) {
+  if (!usePostgres()) return [];
+  const lim = Math.min(40, Math.max(1, limit));
+  const { rows } = await query(
+    `SELECT s.*, COALESCE(agg.c, 0)::int AS sales_30d
+     FROM ccweb_marketplace_stores s
+     LEFT JOIN (
+       SELECT l.store_id, COUNT(p.id)::int AS c
+       FROM ccweb_marketplace_purchases p
+       JOIN ccweb_marketplace_listings l ON l.id = p.listing_id AND l.status = 'published' AND l.moderation_status = 'visible'
+       WHERE p.created_at > NOW() - INTERVAL '30 days'
+       GROUP BY l.store_id
+     ) agg ON agg.store_id = s.id
+     WHERE s.published = TRUE
+     ORDER BY COALESCE(agg.c, 0) DESC, s.updated_at DESC
+     LIMIT $1`,
+    [lim]
+  );
+  return rows.map((r) => ({
+    ...mapStore(r),
+    salesCount30d: Number(r.sales_30d) || 0,
+  }));
+}
+
+async function listCreatorListings(ownerUserId, limit = 80) {
+  if (!usePostgres() || !ownerUserId) return [];
+  const lim = Math.min(120, Math.max(1, limit));
+  const { rows } = await query(
+    `SELECT l.* FROM ccweb_marketplace_listings l
+     JOIN ccweb_marketplace_stores s ON s.id = l.store_id
+     WHERE s.owner_user_id = $1
+     ORDER BY l.updated_at DESC
+     LIMIT $2`,
+    [ownerUserId, lim]
+  );
+  return rows.map(mapListingRow);
+}
+
+async function getListingPrivateBundle(listingId, ownerUserId) {
+  const { rows } = await query(
+    `SELECT l.* FROM ccweb_marketplace_listings l
+     JOIN ccweb_marketplace_stores s ON s.id = l.store_id
+     WHERE l.id = $1 AND s.owner_user_id = $2 LIMIT 1`,
+    [listingId, ownerUserId]
+  );
+  const row = rows[0];
+  if (!row) return null;
+  const listing = mapListingRow(row);
+  const [skus, versions, reviews, stats] = await Promise.all([
+    listSkusForListing(listing.id, { onlyActive: false }),
+    listAiVersions(listing.id, 30),
+    listReviewsForListing(listing.id, 50, { allStatuses: true }),
+    reviewStatsForListing(listing.id),
+  ]);
+  return { listing, skus, aiVersions: versions, reviews, reviewStats: stats };
+}
+
+async function creatorMarketplaceSummary(ownerUserId) {
+  if (!usePostgres() || !ownerUserId) return null;
+  const storeRows = await query(`SELECT * FROM ccweb_marketplace_stores WHERE owner_user_id = $1 LIMIT 1`, [ownerUserId]);
+  const store = mapStore(storeRows.rows[0]);
+  const { rows: lc } = await query(
+    `SELECT
+       COUNT(*)::int AS total,
+       COUNT(*) FILTER (WHERE l.status = 'published' AND l.moderation_status = 'visible')::int AS live,
+       COUNT(*) FILTER (WHERE l.moderation_status = 'pending_review')::int AS pending_review
+     FROM ccweb_marketplace_listings l
+     JOIN ccweb_marketplace_stores s ON s.id = l.store_id
+     WHERE s.owner_user_id = $1`,
+    [ownerUserId]
+  );
+  const { rows: sales } = await query(
+    `SELECT COUNT(*)::int AS c, COALESCE(SUM(p.amount_minor), 0)::bigint AS vol_minor, p.currency
+     FROM ccweb_marketplace_purchases p
+     JOIN ccweb_marketplace_listings l ON l.id = p.listing_id
+     JOIN ccweb_marketplace_stores s ON s.id = l.store_id
+     WHERE s.owner_user_id = $1 AND p.created_at > NOW() - INTERVAL '30 days'
+     GROUP BY p.currency`,
+    [ownerUserId]
+  );
+  const { rows: rv } = await query(
+    `SELECT COUNT(*)::int AS c, COALESCE(AVG(r.rating), 0)::float AS avg
+     FROM ccweb_marketplace_reviews r
+     JOIN ccweb_marketplace_listings l ON l.id = r.listing_id
+     JOIN ccweb_marketplace_stores s ON s.id = l.store_id
+     WHERE s.owner_user_id = $1 AND r.status = 'visible'`,
+    [ownerUserId]
+  );
+  return {
+    store,
+    listings: {
+      total: Number(lc[0]?.total || 0),
+      live: Number(lc[0]?.live || 0),
+      pendingReview: Number(lc[0]?.pending_review || 0),
+    },
+    salesLast30dByCurrency: sales.map((r) => ({
+      currency: r.currency,
+      count: Number(r.c || 0),
+      volumeMinor: Number(r.vol_minor || 0),
+    })),
+    reviews: { count: Number(rv[0]?.c || 0), avgRating: Number(rv[0]?.avg || 0) },
+  };
+}
+
+async function listCreatorMarketplaceSales(ownerUserId, limit = 50) {
+  if (!usePostgres() || !ownerUserId) return [];
+  const lim = Math.min(120, Math.max(1, limit));
+  const { rows } = await query(
+    `SELECT p.*, l.slug AS listing_slug, l.title AS listing_title, k.label AS sku_label
+     FROM ccweb_marketplace_purchases p
+     JOIN ccweb_marketplace_listings l ON l.id = p.listing_id
+     JOIN ccweb_marketplace_stores s ON s.id = l.store_id
+     LEFT JOIN ccweb_marketplace_skus k ON k.id = p.sku_id
+     WHERE s.owner_user_id = $1
+     ORDER BY p.created_at DESC
+     LIMIT $2`,
+    [ownerUserId, lim]
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    buyerUserId: r.buyer_user_id,
+    listingSlug: r.listing_slug,
+    listingTitle: r.listing_title,
+    skuLabel: r.sku_label,
+    amountMinor: Number(r.amount_minor),
+    currency: r.currency,
+    status: r.status,
+    createdAt: r.created_at,
+  }));
+}
+
+async function listCreatorIncomingReviews(ownerUserId, limit = 40) {
+  if (!usePostgres() || !ownerUserId) return [];
+  const lim = Math.min(100, Math.max(1, limit));
+  const { rows } = await query(
+    `SELECT r.id, r.listing_id, r.author_user_id, r.rating, r.title, r.body, r.created_at,
+            l.slug AS listing_slug, l.title AS listing_title
+     FROM ccweb_marketplace_reviews r
+     JOIN ccweb_marketplace_listings l ON l.id = r.listing_id
+     JOIN ccweb_marketplace_stores s ON s.id = l.store_id
+     WHERE s.owner_user_id = $1 AND r.status = 'visible'
+     ORDER BY r.created_at DESC
+     LIMIT $2`,
+    [ownerUserId, lim]
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    listingId: r.listing_id,
+    listingSlug: r.listing_slug,
+    listingTitle: r.listing_title,
+    authorUserId: r.author_user_id,
+    rating: r.rating,
+    title: r.title,
+    body: r.body,
+    createdAt: r.created_at,
+  }));
+}
+
+async function listListingPerformance(ownerUserId, limit = 40) {
+  if (!usePostgres() || !ownerUserId) return [];
+  const lim = Math.min(80, Math.max(1, limit));
+  const { rows } = await query(
+    `SELECT l.id, l.slug, l.title, l.status, l.moderation_status, l.category_slug,
+            COUNT(DISTINCT p.id)::int AS purchase_count,
+            (SELECT COUNT(*)::int FROM ccweb_marketplace_reviews r WHERE r.listing_id = l.id AND r.status = 'visible') AS review_count,
+            (SELECT COALESCE(AVG(r2.rating), 0)::float FROM ccweb_marketplace_reviews r2 WHERE r2.listing_id = l.id AND r2.status = 'visible') AS review_avg
+     FROM ccweb_marketplace_listings l
+     JOIN ccweb_marketplace_stores s ON s.id = l.store_id
+     LEFT JOIN ccweb_marketplace_purchases p ON p.listing_id = l.id
+     WHERE s.owner_user_id = $1
+     GROUP BY l.id
+     ORDER BY purchase_count DESC, l.updated_at DESC
+     LIMIT $2`,
+    [ownerUserId, lim]
+  );
+  return rows.map((r) => ({
+    listingId: r.id,
+    slug: r.slug,
+    title: r.title,
+    status: r.status,
+    moderationStatus: r.moderation_status,
+    categorySlug: r.category_slug,
+    purchaseCount: Number(r.purchase_count) || 0,
+    reviewCount: Number(r.review_count) || 0,
+    reviewAvg: Number(r.review_avg) || 0,
+  }));
+}
+
+async function saveLibraryEntry(userId, listingSlug) {
+  if (!usePostgres() || !userId || !listingSlug) return { ok: false, error: "bad_input" };
+  const listing = await getListingBySlug(String(listingSlug).trim());
+  if (!listing) return { ok: false, error: "not_found" };
+  await ensureCcwebUser(userId);
+  await query(
+    `INSERT INTO ccweb_marketplace_library (user_id, listing_id) VALUES ($1, $2)
+     ON CONFLICT (user_id, listing_id) DO UPDATE SET created_at = EXCLUDED.created_at`,
+    [userId, listing.id]
+  );
+  return { ok: true, listingId: listing.id };
+}
+
+async function removeLibraryEntry(userId, listingSlug) {
+  const listing = await getListingBySlug(String(listingSlug).trim());
+  if (!listing) return { ok: false, error: "not_found" };
+  await query(`DELETE FROM ccweb_marketplace_library WHERE user_id = $1 AND listing_id = $2`, [userId, listing.id]);
+  return { ok: true };
+}
+
+async function listLibraryForUser(userId, limit = 40) {
+  if (!usePostgres() || !userId) return [];
+  const lim = Math.min(100, Math.max(1, limit));
+  const { rows } = await query(
+    `SELECT l.*, s.slug AS store_slug, s.title AS store_title, lib.created_at AS saved_at
+     FROM ccweb_marketplace_library lib
+     JOIN ccweb_marketplace_listings l ON l.id = lib.listing_id
+     JOIN ccweb_marketplace_stores s ON s.id = l.store_id
+     WHERE lib.user_id = $1 AND l.status = 'published' AND l.moderation_status = 'visible' AND s.published = TRUE
+     ORDER BY lib.created_at DESC
+     LIMIT $2`,
+    [userId, lim]
+  );
+  return rows.map((r) => {
+    const x = mapListingRow(r);
+    x.storeSlug = r.store_slug;
+    x.storeTitle = r.store_title;
+    x.savedAt = r.saved_at;
+    return x;
+  });
+}
+
+async function adminListListingsByModeration(moderationStatus, limit = 80) {
+  if (!usePostgres()) return [];
+  const lim = Math.min(200, Math.max(1, limit));
+  const st = String(moderationStatus || "pending_review").trim();
+  const { rows } = await query(
+    `SELECT l.*, s.slug AS store_slug, s.title AS store_title, s.owner_user_id
+     FROM ccweb_marketplace_listings l
+     JOIN ccweb_marketplace_stores s ON s.id = l.store_id
+     WHERE l.moderation_status = $1 AND l.status = 'published'
+     ORDER BY l.updated_at DESC
+     LIMIT $2`,
+    [st, lim]
+  );
+  return rows.map((r) => {
+    const x = mapListingRow(r);
+    x.storeSlug = r.store_slug;
+    x.storeTitle = r.store_title;
+    x.storeOwnerId = r.owner_user_id;
+    return x;
+  });
+}
+
+async function adminSetListingModeration(listingId, moderationStatus) {
+  const st = String(moderationStatus || "").trim();
+  if (!["visible", "pending_review", "hidden", "rejected"].includes(st)) return { ok: false, error: "bad_status" };
+  const { rowCount } = await query(`UPDATE ccweb_marketplace_listings SET moderation_status = $2, updated_at = NOW() WHERE id = $1`, [
+    listingId,
+    st,
+  ]);
+  return { ok: rowCount > 0 };
+}
+
+async function adminSetStoreVerified(storeId, verified) {
+  const { rowCount } = await query(`UPDATE ccweb_marketplace_stores SET creator_verified = $2, updated_at = NOW() WHERE id = $1`, [
+    storeId,
+    Boolean(verified),
+  ]);
+  return { ok: rowCount > 0 };
+}
+
 async function assertUserOwnsListing(listingId, userId) {
   const { rows } = await query(
     `SELECT 1 FROM ccweb_marketplace_listings l
@@ -648,6 +1021,9 @@ module.exports = {
   listListingsPublic,
   listFeaturedListings,
   listTrendingListings,
+  listDistinctCategoriesPublic,
+  listRecommendations,
+  listTrendingStores,
   getSkuById,
   addSku,
   listSkusForListing,
@@ -660,5 +1036,17 @@ module.exports = {
   mapListingRow,
   getListingPublicBundle,
   listEntitlementsForUser,
+  listCreatorListings,
+  getListingPrivateBundle,
+  creatorMarketplaceSummary,
+  listCreatorMarketplaceSales,
+  listCreatorIncomingReviews,
+  listListingPerformance,
+  saveLibraryEntry,
+  removeLibraryEntry,
+  listLibraryForUser,
+  adminListListingsByModeration,
+  adminSetListingModeration,
+  adminSetStoreVerified,
   assertUserOwnsListing,
 };

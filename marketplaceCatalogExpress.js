@@ -1,10 +1,11 @@
 /**
- * Marketplace catalog API — storefronts, listings, SKUs, reviews, AI versions, entitlements.
+ * Marketplace catalog API — storefronts, listings, SKUs, reviews, AI versions, entitlements,
+ * creator studio data, library, discovery helpers.
  * Mounted at /api/v1/marketplace/catalog (PostgreSQL required).
  */
 
 const express = require("express");
-const mp = require("../db/persistenceMarketplace");
+const mp = require("./db/persistenceMarketplace");
 
 function requireDb(req, res, next) {
   if (!mp.usePostgres()) {
@@ -13,7 +14,8 @@ function requireDb(req, res, next) {
   next();
 }
 
-function createMarketplaceCatalogRouter({ authJwtMiddleware }) {
+function createMarketplaceCatalogRouter({ authJwtMiddleware, optionalJwt }) {
+  const opt = typeof optionalJwt === "function" ? optionalJwt : (req, res, next) => next();
   const router = express.Router();
   router.use(requireDb);
 
@@ -35,11 +37,40 @@ function createMarketplaceCatalogRouter({ authJwtMiddleware }) {
     }
   });
 
+  router.get("/categories", async (req, res, next) => {
+    try {
+      const categories = await mp.listDistinctCategoriesPublic(Number(req.query.limit) || 40);
+      res.json({ categories });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get("/recommendations", opt, async (req, res, next) => {
+    try {
+      const uid = req.ccwebUserId || null;
+      const listings = await mp.listRecommendations({ userId: uid, limit: Number(req.query.limit) || 12 });
+      res.json({ listings });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get("/stores/trending", async (req, res, next) => {
+    try {
+      const stores = await mp.listTrendingStores(Number(req.query.limit) || 12);
+      res.json({ stores });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   router.get("/search", async (req, res, next) => {
     try {
       const listings = await mp.listListingsPublic({
         q: req.query.q,
         categorySlug: req.query.category,
+        tag: req.query.tag,
         featuredOnly: req.query.featured === "1",
         limit: Number(req.query.limit) || 30,
         offset: Number(req.query.offset) || 0,
@@ -131,6 +162,16 @@ function createMarketplaceCatalogRouter({ authJwtMiddleware }) {
     }
   });
 
+  router.get("/listings/:id/private", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const bundle = await mp.getListingPrivateBundle(req.params.id, req.ccwebUserId);
+      if (!bundle) return res.status(404).json({ error: "Not found." });
+      res.json(bundle);
+    } catch (e) {
+      next(e);
+    }
+  });
+
   router.post("/listings/:slug/reviews", authJwtMiddleware, async (req, res, next) => {
     try {
       const listing = await mp.getListingBySlug(req.params.slug);
@@ -151,6 +192,80 @@ function createMarketplaceCatalogRouter({ authJwtMiddleware }) {
     try {
       const entitlements = await mp.listEntitlementsForUser(req.ccwebUserId, Number(req.query.limit) || 40);
       res.json({ entitlements });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get("/me/library", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const listings = await mp.listLibraryForUser(req.ccwebUserId, Number(req.query.limit) || 40);
+      res.json({ listings });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post("/me/library/:slug", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const out = await mp.saveLibraryEntry(req.ccwebUserId, req.params.slug);
+      if (!out.ok) return res.status(404).json({ error: out.error || "not_found" });
+      res.status(201).json(out);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.delete("/me/library/:slug", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const out = await mp.removeLibraryEntry(req.ccwebUserId, req.params.slug);
+      if (!out.ok) return res.status(404).json({ error: out.error || "not_found" });
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get("/creator/me/summary", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const summary = await mp.creatorMarketplaceSummary(req.ccwebUserId);
+      res.json({ summary });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get("/creator/me/listings", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const listings = await mp.listCreatorListings(req.ccwebUserId, Number(req.query.limit) || 80);
+      res.json({ listings });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get("/creator/me/sales", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const sales = await mp.listCreatorMarketplaceSales(req.ccwebUserId, Number(req.query.limit) || 50);
+      res.json({ sales });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get("/creator/me/reviews", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const reviews = await mp.listCreatorIncomingReviews(req.ccwebUserId, Number(req.query.limit) || 40);
+      res.json({ reviews });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get("/creator/me/performance", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const listings = await mp.listListingPerformance(req.ccwebUserId, Number(req.query.limit) || 40);
+      res.json({ listings });
     } catch (e) {
       next(e);
     }

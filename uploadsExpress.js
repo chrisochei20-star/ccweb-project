@@ -127,6 +127,23 @@ function createUploadsRouter(deps) {
     }
   });
 
+  router.post("/marketplace/image", authJwtMiddleware, upload.single("file"), async (req, res, next) => {
+    try {
+      if (!req.file?.buffer) return res.status(400).json({ error: "Image file required (field name: file)." });
+      const v = validateImageBuffer(req.file.buffer);
+      if (!v.ok) return res.status(400).json({ error: v.error });
+      const saved = await saveUploadedImage(req.file.buffer, {
+        mimetype: req.file.mimetype,
+        originalName: req.file.originalname,
+        userId: req.ccwebUserId,
+        kind: "marketplace",
+      });
+      res.json({ ok: true, url: saved.url, storage: saved.storage });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   return router;
 }
 

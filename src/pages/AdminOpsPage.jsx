@@ -18,6 +18,7 @@ export function AdminOpsPage() {
   const [reports, setReports] = useState([]);
   const [audit, setAudit] = useState([]);
   const [revenue, setRevenue] = useState(null);
+  const [mpListings, setMpListings] = useState([]);
   const [err, setErr] = useState("");
 
   const canQuery = useMemo(() => adminKey.trim().length > 0, [adminKey]);
@@ -87,6 +88,25 @@ export function AdminOpsPage() {
     }
   }, [adminKey, canQuery]);
 
+  const loadMarketplace = useCallback(async () => {
+    if (!canQuery) return;
+    setBusy(true);
+    setErr("");
+    try {
+      const res = await apiFetch(
+        apiUrl("/api/v1/admin/ops/marketplace/listings?moderationStatus=pending_review&limit=80"),
+        { headers: headers(adminKey.trim()) }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setMpListings(data.listings || []);
+    } catch (e) {
+      setErr(e.message || "Error");
+    } finally {
+      setBusy(false);
+    }
+  }, [adminKey, canQuery]);
+
   async function payoutPost(path, body = {}) {
     if (!canQuery) return;
     setBusy(true);
@@ -99,7 +119,8 @@ export function AdminOpsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || data.detail?.message || "Failed");
-      await loadPayouts();
+      if (path.includes("/marketplace/listings/") && path.includes("/moderate")) await loadMarketplace();
+      else await loadPayouts();
     } catch (e) {
       setErr(e.message || "Error");
     } finally {
@@ -136,7 +157,7 @@ export function AdminOpsPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {["payouts", "reports", "audit", "revenue"].map((t) => (
+        {["payouts", "reports", "audit", "revenue", "marketplace"].map((t) => (
           <button
             key={t}
             type="button"
@@ -147,6 +168,7 @@ export function AdminOpsPage() {
               if (t === "reports") loadReports();
               if (t === "audit") loadAudit();
               if (t === "revenue") loadRevenue();
+              if (t === "marketplace") loadMarketplace();
             }}
           >
             {t}
@@ -253,6 +275,55 @@ export function AdminOpsPage() {
               </li>
             ))}
             {audit.length === 0 && <li>No rows loaded.</li>}
+          </ul>
+        </div>
+      )}
+
+      {tab === "marketplace" && (
+        <div className="space-y-3">
+          <button type="button" className="ccweb-gradient-btn text-sm" disabled={!canQuery || busy} onClick={loadMarketplace}>
+            Refresh marketplace queue
+          </button>
+          <p className="text-xs text-ccweb-muted">Listings in pending_review (when CCWEB_MP_REQUIRE_LISTING_REVIEW=1).</p>
+          <ul className="space-y-2 text-sm text-ccweb-muted">
+            {mpListings.map((l) => (
+              <li key={l.id} className="ccweb-glass rounded-xl p-3 text-white">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium">{l.title}</span>
+                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs uppercase">{l.moderationStatus}</span>
+                </div>
+                <p className="mt-1 text-xs text-ccweb-muted">
+                  Store {l.storeTitle} · owner {l.storeOwnerId || "—"}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-lg bg-emerald-600/80 px-3 py-1 text-xs font-semibold text-white"
+                    disabled={busy}
+                    onClick={() =>
+                      payoutPost(`/api/v1/admin/ops/marketplace/listings/${encodeURIComponent(l.id)}/moderate`, {
+                        moderationStatus: "visible",
+                      })
+                    }
+                  >
+                    Approve (visible)
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg bg-red-600/70 px-3 py-1 text-xs font-semibold text-white"
+                    disabled={busy}
+                    onClick={() =>
+                      payoutPost(`/api/v1/admin/ops/marketplace/listings/${encodeURIComponent(l.id)}/moderate`, {
+                        moderationStatus: "hidden",
+                      })
+                    }
+                  >
+                    Hide
+                  </button>
+                </div>
+              </li>
+            ))}
+            {mpListings.length === 0 && <li className="text-ccweb-muted">No rows loaded.</li>}
           </ul>
         </div>
       )}

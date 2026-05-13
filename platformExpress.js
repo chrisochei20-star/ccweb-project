@@ -542,7 +542,7 @@ function createPlatformApp(deps) {
   const discoverRouter = createDiscoverRouter({ optionalJwt });
   v1.use("/discover", apiRateShort, discoverRouter);
 
-  const marketplaceCatalogRouter = createMarketplaceCatalogRouter({ authJwtMiddleware });
+  const marketplaceCatalogRouter = createMarketplaceCatalogRouter({ authJwtMiddleware, optionalJwt });
   v1.use("/marketplace/catalog", apiRateShort, marketplaceCatalogRouter);
 
   const flutterwaveRouter = createFlutterwaveRouter({ authJwtMiddleware });

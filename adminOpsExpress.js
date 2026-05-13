@@ -4,15 +4,16 @@
  */
 
 const express = require("express");
-const flwPg = require("../db/persistenceFlutterwave");
-const auditPg = require("../db/persistenceAudit");
-const trustPg = require("../db/persistenceTrust");
-const modPg = require("../db/persistenceModeration");
-const { query } = require("../db/pool");
-const flwTransfers = require("../services/flutterwaveTransfers");
-const flwClient = require("../services/flutterwaveClient");
-const payoutCrypto = require("../services/payoutFieldCrypto");
-const { getClientIp } = require("../server/http/middleware/expressRateLimit");
+const flwPg = require("./db/persistenceFlutterwave");
+const auditPg = require("./db/persistenceAudit");
+const trustPg = require("./db/persistenceTrust");
+const modPg = require("./db/persistenceModeration");
+const { query } = require("./db/pool");
+const flwTransfers = require("./services/flutterwaveTransfers");
+const flwClient = require("./services/flutterwaveClient");
+const payoutCrypto = require("./services/payoutFieldCrypto");
+const mp = require("./db/persistenceMarketplace");
+const { getClientIp } = require("./server/http/middleware/expressRateLimit");
 
 function requireAdmin(req, res, next) {
   const key = (req.headers["x-ccweb-admin"] || "").toString().trim();
@@ -307,6 +308,55 @@ function createAdminOpsRouter() {
         [lim]
       );
       res.json({ transactions: rows });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get("/marketplace/listings", async (req, res, next) => {
+    try {
+      if (!mp.usePostgres()) return res.status(503).json({ error: "PostgreSQL required." });
+      const st = (req.query.moderationStatus || "pending_review").toString().trim();
+      const listings = await mp.adminListListingsByModeration(st, Number(req.query.limit) || 80);
+      res.json({ listings });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post("/marketplace/listings/:id/moderate", async (req, res, next) => {
+    try {
+      const moderationStatus = String(req.body?.moderationStatus || "").trim();
+      const out = await mp.adminSetListingModeration(req.params.id, moderationStatus);
+      if (!out.ok) return res.status(400).json({ error: out.error || "update_failed" });
+      await auditPg.insertAuditLog({
+        actorLabel: adminLabel(req),
+        action: "marketplace_listing_moderate",
+        targetType: "marketplace_listing",
+        targetId: req.params.id,
+        ip: getClientIp(req),
+        metadata: { moderationStatus },
+      });
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post("/marketplace/stores/:id/verify", async (req, res, next) => {
+    try {
+      const verified = Boolean(req.body?.verified);
+      const out = await mp.adminSetStoreVerified(req.params.id, verified);
+      if (!out.ok) return res.status(404).json({ error: "Store not found." });
+      await auditPg.insertAuditLog({
+        actorLabel: adminLabel(req),
+        action: "marketplace_store_verify",
+        targetType: "marketplace_store",
+        targetId: req.params.id,
+        ip: getClientIp(req),
+        metadata: { verified },
+      });
+      res.json({ ok: true });
     } catch (e) {
       next(e);
     }

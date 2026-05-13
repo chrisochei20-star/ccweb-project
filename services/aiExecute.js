@@ -1,0 +1,359 @@
+/**
+ * OpenAI Chat Completions when configured; deterministic mock when keys are missing
+ * (set CCWEB_REQUIRE_OPENAI=1 to fail instead of mock in production).
+ */
+
+const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
+function requireOpenAI() {
+  return process.env.CCWEB_REQUIRE_OPENAI === "1" || process.env.CCWEB_REQUIRE_OPENAI === "true";
+}
+
+function getApiKey() {
+  return (process.env.OPENAI_API_KEY || process.env.CCWEB_OPENAI_API_KEY || "").trim();
+}
+
+function mockChatResult(systemPrompt, userPayload) {
+  const inputPreview =
+    typeof userPayload === "string"
+      ? userPayload.slice(0, 500)
+      : JSON.stringify(userPayload, null, 2).slice(0, 1200);
+  const text = [
+    "[CCWEB mock AI — set OPENAI_API_KEY or CCWEB_OPENAI_API_KEY for live OpenAI output]",
+    "",
+    "This response is deterministic and safe for staging when API keys are unavailable.",
+    `Stub summary for agent/workflow input (${inputPreview.length} chars).`,
+  ].join("\n");
+  return {
+    text,
+    model: "mock",
+    usage: null,
+    provider: "mock",
+    mock: true,
+    rawId: null,
+  };
+}
+
+async function chatComplete(systemPrompt, userPayload, opts = {}) {
+  const key = getApiKey();
+  if (!key) {
+    if (requireOpenAI()) {
+      const err = new Error("OPENAI_API_KEY is not configured.");
+      err.code = "AI_NOT_CONFIGURED";
+      err.status = 503;
+      throw err;
+    }
+    return mockChatResult(systemPrompt, userPayload);
+  }
+
+  const model = opts.model || DEFAULT_MODEL;
+  const body = {
+    model,
+    temperature: opts.temperature ?? 0.4,
+    max_tokens: opts.maxTokens ?? 1200,
+    messages: [
+      { role: "system", content: systemPrompt },
+      {
+        role: "user",
+        content:
+          typeof userPayload === "string" ? userPayload : JSON.stringify(userPayload, null, 2),
+      },
+    ],
+  };
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data.error?.message || res.statusText || "OpenAI request failed";
+    const err = new Error(msg);
+    err.status = res.status >= 400 && res.status < 500 ? res.status : 502;
+    throw err;
+  }
+
+  const text = data.choices?.[0]?.message?.content?.trim() || "";
+  return {
+    text,
+    model,
+    usage: data.usage || null,
+    provider: "openai",
+    rawId: data.id,
+  };
+}
+
+async function runAgent(agentMeta, input) {
+  const system = [
+    "You are an automation agent executed inside the CCWEB developer API.",
+    "Respond with concise, actionable output. If tools are needed, describe steps clearly.",
+    `Agent: ${agentMeta?.name || "unnamed"}`,
+    agentMeta?.description ? `Description: ${agentMeta.description}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return chatComplete(system, { input: input || {}, agentId: agentMeta?.id });
+}
+
+async function runWorkflowSteps(steps, input) {
+  const system =
+    "You are executing a CCWEB workflow. Given steps (JSON) and input, produce the logical outcome summary and any structured result as JSON in your reply (include a JSON block if applicable).";
+  return chatComplete(system, { steps, input: input || {} }, { maxTokens: 2000 });
+}
+
+/**
+ * Stream plain-text deltas from OpenAI Chat Completions (streaming).
+ * Yields string chunks; yields full mock text in small slices when no API key.
+ */
+async function* streamChatComplete(systemPrompt, userMessage, opts = {}) {
+  const key = getApiKey();
+  const model = opts.model || DEFAULT_MODEL;
+  const userContent =
+    typeof userMessage === "string" ? userMessage : JSON.stringify(userMessage, null, 2);
+
+  if (!key) {
+    if (requireOpenAI()) {
+      throw Object.assign(new Error("OPENAI_API_KEY is not configured."), { code: "AI_NOT_CONFIGURED", status: 503 });
+    }
+    const mock = mockChatResult(systemPrompt, userMessage);
+    const parts = mock.text.split(/(\s+)/);
+    for (const p of parts) {
+      if (p) yield p;
+    }
+    return;
+  }
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      temperature: opts.temperature ?? 0.35,
+      max_tokens: opts.maxTokens ?? 1800,
+      stream: true,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent },
+      ],
+    }),
+  });
+
+  if (!res.ok || !res.body) {
+    const errText = await res.text().catch(() => "");
+    const err = new Error(errText.slice(0, 400) || res.statusText || "OpenAI stream failed");
+    err.status = res.status >= 400 && res.status < 500 ? res.status : 502;
+    throw err;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop() || "";
+    for (const line of lines) {
+      const s = line.replace(/^data:\s*/, "").trim();
+      if (!s || s === "[DONE]") continue;
+      try {
+        const j = JSON.parse(s);
+        const delta = j.choices?.[0]?.delta?.content;
+        if (delta) yield delta;
+      } catch {
+        /* ignore partial JSON lines */
+      }
+    }
+  }
+}
+
+function normalizeChatMessages(messages) {
+  const out = [];
+  for (const m of messages || []) {
+    const role = m.role === "assistant" || m.role === "system" ? m.role : "user";
+    const content = String(m.content ?? "").slice(0, 200000);
+    if (!content && role !== "system") continue;
+    out.push({ role, content });
+  }
+  return out;
+}
+
+async function chatCompleteMessages(messages, opts = {}) {
+  const key = getApiKey();
+  const model = opts.model || DEFAULT_MODEL;
+  const msgs = normalizeChatMessages(messages);
+  if (!msgs.length) {
+    const err = new Error("No messages.");
+    err.status = 400;
+    throw err;
+  }
+
+  if (!key) {
+    if (requireOpenAI()) {
+      throw Object.assign(new Error("OPENAI_API_KEY is not configured."), { code: "AI_NOT_CONFIGURED", status: 503 });
+    }
+    const lastUser = [...msgs].reverse().find((m) => m.role === "user");
+    const mock = mockChatResult("", lastUser?.content || "");
+    return {
+      text: mock.text,
+      model: "mock",
+      usage: null,
+      provider: "mock",
+      mock: true,
+      rawId: null,
+    };
+  }
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      temperature: opts.temperature ?? 0.35,
+      max_tokens: opts.maxTokens ?? 2200,
+      messages: msgs,
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data.error?.message || res.statusText || "OpenAI request failed";
+    const err = new Error(msg);
+    err.status = res.status >= 400 && res.status < 500 ? res.status : 502;
+    throw err;
+  }
+
+  const text = data.choices?.[0]?.message?.content?.trim() || "";
+  return {
+    text,
+    model,
+    usage: data.usage || null,
+    provider: "openai",
+    rawId: data.id,
+  };
+}
+
+async function* streamChatCompleteMessages(messages, opts = {}) {
+  const key = getApiKey();
+  const model = opts.model || DEFAULT_MODEL;
+  const msgs = normalizeChatMessages(messages);
+
+  if (!key) {
+    if (requireOpenAI()) {
+      throw Object.assign(new Error("OPENAI_API_KEY is not configured."), { code: "AI_NOT_CONFIGURED", status: 503 });
+    }
+    const lastUser = [...msgs].reverse().find((m) => m.role === "user");
+    const mock = mockChatResult("", lastUser?.content || "");
+    const parts = mock.text.split(/(\s+)/);
+    for (const p of parts) {
+      if (p) yield p;
+    }
+    return;
+  }
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      temperature: opts.temperature ?? 0.35,
+      max_tokens: opts.maxTokens ?? 2200,
+      stream: true,
+      messages: msgs,
+    }),
+  });
+
+  if (!res.ok || !res.body) {
+    const errText = await res.text().catch(() => "");
+    const err = new Error(errText.slice(0, 400) || res.statusText || "OpenAI stream failed");
+    err.status = res.status >= 400 && res.status < 500 ? res.status : 502;
+    throw err;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop() || "";
+    for (const line of lines) {
+      const s = line.replace(/^data:\s*/, "").trim();
+      if (!s || s === "[DONE]") continue;
+      try {
+        const j = JSON.parse(s);
+        const delta = j.choices?.[0]?.delta?.content;
+        if (delta) yield delta;
+      } catch {
+        /* ignore partial JSON lines */
+      }
+    }
+  }
+}
+
+/**
+ * Extract 0–4 durable learner facts from one exchange (second OpenAI call).
+ */
+async function extractLearnerFactsFromExchange(userMessage, assistantReply) {
+  const key = getApiKey();
+  if (!key) return [];
+
+  const system = [
+    "You extract durable learner preferences/facts from one chat turn.",
+    'Reply with JSON only: {"facts":["..."]} — max 4 short facts, empty array if nothing worth remembering.',
+    "Facts should be stable (goals, stack, chain preference), not transient questions.",
+  ].join(" ");
+
+  const user = JSON.stringify({
+    user: String(userMessage || "").slice(0, 8000),
+    assistant: String(assistantReply || "").slice(0, 8000),
+  });
+
+  try {
+    const out = await chatCompleteMessages(
+      [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      { maxTokens: 400, temperature: 0.2 }
+    );
+    const text = out.text || "";
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return [];
+    const j = JSON.parse(match[0]);
+    const facts = Array.isArray(j.facts) ? j.facts.map((x) => String(x).trim()).filter(Boolean) : [];
+    return facts.slice(0, 4);
+  } catch {
+    return [];
+  }
+}
+
+module.exports = {
+  chatComplete,
+  chatCompleteMessages,
+  streamChatComplete,
+  streamChatCompleteMessages,
+  extractLearnerFactsFromExchange,
+  runAgent,
+  runWorkflowSteps,
+  getApiKey,
+  mockChatResult,
+};

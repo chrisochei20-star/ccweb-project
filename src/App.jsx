@@ -1,152 +1,136 @@
 import {
   BrowserRouter,
   Link,
-  NavLink,
   Navigate,
-  Outlet,
   Route,
   Routes,
+  useOutletContext,
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { useEffect, useState } from "react";
-import "./styles.css";
+import { Suspense, lazy, useEffect, useState } from "react";
+import { GrowthHubPage } from "./GrowthHubPage";
+import { MobileLayout } from "./layout/MobileLayout";
+import { ProtectedLayout } from "./layout/ProtectedLayout";
+import { LoginPage, SignupPage } from "./pages/AuthPages";
+import { BuildHubPage } from "./pages/BuildHubPage";
+import { CommunityShellPage } from "./pages/CommunityShellPage";
+import { PublicProfilePage } from "./pages/PublicProfilePage";
+import { EarnShellPage } from "./pages/EarnShellPage";
+import { LearnShellPage } from "./pages/LearnShellPage";
+import { MobileDashboardPage } from "./pages/MobileDashboardPage";
+import { ProfileShellPage } from "./pages/ProfileShellPage";
+import { ChatPage } from "./pages/ChatPage";
+import { CourseAdminDashboard } from "./pages/CourseAdminDashboard";
+import { CourseCatalogPage } from "./pages/CourseCatalogPage";
+import { CourseDetailPage } from "./pages/CourseDetailPage";
+import { CourseLessonPage } from "./pages/CourseLessonPage";
+import { AiTutorPage } from "./pages/AiTutorPage";
+import { Skeleton } from "./components/ui/Skeleton";
+import { CcwebErrorBoundary } from "./components/CcwebErrorBoundary";
+import { NotificationCenterPage } from "./components/notifications/NotificationCenter";
+import { LearningAdminPage } from "./learning/LearningAdminPage";
+import { LearningSessionPage } from "./learning/LearningSessionPage";
+import { BetaInvitePage, BetaTestUserPage, BetaUserSlugPage } from "./pages/BetaPages";
+import { apiUrl } from "./config/env";
 
-const navItems = [
-  { label: "Home", to: "/" },
-  { label: "Learn", to: "/courses" },
-  { label: "AI Streaming", to: "/ai-streaming" },
-  { label: "Find", to: "/find" },
-  { label: "Build", to: "/dapp-builder" },
-  { label: "AI Agents", to: "/ai-agents" },
-  { label: "Earn", to: "/earn" },
-  { label: "Community", to: "/community" },
-  { label: "About", to: "/about" },
-];
+const FindPage = lazy(() => import("./pages/FindPage").then((m) => ({ default: m.FindPage })));
+const EarlySignalsDashboard = lazy(() =>
+  import("./EarlySignalsDashboard").then((m) => ({ default: m.EarlySignalsDashboard }))
+);
+const DeveloperOnboardingPage = lazy(() =>
+  import("./DeveloperOnboardingPage").then((m) => ({ default: m.DeveloperOnboardingPage }))
+);
+const DeveloperPlatformPage = lazy(() =>
+  import("./DeveloperPlatformPage").then((m) => ({ default: m.DeveloperPlatformPage }))
+);
+const VisualDappBuilderPage = lazy(() =>
+  import("./VisualDappBuilderPage").then((m) => ({ default: m.VisualDappBuilderPage }))
+);
+const TokenDetailPage = lazy(() => import("./TokenDetailPage").then((m) => ({ default: m.TokenDetailPage })));
 
-const courses = [
-  {
-    id: 1,
-    category: "Crypto",
-    title: "Blockchain Fundamentals",
-    level: "Beginner",
-    duration: "6h",
-    students: "12,400",
-    rating: "4.9",
-  },
-  {
-    id: 2,
-    category: "Crypto",
-    title: "Smart Contract Development",
-    level: "Intermediate",
-    duration: "10h",
-    students: "8,200",
-    rating: "4.8",
-  },
-  {
-    id: 3,
-    category: "Crypto",
-    title: "DeFi Masterclass",
-    level: "Advanced",
-    duration: "12h",
-    students: "5,100",
-    rating: "4.9",
-  },
-  {
-    id: 4,
-    category: "AI",
-    title: "AI & Machine Learning Basics",
-    level: "Beginner",
-    duration: "8h",
-    students: "15,600",
-    rating: "4.7",
-  },
-];
+function RouteFallback() {
+  return (
+    <div className="mx-auto flex min-h-[50vh] max-w-lg flex-col items-center justify-center gap-5 px-4 py-16">
+      <div className="ccweb-glass ccweb-card-premium w-full max-w-sm rounded-3xl p-8">
+        <Skeleton className="mx-auto h-11 w-11 rounded-2xl" />
+        <Skeleton className="mx-auto mt-5 h-6 w-44 rounded-lg" />
+        <Skeleton className="mx-auto mt-3 h-3 w-full max-w-[220px] rounded-md" />
+        <div className="mt-6 space-y-2">
+          <Skeleton className="h-3 w-full rounded-md" />
+          <Skeleton className="h-3 w-[88%] rounded-md" />
+        </div>
+      </div>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-ccweb-muted">Loading experience…</p>
+    </div>
+  );
+}
 
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<HomePage />} />
-          <Route path="courses" element={<CoursesPage />} />
-          <Route path="courses/:id" element={<CourseNotFoundPage />} />
-          <Route path="ai-tutor" element={<AiTutorPage />} />
-          <Route path="ai-streaming" element={<AiStreamingPage />} />
+      <CcwebErrorBoundary>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+        <Route element={<MobileLayout />}>
+          <Route path="invite/:code" element={<BetaInvitePage />} />
+          <Route path="u/:slug" element={<BetaUserSlugPage />} />
+          <Route path="test/:userId" element={<BetaTestUserPage />} />
+          <Route index element={<MobileDashboardPage />} />
+          <Route path="learn" element={<LearnShellPage />} />
+          <Route path="learn/session/:roomId" element={<LearningSessionPage />} />
           <Route path="find" element={<FindPage />} />
           <Route path="crypto-scanner" element={<FindPage initialTab="scanner" />} />
           <Route path="crypto/trending" element={<FindPage initialTab="trending" />} />
           <Route path="crypto/early-signals" element={<FindPage initialTab="signals" />} />
           <Route path="crypto/wallets" element={<FindPage initialTab="wallets" />} />
-          <Route path="dapp-builder" element={<DappBuilderPage />} />
+          <Route path="build" element={<BuildHubPage />} />
+          <Route path="earn" element={<EarnShellPage />} />
+          <Route path="community" element={<CommunityShellPage />} />
+          <Route path="p/:userId" element={<PublicProfilePage />} />
+          <Route path="notifications" element={<NotificationCenterPage />} />
+          <Route element={<ProtectedLayout />}>
+            <Route path="profile" element={<ProfileShellPage />} />
+            <Route path="messages" element={<ChatPage />} />
+            <Route path="learn/admin" element={<LearningAdminPage />} />
+            <Route path="learn/admin/courses" element={<CourseAdminDashboard />} />
+          </Route>
+          <Route path="marketplace" element={<GrowthHubPage initialTab="marketplace" />} />
+          <Route path="escrow" element={<GrowthHubPage initialTab="escrow" />} />
+          <Route path="courses" element={<CourseCatalogPage />} />
+          <Route path="courses/:slug/lesson/:lessonId" element={<CourseLessonPage />} />
+          <Route path="courses/:slug" element={<CourseDetailPage />} />
+          <Route path="ai-tutor" element={<AiTutorPage />} />
+          <Route path="ai-streaming" element={<AiStreamingPage />} />
+          <Route path="early-signals" element={<EarlySignalsDashboard />} />
+          <Route path="token/:slug" element={<TokenDetailPage />} />
+          <Route path="developers" element={<DeveloperPlatformPage />} />
+          <Route path="developers/onboarding" element={<DeveloperOnboardingPage />} />
+          <Route path="dapp-builder" element={<VisualDappBuilderPage />} />
           <Route path="dapp-dashboard" element={<DappDashboardPage />} />
           <Route path="ai-agents" element={<AiAgentsPage />} />
-          <Route path="earn" element={<EarnPage />} />
+          <Route path="growth-hub" element={<GrowthHubPage />} />
           <Route path="pricing" element={<PricingPage />} />
           <Route path="tokens" element={<Navigate to="/earn" replace />} />
           <Route path="affiliates" element={<Navigate to="/earn" replace />} />
-          <Route path="community" element={<CommunityPage />} />
           <Route path="blog" element={<BlogPage />} />
           <Route path="about" element={<AboutPage />} />
           <Route path="faq" element={<FaqPage />} />
           <Route path="login" element={<LoginPage />} />
           <Route path="signup" element={<SignupPage />} />
           <Route path="contact" element={<ContactPage />} />
-          <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="profile" element={<Navigate to="/login" replace />} />
+          <Route path="privacy" element={<PrivacyPage />} />
+          <Route path="terms" element={<TermsPage />} />
+          <Route path="dashboard" element={<Navigate to="/" replace />} />
+          <Route path="verify-email" element={<VerifyEmailPage />} />
+          <Route path="forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="welcome" element={<HomePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
-      </Routes>
+          </Routes>
+        </Suspense>
+      </CcwebErrorBoundary>
     </BrowserRouter>
-  );
-}
-
-function Layout() {
-  return (
-    <div className="site-shell">
-      <header className="navbar">
-        <div className="container navbar-content">
-          <Link to="/" className="brand">
-            <span className="brand-bolt">⚡</span>
-            CHRISCCWEB
-          </Link>
-          <nav className="nav-links">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.label}
-                to={item.to}
-                className={({ isActive }) =>
-                  `nav-link${isActive ? " active" : ""}`
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-          <div className="nav-cta">
-            <NavLink to="/login" className="nav-link">
-              Login
-            </NavLink>
-            <Link to="/signup" className="btn btn-primary">
-              Get Started
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <main className="main-content">
-        <div className="container">
-          <Outlet />
-        </div>
-      </main>
-
-      <footer className="footer">
-        <div className="container">
-          © {new Date().getFullYear()} Chrisccwebfoundation ·{" "}
-          <Link to="/contact">Contact</Link> · <Link to="/dashboard">Dashboard</Link>
-        </div>
-      </footer>
-    </div>
   );
 }
 
@@ -193,11 +177,17 @@ function HomePage() {
           <p>Crypto Safety Scanner, Early Signals Dashboard, Smart Money Tracking, and narrative detection.</p>
           <span className="pillar-link">View Intelligence →</span>
         </Link>
-        <Link to="/dapp-builder" className="pillar-card pillar-build">
+        <Link to="/build" className="pillar-card pillar-build">
           <div className="pillar-icon">🏗️</div>
           <h3>BUILD</h3>
           <p>DApp Builder, AI Agents, Business Automation Hub, and workflow operator system.</p>
           <span className="pillar-link">Start Building →</span>
+        </Link>
+        <Link to="/marketplace" className="pillar-card pillar-build" style={{ borderStyle: "dashed", opacity: 0.95 }}>
+          <div className="pillar-icon">🌍</div>
+          <h3>MARKETPLACE</h3>
+          <p>Global marketing agent, business listings, escrow pay-on-delivery, and lead engine — organic-first.</p>
+          <span className="pillar-link">Open marketplace →</span>
         </Link>
         <Link to="/earn" className="pillar-card pillar-earn">
           <div className="pillar-icon">💰</div>
@@ -216,94 +206,6 @@ function StatCard({ value, label }) {
       <div className="stat-value">{value}</div>
       <div className="muted">{label}</div>
     </article>
-  );
-}
-
-function CoursesPage() {
-  return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">Course Library</h1>
-        <p className="muted">Master crypto and AI at your own pace.</p>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          {["All", "Crypto", "AI", "Trading", "Web3"].map((tag) => (
-            <span key={tag} className="badge">
-              {tag}
-            </span>
-          ))}
-        </div>
-      </header>
-      <div className="course-grid">
-        {courses.map((course) => (
-          <article key={course.id} className="course-card">
-            <span className="badge">{course.category}</span>
-            <h3>{course.title}</h3>
-            <p className="muted">
-              {course.level} · {course.duration}
-            </p>
-            <p className="muted">
-              {course.students} students · {course.rating} rating
-            </p>
-            <Link to={`/courses/${course.id}`} className="btn btn-outline">
-              View Course
-            </Link>
-          </article>
-        ))}
-      </div>
-      <p className="muted" style={{ marginTop: "1rem" }}>
-        No courses in this category yet.
-      </p>
-    </section>
-  );
-}
-
-function CourseNotFoundPage() {
-  const { id } = useParams();
-  return (
-    <section className="panel">
-      <h1 className="section-title">Course Not Found</h1>
-      <p className="muted">
-        Course {id ? `#${id}` : ""} doesn&apos;t exist or has been removed.
-      </p>
-      <Link to="/courses" className="btn btn-primary">
-        Browse Courses
-      </Link>
-    </section>
-  );
-}
-
-function AiTutorPage() {
-  return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">AI Tutor</h1>
-        <p className="muted">Powered by AI · 24/7 learning assistant</p>
-      </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>Ask me anything!</h3>
-          <p className="muted">
-            Crypto, blockchain, DeFi, AI — I&apos;m here to help you learn.
-          </p>
-          <ul className="list">
-            <li>Explain blockchain in simple terms</li>
-            <li>What is DeFi and how does it work?</li>
-            <li>How do smart contracts work?</li>
-            <li>Explain proof of stake vs proof of work</li>
-          </ul>
-        </article>
-        <article className="panel">
-          <h3>Modes</h3>
-          <p className="muted">Chat · Quiz Generator</p>
-          <p className="muted">
-            Sign in to save your chat history and learning progress.
-          </p>
-          <Link to="/login" className="btn btn-outline">
-            Sign In
-          </Link>
-        </article>
-      </div>
-    </section>
   );
 }
 
@@ -420,7 +322,7 @@ function AiStreamingPage() {
 
   async function loadRooms() {
     try {
-      const res = await fetch("/api/streaming/rooms");
+      const res = await fetch(apiUrl("/api/streaming/rooms"));
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Could not load rooms.");
@@ -450,7 +352,7 @@ function AiStreamingPage() {
     setError("");
     try {
       const expectedGross = Number(payload.expectedAudience) * Number(payload.expectedArppuUsd);
-      const res = await fetch("/api/streaming/rooms", {
+      const res = await fetch(apiUrl("/api/streaming/rooms"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -488,7 +390,7 @@ function AiStreamingPage() {
         throw new Error(roomData.error || "Could not create room.");
       }
 
-      const payoutRes = await fetch("/api/streaming/payouts", {
+      const payoutRes = await fetch(apiUrl("/api/streaming/payouts"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -523,7 +425,7 @@ function AiStreamingPage() {
     setJoinLoading(true);
     setJoinError("");
     try {
-      const res = await fetch(`/api/streaming/rooms/${selectedRoomId}/attendance`, {
+      const res = await fetch(apiUrl(`/api/streaming/rooms/${selectedRoomId}/attendance`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -559,7 +461,7 @@ function AiStreamingPage() {
     setJoinLoading(true);
     setJoinError("");
     try {
-      const res = await fetch(`/api/streaming/rooms/${selectedRoomId}/attendance`, {
+      const res = await fetch(apiUrl(`/api/streaming/rooms/${selectedRoomId}/attendance`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -594,7 +496,7 @@ function AiStreamingPage() {
     setJoinLoading(true);
     setJoinError("");
     try {
-      const res = await fetch(`/api/streaming/rooms/${selectedRoomId}/finish`, {
+      const res = await fetch(apiUrl(`/api/streaming/rooms/${selectedRoomId}/finish`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -999,35 +901,6 @@ function AffiliatesPage() {
   return <Navigate to="/earn" replace />;
 }
 
-function CommunityPage() {
-  return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">Community</h1>
-        <p className="muted">Connect, collaborate, and grow with learners.</p>
-      </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>General Discussion</h3>
-          <p className="muted">8,400 members · 2.1K posts</p>
-        </article>
-        <article className="panel">
-          <h3>Crypto Trading</h3>
-          <p className="muted">5,200 members · 3.4K posts</p>
-        </article>
-        <article className="panel">
-          <h3>AI Projects</h3>
-          <p className="muted">3,100 members · 890 posts</p>
-        </article>
-        <article className="panel">
-          <h3>Study Groups</h3>
-          <p className="muted">2,800 members · 1.2K posts</p>
-        </article>
-      </div>
-    </section>
-  );
-}
-
 function BlogPage() {
   return (
     <section>
@@ -1117,55 +990,142 @@ function FaqPage() {
   );
 }
 
-function LoginPage() {
-  return (
-    <AuthPage
-      title="Welcome Back"
-      subtitle="Sign in to continue learning"
-      action="Sign In"
-      prompt="Don't have an account?"
-      promptHref="/signup"
-      promptLabel="Sign Up"
-    />
-  );
-}
+function VerifyEmailPage() {
+  const [searchParams] = useSearchParams();
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+  const [pending, setPending] = useState(true);
+  const token = searchParams.get("token") || searchParams.get("t");
 
-function SignupPage() {
-  return (
-    <AuthPage
-      title="Create Account"
-      subtitle="Start learning and earning today"
-      action="Create Account"
-      prompt="Already have an account?"
-      promptHref="/login"
-      promptLabel="Sign In"
-    />
-  );
-}
+  useEffect(() => {
+    if (!token) {
+      setErr("Missing verification token. Open the full link from your email.");
+      setPending(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(apiUrl(`/api/auth/verify-email?token=${encodeURIComponent(token)}`));
+        const data = await res.json();
+        if (cancelled) return;
+        if (res.ok) setMsg("Your email is verified. You can continue using the app.");
+        else setErr(data.error || "Verification failed.");
+      } catch (e) {
+        if (!cancelled) setErr(e.message || "Request failed.");
+      } finally {
+        if (!cancelled) setPending(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
-function AuthPage({ title, subtitle, action, prompt, promptHref, promptLabel }) {
   return (
     <section className="auth-card">
-      <h1 className="section-title">{title}</h1>
-      <p className="muted">{subtitle}</p>
-      <div className="auth-row">
-        <label htmlFor="email">Email</label>
-        <input id="email" type="email" placeholder="you@example.com" />
-      </div>
-      <div className="auth-row">
-        <label htmlFor="password">Password</label>
-        <input id="password" type="password" placeholder="••••••••" />
-      </div>
-      <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
-        <button type="button" className="btn btn-primary">
-          {action}
-        </button>
-        <button type="button" className="btn btn-outline">
-          Continue with Google
-        </button>
-      </div>
+      <h1 className="section-title">Email verification</h1>
+      {pending && !err && <p className="muted">Verifying…</p>}
+      {msg && <p style={{ color: "#4ade80" }}>{msg}</p>}
+      {err && <p style={{ color: "#f87171" }}>{err}</p>}
       <p className="muted" style={{ marginTop: "1rem" }}>
-        {prompt} <Link to={promptHref}>{promptLabel}</Link>
+        <Link to="/login">Back to sign in</Link>
+      </p>
+    </section>
+  );
+}
+
+function ForgotPasswordPage() {
+  const [email, setEmail] = useState("");
+  const [token, setToken] = useState("");
+  const [pw, setPw] = useState("");
+  const [step, setStep] = useState("request");
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+
+  async function requestReset() {
+    setErr(null);
+    setMsg(null);
+    try {
+      const res = await fetch(apiUrl("/api/auth/password/request"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Request failed");
+      setMsg(data.message);
+      if (data.debugToken) setMsg(`${data.message} (dev token: ${data.debugToken})`);
+      setStep("reset");
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  async function doReset() {
+    setErr(null);
+    setMsg(null);
+    try {
+      const res = await fetch(apiUrl("/api/auth/password/reset"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, token, newPassword: pw }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Reset failed");
+      setMsg("Password updated. You can sign in now.");
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  return (
+    <section className="auth-card">
+      <h1 className="section-title">Reset password</h1>
+      <p className="muted">
+        Request a secure reset for your account. If <code>AUTH_DEBUG=1</code> is enabled on the API, the
+        response may include a dev token for the next step.
+      </p>
+      <div className="auth-row">
+        <label htmlFor="re-email">Email</label>
+        <input
+          id="re-email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+        />
+      </div>
+      {step === "request" && (
+        <button type="button" className="btn btn-primary" onClick={requestReset}>
+          Send reset request
+        </button>
+      )}
+      {step === "reset" && (
+        <>
+          <div className="auth-row">
+            <label htmlFor="re-token">Reset token</label>
+            <input id="re-token" value={token} onChange={(e) => setToken(e.target.value)} placeholder="paste token" />
+          </div>
+          <div className="auth-row">
+            <label htmlFor="re-pw">New password</label>
+            <input
+              id="re-pw"
+              type="password"
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+              placeholder="min 8 characters"
+            />
+          </div>
+          <button type="button" className="btn btn-primary" onClick={doReset}>
+            Update password
+          </button>
+        </>
+      )}
+      {msg && <p className="muted" style={{ marginTop: "1rem" }}>{msg}</p>}
+      {err && <p style={{ marginTop: "1rem", color: "#ff6b6b" }}>{err}</p>}
+      <p className="muted" style={{ marginTop: "1rem" }}>
+        <Link to="/login">Back to login</Link>
       </p>
     </section>
   );
@@ -1199,685 +1159,53 @@ function ContactPage() {
   );
 }
 
-function DashboardPage() {
+function PrivacyPage() {
   return (
     <section>
       <header className="page-header">
-        <h1 className="section-title">Dashboard</h1>
-        <p className="muted">Welcome back! Here&apos;s your learning overview.</p>
+        <h1 className="section-title">Privacy policy (draft)</h1>
+        <p className="muted">Replace with counsel-reviewed policy before store submission.</p>
       </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>Plan</h3>
-          <p>Free Plan</p>
-          <p className="muted">Upgrade now</p>
-        </article>
-        <article className="panel">
-          <h3>Courses Enrolled</h3>
-          <p>5</p>
-          <p className="muted">+1 this month</p>
-        </article>
-        <article className="panel">
-          <h3>Tokens Earned</h3>
-          <p>1,250</p>
-          <p className="muted">+180 this week</p>
-        </article>
-        <article className="panel">
-          <h3>Referrals</h3>
-          <p>12</p>
-          <p className="muted">+3 this month</p>
-        </article>
-        <article className="panel">
-          <h3>Affiliate Revenue</h3>
-          <p>$340</p>
-          <p className="muted">+$85 this week</p>
-        </article>
-      </div>
-      <section className="panel" style={{ marginTop: "1rem" }}>
-        <h3>Continue Learning</h3>
-        <p className="muted">Blockchain Fundamentals · 9/12 lessons · 75%</p>
-        <p className="muted">AI Basics · 4/10 lessons · 40%</p>
-      </section>
-    </section>
-  );
-}
-
-function FindPage({ initialTab = "scanner" }) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const tabFromUrl = searchParams.get("tab");
-  const validTabs = ["scanner", "signals", "trending", "wallets", "alerts"];
-  const initial = tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : initialTab;
-  const [tab, setTab] = useState(initial);
-
-  useEffect(() => {
-    if (tabFromUrl && validTabs.includes(tabFromUrl)) setTab(tabFromUrl);
-  }, [tabFromUrl]);
-
-  const [scanSymbol, setScanSymbol] = useState("");
-  const [scanAddress, setScanAddress] = useState("");
-  const [scanResult, setScanResult] = useState(null);
-  const [scanning, setScanning] = useState(false);
-  const [signals, setSignals] = useState([]);
-  const [smartMoney, setSmartMoney] = useState(null);
-  const [discover, setDiscover] = useState(null);
-  const [alerts, setAlerts] = useState(null);
-  const [walletInput, setWalletInput] = useState("");
-  const [walletScan, setWalletScan] = useState(null);
-  const [walletTrackMsg, setWalletTrackMsg] = useState(null);
-  const [walletLoading, setWalletLoading] = useState(false);
-  const [loadingSignals, setLoadingSignals] = useState(false);
-  const [loadingSm, setLoadingSm] = useState(false);
-  const [loadingDiscover, setLoadingDiscover] = useState(false);
-  const [loadingAlerts, setLoadingAlerts] = useState(false);
-  const [smDisclosure, setSmDisclosure] = useState(false);
-
-  function goTab(next) {
-    setTab(next);
-    setSearchParams(next === "scanner" ? {} : { tab: next });
-  }
-
-  async function doScan() {
-    if (!scanSymbol.trim() && !scanAddress.trim()) return;
-    setScanning(true);
-    setScanResult(null);
-    try {
-      const params = new URLSearchParams();
-      if (scanSymbol.trim()) params.set("token", scanSymbol.trim().toUpperCase());
-      if (scanAddress.trim()) params.set("address", scanAddress.trim());
-      const res = await fetch(`/api/scan-token?${params.toString()}`);
-      const data = await res.json();
-      setScanResult(data);
-    } catch {
-      /* ignore */
-    }
-    setScanning(false);
-  }
-
-  async function loadSignals() {
-    setLoadingSignals(true);
-    try {
-      const res = await fetch("/api/find/signals");
-      const data = await res.json();
-      setSignals(data.signals || []);
-    } catch {
-      /* ignore */
-    }
-    setLoadingSignals(false);
-  }
-
-  async function loadSmartMoney() {
-    setLoadingSm(true);
-    try {
-      const res = await fetch("/api/find/smart-money");
-      const data = await res.json();
-      setSmartMoney(data);
-    } catch {
-      /* ignore */
-    }
-    setLoadingSm(false);
-  }
-
-  async function loadDiscover() {
-    setLoadingDiscover(true);
-    try {
-      const res = await fetch("/api/discover-tokens");
-      const data = await res.json();
-      setDiscover(data);
-    } catch {
-      /* ignore */
-    }
-    setLoadingDiscover(false);
-  }
-
-  async function loadAlerts() {
-    setLoadingAlerts(true);
-    try {
-      const res = await fetch("/api/crypto/alerts");
-      const data = await res.json();
-      setAlerts(data);
-    } catch {
-      /* ignore */
-    }
-    setLoadingAlerts(false);
-  }
-
-  async function scanWallet() {
-    if (!walletInput.trim()) return;
-    setWalletLoading(true);
-    setWalletScan(null);
-    setWalletTrackMsg(null);
-    try {
-      const res = await fetch(
-        `/api/scan-wallet?address=${encodeURIComponent(walletInput.trim())}`
-      );
-      const data = await res.json();
-      setWalletScan(data.error ? null : data);
-    } catch {
-      /* ignore */
-    }
-    setWalletLoading(false);
-  }
-
-  async function trackWallet() {
-    if (!walletInput.trim()) return;
-    setWalletTrackMsg(null);
-    try {
-      const res = await fetch("/api/track-wallet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          address: walletInput.trim(),
-          action: "register",
-          alertsEnabled: true,
-        }),
-      });
-      const data = await res.json();
-      setWalletTrackMsg(data.error || data.note || "Tracking updated.");
-    } catch {
-      setWalletTrackMsg("Request failed.");
-    }
-  }
-
-  useEffect(() => {
-    if (tab === "signals" && !signals.length) loadSignals();
-    if (tab === "trending" && !smartMoney) loadSmartMoney();
-    if (tab === "trending" && !discover) loadDiscover();
-    if (tab === "wallets" && !smartMoney) loadSmartMoney();
-    if (tab === "alerts" && !alerts) loadAlerts();
-  }, [tab]);
-
-  const scoreColor = (score) =>
-    score >= 70 ? "find-score-safe" : score >= 40 ? "find-score-warn" : "find-score-danger";
-
-  const mod = scanResult?.modules;
-  const sec = mod?.security;
-  const ai = mod?.aiInsightEngine;
-  const onChain = mod?.onChainIntelligence;
-  const early = mod?.earlyDiscovery;
-
-  return (
-    <section className="find-page find-hub">
-      <header className="page-header find-hub-header">
-        <span className="pill">FIND — Safety Scanner &amp; Alpha Engine</span>
-        <h1 className="section-title">Crypto Intelligence Hub</h1>
+      <article className="panel">
         <p className="muted">
-          On-chain signals, narrative velocity, and risk heuristics — framed as probabilities, not promises.
-          Volatility is extreme; verify everything independently.
+          This prototype may process email and usage data in memory on the server you control. For production, document
+          data categories, retention, subprocessors, and user rights (access, deletion, portability) per GDPR/CCPA and
+          store guidelines.
         </p>
-      </header>
-
-      <div className="dash-tabs find-hub-tabs">
-        {[
-          ["scanner", "Token Scanner"],
-          ["signals", "Early Signals"],
-          ["trending", "Trending & Discovery"],
-          ["wallets", "Wallets & Smart Money"],
-          ["alerts", "Alerts"],
-        ].map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            className={`dash-tab ${tab === key ? "active" : ""}`}
-            onClick={() => goTab(key)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "scanner" && (
-        <div className="find-scanner find-scanner-wide">
-          <div className="panel glass-panel find-scan-input-panel">
-            <h3>Token safety &amp; alpha snapshot</h3>
-            <p className="muted">
-              Contract verification, liquidity lock, ownership, mint or burn paths, estimated transfer friction,
-              rug-pattern heuristics, and a synthesized opportunity score. Demo data unless wired to your indexer
-              and explorer keys.
-            </p>
-            <div className="find-scan-form find-scan-form-stack">
-              <input
-                type="text"
-                value={scanSymbol}
-                onChange={(e) => setScanSymbol(e.target.value)}
-                placeholder="Token symbol (e.g. ETH, SHIB)"
-                onKeyDown={(e) => e.key === "Enter" && doScan()}
-              />
-              <input
-                type="text"
-                value={scanAddress}
-                onChange={(e) => setScanAddress(e.target.value)}
-                placeholder="Optional contract address (0x…)"
-                onKeyDown={(e) => e.key === "Enter" && doScan()}
-              />
-              <button className="btn btn-primary" type="button" onClick={doScan} disabled={scanning}>
-                {scanning ? "Scanning…" : "Run scan"}
-              </button>
-            </div>
-            <p className="find-legal-note">
-              Scores are model outputs, not audits. High opportunity scores can still coincide with scams.
-            </p>
-          </div>
-
-          {scanResult && (
-            <div className="find-scan-results-grid">
-              <div className="find-scan-result panel glass-panel">
-                <div className="find-scan-header">
-                  <div>
-                    <h3 style={{ margin: 0 }}>
-                      {scanResult.name}{" "}
-                      <span className="muted">({scanResult.token})</span>
-                    </h3>
-                    {scanResult.contractAddress && (
-                      <p className="muted find-mono">{scanResult.contractAddress}</p>
-                    )}
-                  </div>
-                  <div className="find-score-row">
-                    <div className="find-score-pair">
-                      <span className="muted">Risk</span>
-                      <div className={`find-score-badge ${scoreColor(scanResult.score)}`}>
-                        {scanResult.score}/100
-                      </div>
-                    </div>
-                    {ai && (
-                      <div className="find-score-pair">
-                        <span className="muted">Opportunity</span>
-                        <div className={`find-score-badge ${scoreColor(ai.opportunityScore)}`}>
-                          {ai.opportunityScore}/100
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <p className="muted find-band-label">
-                  Risk tier: <strong>{sec?.riskBand || "—"}</strong>
-                  {ai && (
-                    <>
-                      {" "}
-                      · Risk vs reward (heuristic): <strong>{ai.riskVsReward?.replace(/_/g, " ")}</strong>
-                    </>
-                  )}
-                </p>
-                <div className="find-scan-grid">
-                  <div className="find-check-item">
-                    <span className={scanResult.contractVerified ? "check-pass" : "check-fail"}>
-                      {scanResult.contractVerified ? "✓" : "✗"}
-                    </span>{" "}
-                    Contract verified
-                  </div>
-                  <div className="find-check-item">
-                    <span className={scanResult.liquidityLocked ? "check-pass" : "check-fail"}>
-                      {scanResult.liquidityLocked ? "✓" : "✗"}
-                    </span>{" "}
-                    Liquidity lock
-                  </div>
-                  <div className="find-check-item">
-                    <span className={scanResult.ownershipRenounced ? "check-pass" : "check-fail"}>
-                      {scanResult.ownershipRenounced ? "✓" : "✗"}
-                    </span>{" "}
-                    Ownership renounced
-                  </div>
-                  <div className="find-check-item">
-                    <span>Mint / burn:</span>{" "}
-                    <strong>{sec?.mintBurnFunctions || "—"}</strong>
-                  </div>
-                  <div className="find-check-item">
-                    <span>Hidden tax (est.):</span>{" "}
-                    <strong>{sec?.hiddenTaxEstimatePercent ?? 0}%</strong>
-                  </div>
-                  <div className="find-check-item">
-                    <span>Honeypot risk:</span>{" "}
-                    <strong
-                      className={
-                        scanResult.honeypotRisk === "none" || scanResult.honeypotRisk === "low"
-                          ? "check-pass"
-                          : "check-fail"
-                      }
-                    >
-                      {scanResult.honeypotRisk}
-                    </strong>
-                  </div>
-                  <div className="find-check-item">
-                    <span>Rug pull risk:</span>{" "}
-                    <strong
-                      className={
-                        scanResult.rugPullRisk === "very_low" || scanResult.rugPullRisk === "low"
-                          ? "check-pass"
-                          : "check-fail"
-                      }
-                    >
-                      {scanResult.rugPullRisk}
-                    </strong>
-                  </div>
-                  <div className="find-check-item">
-                    <span>Network:</span> <strong>{scanResult.network}</strong>
-                  </div>
-                </div>
-                {scanResult.flags?.length > 0 && (
-                  <div className="find-flags">
-                    <strong>Flags:</strong>{" "}
-                    <div className="pill-row">
-                      {scanResult.flags.map((f) => (
-                        <span key={f} className="tiny-pill find-flag-pill">
-                          {f.replace(/_/g, " ")}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {sec && (
-                <div className="panel glass-panel find-module-card">
-                  <h4>Rug-pattern signals</h4>
-                  <ul className="find-bullet-list">
-                    {sec.rugPullSignals?.map((r) => (
-                      <li key={r.type}>
-                        <strong>{r.type.replace(/_/g, " ")}</strong> — {r.note}{" "}
-                        <span className="muted">(p ≈ {(r.confidence * 100).toFixed(0)}%)</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {onChain && (
-                <div className="panel glass-panel find-module-card">
-                  <h4>On-chain intelligence (sample)</h4>
-                  <p className="muted small-print">{onChain.smartMoney?.note}</p>
-                  <ul className="find-bullet-list">
-                    <li>
-                      Smart wallets with early overlap:{" "}
-                      <strong>{onChain.smartMoney?.walletsBuyingEarly}</strong>
-                    </li>
-                    <li>
-                      Large buys / sells (24h):{" "}
-                      <strong>{onChain.whaleActivity?.largeBuys24h}</strong> /{" "}
-                      <strong>{onChain.whaleActivity?.largeSells24h}</strong>
-                    </li>
-                    <li>
-                      Accumulation probability (model):{" "}
-                      <strong>{onChain.whaleActivity?.suddenAccumulationProbability}</strong>
-                    </li>
-                    <li>
-                      Coordinated-activity score:{" "}
-                      <strong>{onChain.walletClustering?.coordinatedActivityScore}</strong> / 100
-                    </li>
-                  </ul>
-                  <p className="muted small-print">{onChain.tokenFlow?.note}</p>
-                </div>
-              )}
-
-              {early && (
-                <div className="panel glass-panel find-module-card">
-                  <h4>Early discovery signals</h4>
-                  <ul className="find-bullet-list">
-                    <li>
-                      New contract probability:{" "}
-                      <strong>{(early.newContractProbability * 100).toFixed(0)}%</strong>
-                    </li>
-                    <li>
-                      Early liquidity score: <strong>{early.earlyLiquidityScore}</strong>/100
-                    </li>
-                    <li>
-                      Volume momentum: <strong>{early.volumeMomentumScore}</strong>/100
-                    </li>
-                    <li>
-                      Holder growth (simulated): <strong>{early.holderGrowthRate}</strong>
-                    </li>
-                  </ul>
-                  <p className="muted small-print">
-                    Social: Twitter velocity {early.socialSignals?.twitterX?.mentionVelocity}/100 · Reddit
-                    velocity {early.socialSignals?.reddit?.postVelocity}/100
-                  </p>
-                  <p className="muted small-print">{early.influencerCorrelation?.note}</p>
-                </div>
-              )}
-
-              {ai && (
-                <div className="panel glass-panel find-module-card find-ai-card">
-                  <h4>AI insight layer</h4>
-                  <ul className="find-insight-list">
-                    {ai.insights?.map((ins) => (
-                      <li key={ins.id}>
-                        {ins.text}{" "}
-                        <span className="muted">(confidence {(ins.confidence * 100).toFixed(0)}%)</span>
-                      </li>
-                    ))}
-                  </ul>
-                  {scanResult.methodology && (
-                    <p className="muted small-print find-mono-small">
-                      {scanResult.methodology.riskScoreFormula}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {scanResult.disclaimer && (
-                <p className="find-disclaimer glass-panel">{scanResult.disclaimer}</p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {tab === "signals" && (
-        <div className="find-signals">
-          <div className="find-signals-toolbar">
-            <h3 style={{ margin: 0 }}>Early Signals feed</h3>
-            <button type="button" className="btn btn-outline btn-sm" onClick={loadSignals} disabled={loadingSignals}>
-              Refresh
-            </button>
-          </div>
-          {loadingSignals && <p className="muted">Loading signals…</p>}
-          <div className="find-signals-grid">
-            {signals.map((sig) => (
-              <article key={sig.id} className="find-signal-card panel glass-panel">
-                <div className="find-signal-header">
-                  <span className="badge">{sig.type.replace(/_/g, " ")}</span>
-                  <span className="find-confidence">{sig.confidence}% signal</span>
-                </div>
-                <h4>{sig.title}</h4>
-                <p className="muted">{sig.description}</p>
-                <div className="pill-row">
-                  {sig.tokens.map((t) => (
-                    <span key={t} className="tiny-pill">
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {tab === "trending" && (
-        <div className="find-trending">
-          {loadingDiscover && <p className="muted">Loading discovery…</p>}
-          {discover?.tokens && (
-            <>
-              <h3>Alpha discovery (new &amp; early liquidity)</h3>
-              <div className="find-discover-grid">
-                {discover.tokens.map((t) => (
-                  <article key={t.id} className="panel glass-panel find-discover-card">
-                    <div className="find-discover-head">
-                      <strong>{t.symbol}</strong>
-                      <span className="badge">{t.network}</span>
-                    </div>
-                    <p className="muted" style={{ margin: "0.35rem 0" }}>
-                      {t.name}
-                    </p>
-                    <p className="muted small-print find-mono">{t.contractAddress}</p>
-                    <ul className="find-discover-stats">
-                      <li>Liquidity ~ ${(t.liquidityUsd / 1e3).toFixed(0)}k</li>
-                      <li>Holders ~ {t.holderCount}</li>
-                      <li>Deployed ~ {t.deployedHoursAgo}h ago</li>
-                      <li>Signal strength {t.signalStrength}/100</li>
-                    </ul>
-                    <div className="pill-row">
-                      {t.narrativeKeywords.map((k) => (
-                        <span key={k} className="tiny-pill">
-                          {k}
-                        </span>
-                      ))}
-                    </div>
-                    <p className="muted small-print">{t.dataSourceNote}</p>
-                  </article>
-                ))}
-              </div>
-            </>
-          )}
-
-          {loadingSm && <p className="muted">Loading whale trends…</p>}
-          {smartMoney && (
-            <>
-              <h3 style={{ marginTop: "1.5rem" }}>Whale flow trends (sample)</h3>
-              <div className="find-trends-grid">
-                {smartMoney.trends.map((t) => (
-                  <div key={t.token} className="find-trend-card panel glass-panel">
-                    <strong>{t.token}</strong>
-                    <div className={t.direction === "accumulation" ? "find-trend-up" : "find-trend-down"}>
-                      {t.direction === "accumulation" ? "↑" : "↓"} ${(t.netFlow / 1e6).toFixed(1)}M
-                    </div>
-                    <span className="muted">
-                      {t.whaleCount} wallets · {t.direction}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {tab === "wallets" && (
-        <div className="find-wallets-tab">
-          <div className="panel glass-panel find-wallet-scan-panel">
-            <h3>Wallet risk scanner</h3>
-            <p className="muted">
-              Scam-adjacency probabilities, pattern flags, and cluster estimates. Paste any EVM address; try{" "}
-              <code className="find-inline-code">0x28c6c06298d538db24363dfa3a7bee9368290a4f</code> or{" "}
-              <code className="find-inline-code">0xdead000000000000000000000000000000000001</code> for preset demos.
-            </p>
-            <div className="find-scan-form">
-              <input
-                type="text"
-                value={walletInput}
-                onChange={(e) => setWalletInput(e.target.value)}
-                placeholder="0x wallet address"
-                onKeyDown={(e) => e.key === "Enter" && scanWallet()}
-              />
-              <button type="button" className="btn btn-primary" onClick={scanWallet} disabled={walletLoading}>
-                {walletLoading ? "Scanning…" : "Scan wallet"}
-              </button>
-              <button type="button" className="btn btn-outline" onClick={trackWallet}>
-                Track (demo)
-              </button>
-            </div>
-            {walletTrackMsg && <p className="muted small-print">{walletTrackMsg}</p>}
-            {walletScan && (
-              <div className="find-wallet-scan-result">
-                <div className="find-scan-header">
-                  <div>
-                    <strong>{walletScan.label}</strong>
-                    <p className="muted find-mono">{walletScan.address}</p>
-                  </div>
-                  <div className={`find-score-badge ${scoreColor(100 - walletScan.walletRiskScore)}`}>
-                    danger {walletScan.walletRiskScore}/100
-                  </div>
-                </div>
-                <p className="muted">
-                  Safety tier: <strong>{walletScan.safetyTier}</strong> · Scam-link probability ~{" "}
-                  {(walletScan.scamLinkedProbability * 100).toFixed(0)}%
-                </p>
-                <ul className="find-bullet-list">
-                  {walletScan.suspiciousPatterns?.map((p) => (
-                    <li key={p.type}>
-                      {p.type.replace(/_/g, " ")} — p ≈ {(p.probability * 100).toFixed(0)}%
-                    </li>
-                  ))}
-                </ul>
-                <p className="muted small-print">
-                  Cluster {walletScan.cluster?.id} · ~{walletScan.cluster?.relatedWalletsEstimate} related wallets
-                  (estimate)
-                </p>
-                {walletScan.disclaimer && <p className="find-disclaimer inline">{walletScan.disclaimer}</p>}
-              </div>
-            )}
-          </div>
-
-          {loadingSm && <p className="muted">Loading smart money panel…</p>}
-          {smartMoney && (
-            <>
-              <div className="find-smart-toolbar">
-                <h3 style={{ margin: 0 }}>Smart money &amp; whale panel</h3>
-                <button type="button" className="btn btn-outline btn-sm" onClick={() => setSmDisclosure((v) => !v)}>
-                  {smDisclosure ? "Hide" : "Show"} data disclaimer
-                </button>
-              </div>
-              {smDisclosure && smartMoney.disclaimer && (
-                <p className="find-disclaimer glass-panel">{smartMoney.disclaimer}</p>
-              )}
-              <div className="find-wallets-list">
-                {smartMoney.wallets.map((w) => (
-                  <div key={w.address} className="find-wallet-card panel glass-panel">
-                    <div className="find-wallet-header">
-                      <strong>{w.label}</strong>
-                      <span className="muted">{w.address}</span>
-                    </div>
-                    <div className="find-wallet-stats">
-                      <span>Win rate (sample): {w.winRate}%</span>
-                      <span>Avg return (sample): {w.avgReturn}%</span>
-                      <span>Not predictive — labels illustrative</span>
-                    </div>
-                    <div className="find-wallet-moves">
-                      {w.recentMoves.map((m, i) => (
-                        <span key={i} className={`find-move ${m.action === "buy" ? "move-buy" : "move-sell"}`}>
-                          {m.action.toUpperCase()} {m.token} · ${(m.amountUsd / 1e6).toFixed(1)}M
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {tab === "alerts" && (
-        <div className="find-alerts-tab">
-          {loadingAlerts && <p className="muted">Loading alerts…</p>}
-          {alerts?.alerts && (
-            <>
-              <h3>Alert stream (sample)</h3>
-              <div className="find-alerts-grid">
-                {alerts.alerts.map((a) => (
-                  <article key={a.id} className={`panel glass-panel find-alert-card sev-${a.severity}`}>
-                    <div className="find-alert-head">
-                      <span className="badge">{a.type.replace(/_/g, " ")}</span>
-                      <span className="muted small-print">{new Date(a.at).toLocaleString()}</span>
-                    </div>
-                    <h4>{a.title}</h4>
-                    <p className="muted small-print">{a.probabilityNote}</p>
-                  </article>
-                ))}
-              </div>
-              {alerts.disclaimer && <p className="find-disclaimer glass-panel">{alerts.disclaimer}</p>}
-            </>
-          )}
-        </div>
-      )}
+      </article>
     </section>
   );
 }
+
+function TermsPage() {
+  return (
+    <section>
+      <header className="page-header">
+        <h1 className="section-title">Terms of service (draft)</h1>
+        <p className="muted">Replace with counsel-reviewed terms before store submission.</p>
+      </header>
+      <article className="panel">
+        <p className="muted">
+          CCWEB provides educational and tooling prototypes. Crypto and AI features output signals, not financial or
+          legal advice. Users accept risks of volatile markets and experimental software.
+        </p>
+      </article>
+    </section>
+  );
+}
+
 
 function AiAgentsPage() {
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/build/agents").then((r) => r.json()).then((d) => { setAgents(d.agents || []); setLoading(false); });
+    fetch(apiUrl("/api/build/agents"))
+      .then((r) => r.json())
+      .then((d) => {
+        setAgents(d.agents || []);
+        setLoading(false);
+      });
   }, []);
 
   return (
@@ -1925,345 +1253,6 @@ function AiAgentsPage() {
   );
 }
 
-function EarnPage() {
-  return (
-    <section>
-      <header className="page-header">
-        <span className="pill">EARN — Revenue Streams</span>
-        <h1 className="section-title">Earn With CCWEB</h1>
-        <p className="muted">
-          Multiple revenue streams powered by real utility — no platform token required.
-          Earn through skills, referrals, and participation.
-        </p>
-      </header>
-
-      <div className="card-grid">
-        <article className="panel">
-          <h3>🎓 Affiliate Program</h3>
-          <p className="muted">30% recurring commissions on all referred subscriptions. Share your unique link and earn passive income.</p>
-          <ul className="list">
-            <li>Recurring monthly commissions</li>
-            <li>Real-time tracking dashboard</li>
-            <li>Payout in USDC or fiat</li>
-          </ul>
-          <Link to="/signup" className="btn btn-primary" style={{ marginTop: "0.6rem" }}>Become an Affiliate</Link>
-        </article>
-        <article className="panel">
-          <h3>📡 Streaming Revenue</h3>
-          <p className="muted">Create AI-powered live learning sessions and earn organic revenue share based on attendance and engagement.</p>
-          <ul className="list">
-            <li>63% creator revenue share</li>
-            <li>Watch-time weighted distribution</li>
-            <li>Payout via USDC settlement</li>
-          </ul>
-          <Link to="/ai-streaming" className="btn btn-outline" style={{ marginTop: "0.6rem" }}>Start Streaming</Link>
-        </article>
-        <article className="panel">
-          <h3>🏗️ Skill-Based Income</h3>
-          <p className="muted">Use the Business Engine to match your skills with real client needs. Get paid for completed work through secure escrow.</p>
-          <ul className="list">
-            <li>AI-matched opportunities</li>
-            <li>Secure escrow payments</li>
-            <li>Performance-based bonuses</li>
-          </ul>
-        </article>
-        <article className="panel">
-          <h3>🤖 Agent Rewards</h3>
-          <p className="muted">Deploy AI agents that generate value, optimize workflows, and earn based on measurable outcomes.</p>
-          <ul className="list">
-            <li>Revenue from agent operations</li>
-            <li>Performance-linked payouts</li>
-            <li>Scalable passive income</li>
-          </ul>
-          <Link to="/ai-agents" className="btn btn-outline" style={{ marginTop: "0.6rem" }}>Deploy Agents</Link>
-        </article>
-      </div>
-
-      <section className="panel" style={{ marginTop: "1.5rem" }}>
-        <h3>No Platform Token Required</h3>
-        <p className="muted">
-          All earnings are paid in external tokens (USDC, ETH) or fiat. CCWEB focuses on real utility and
-          measurable value — not token speculation. You earn by contributing real skills, content, and referrals.
-        </p>
-      </section>
-    </section>
-  );
-}
-
-function DappBuilderPage() {
-  const [templates, setTemplates] = useState([]);
-  const [networks, setNetworks] = useState([]);
-  const [prices, setPrices] = useState({});
-  const [deployments, setDeployments] = useState([]);
-  const [step, setStep] = useState("select");
-  const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [selectedNetwork, setSelectedNetwork] = useState("");
-  const [selectedToken, setSelectedToken] = useState("ETH");
-  const [walletAddress, setWalletAddress] = useState("");
-  const [walletConnected, setWalletConnected] = useState(false);
-  const [walletType, setWalletType] = useState("");
-  const [contractName, setContractName] = useState("");
-  const [contractSymbol, setContractSymbol] = useState("");
-  const [deploying, setDeploying] = useState(false);
-  const [deployResult, setDeployResult] = useState(null);
-  const [error, setError] = useState("");
-  const [filterCategory, setFilterCategory] = useState("All");
-
-  useEffect(() => {
-    fetch("/api/dapp/templates").then((r) => r.json()).then((d) => setTemplates(d.templates || []));
-    fetch("/api/dapp/networks").then((r) => r.json()).then((d) => setNetworks(d.networks || []));
-    fetch("/api/dapp/prices").then((r) => r.json()).then((d) => setPrices(d.prices || {}));
-    fetch("/api/dapp/deployments").then((r) => r.json()).then((d) => setDeployments(d.deployments || []));
-  }, []);
-
-  const categories = ["All", ...new Set(templates.map((t) => t.category))];
-  const filteredTemplates = filterCategory === "All" ? templates : templates.filter((t) => t.category === filterCategory);
-
-  const availableNetworks = selectedTemplate
-    ? networks.filter((n) => selectedTemplate.networks.includes(n.id))
-    : networks;
-
-  const currentNetworkInfo = networks.find((n) => n.id === selectedNetwork);
-  const feeUsd = selectedTemplate ? selectedTemplate.baseFeeUsd : 0;
-  const tokenPrice = prices[selectedToken];
-  const feeInToken = tokenPrice ? (feeUsd / tokenPrice.priceUsd).toFixed(6) : "—";
-
-  function connectWallet(type) {
-    const mockAddress = type === "phantom"
-      ? `${crypto.getRandomValues(new Uint8Array(4)).reduce((s, b) => s + b.toString(16).padStart(2, "0"), "")}...sol`
-      : `0x${crypto.getRandomValues(new Uint8Array(20)).reduce((s, b) => s + b.toString(16).padStart(2, "0"), "")}`;
-    setWalletAddress(mockAddress);
-    setWalletConnected(true);
-    setWalletType(type);
-  }
-
-  function disconnectWallet() {
-    setWalletAddress("");
-    setWalletConnected(false);
-    setWalletType("");
-  }
-
-  function selectTemplate(tmpl) {
-    setSelectedTemplate(tmpl);
-    setSelectedNetwork(tmpl.networks[0] || "");
-    setContractName(tmpl.name);
-    setContractSymbol(tmpl.id.toUpperCase().slice(0, 5));
-    setStep("configure");
-    setError("");
-    const net = networks.find((n) => n.id === tmpl.networks[0]);
-    if (net) {
-      setSelectedToken(net.wallet === "phantom" ? "SOL" : "ETH");
-    }
-  }
-
-  function handleNetworkChange(networkId) {
-    setSelectedNetwork(networkId);
-    const net = networks.find((n) => n.id === networkId);
-    if (net?.wallet === "phantom") setSelectedToken("SOL");
-  }
-
-  async function handleDeploy() {
-    if (!walletConnected) { setError("Please connect a wallet first."); return; }
-    if (!selectedNetwork) { setError("Please select a network."); return; }
-    if (!contractName.trim()) { setError("Contract name is required."); return; }
-    if (!contractSymbol.trim()) { setError("Contract symbol is required."); return; }
-
-    setDeploying(true);
-    setError("");
-
-    const idempotencyKey = `${walletAddress}-${selectedTemplate.id}-${selectedNetwork}-${Date.now()}`;
-
-    try {
-      const resp = await fetch("/api/dapp/deploy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateId: selectedTemplate.id,
-          network: selectedNetwork,
-          paymentToken: selectedToken,
-          contractName: contractName.trim(),
-          contractSymbol: contractSymbol.trim().toUpperCase(),
-          walletAddress,
-          parameters: {},
-          idempotencyKey,
-        }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) { setError(data.error || "Deployment failed."); setDeploying(false); return; }
-      setDeployResult(data);
-      setStep("success");
-      setDeployments((prev) => [data, ...prev]);
-    } catch {
-      setError("Network error. Please try again.");
-    }
-    setDeploying(false);
-  }
-
-  function resetBuilder() {
-    setStep("select");
-    setSelectedTemplate(null);
-    setDeployResult(null);
-    setError("");
-    setContractName("");
-    setContractSymbol("");
-  }
-
-  const tokenOptions = currentNetworkInfo?.wallet === "phantom" ? ["SOL"] : ["ETH", "MATIC", "USDC", "BNB"];
-
-  return (
-    <section className="dapp-builder">
-      <header className="page-header">
-        <span className="pill">Native DApp Builder</span>
-        <h1 className="section-title">Deploy Decentralized Applications</h1>
-        <p className="muted">
-          Build and deploy smart contracts with multi-token payments. Supports Ethereum, Polygon, BNB Chain, and Solana.
-        </p>
-        <div style={{ marginTop: "0.8rem" }}>
-          <Link to="/dapp-dashboard" className="btn btn-outline btn-sm">View Dashboard</Link>
-        </div>
-      </header>
-
-      <div className="dapp-wallet-bar">
-        {walletConnected ? (
-          <div className="dapp-wallet-connected">
-            <span className="dapp-wallet-indicator"></span>
-            <span className="dapp-wallet-label">
-              {walletType === "phantom" ? "Phantom" : "MetaMask"}: <code>{walletAddress.slice(0, 10)}...{walletAddress.slice(-6)}</code>
-            </span>
-            <button className="btn btn-outline btn-sm" onClick={disconnectWallet}>Disconnect</button>
-          </div>
-        ) : (
-          <div className="dapp-wallet-buttons">
-            <span className="muted" style={{ alignSelf: "center", fontSize: "0.85rem" }}>Connect your wallet to begin:</span>
-            <button className="btn btn-outline" onClick={() => connectWallet("metamask")}>
-              🦊 MetaMask
-            </button>
-            <button className="btn btn-outline" onClick={() => connectWallet("phantom")}>
-              👻 Phantom
-            </button>
-          </div>
-        )}
-      </div>
-
-      {step === "select" && (
-        <>
-          <div className="dapp-filter-bar">
-            <h2 className="dapp-step-title" style={{ margin: 0 }}>Choose a Template</h2>
-            <div className="dapp-filter-pills">
-              {categories.map((cat) => (
-                <button key={cat} className={`dapp-filter-pill ${filterCategory === cat ? "active" : ""}`} onClick={() => setFilterCategory(cat)}>{cat}</button>
-              ))}
-            </div>
-          </div>
-          <div className="dapp-template-grid">
-            {filteredTemplates.map((tmpl) => (
-              <article key={tmpl.id} className="dapp-template-card" onClick={() => selectTemplate(tmpl)}>
-                <div className="dapp-template-header">
-                  <span className="badge">{tmpl.category}</span>
-                  <span className="dapp-fee">${tmpl.baseFeeUsd}</span>
-                </div>
-                <h3>{tmpl.name}</h3>
-                <p className="muted">{tmpl.description}</p>
-                <div className="dapp-template-networks">
-                  {tmpl.networks.map((n) => (
-                    <span key={n} className="tiny-pill">{n}</span>
-                  ))}
-                </div>
-                <div className="dapp-template-features">
-                  {tmpl.features.map((f) => (
-                    <span key={f} className="dapp-feature-tag">{f}</span>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        </>
-      )}
-
-      {step === "configure" && selectedTemplate && (
-        <>
-          <button className="btn btn-outline btn-sm" onClick={resetBuilder} style={{ marginBottom: "1rem" }}>← Back to Templates</button>
-          <h2 className="dapp-step-title">Configure & Deploy: {selectedTemplate.name}</h2>
-          <div className="dapp-config-grid">
-            <div className="dapp-config-form panel">
-              <h3>Contract Configuration</h3>
-              <div className="dapp-form-row">
-                <label>Contract Name</label>
-                <input type="text" value={contractName} onChange={(e) => setContractName(e.target.value)} placeholder="My Token" />
-              </div>
-              <div className="dapp-form-row">
-                <label>Symbol</label>
-                <input type="text" value={contractSymbol} onChange={(e) => setContractSymbol(e.target.value.toUpperCase())} placeholder="TKN" maxLength={10} />
-              </div>
-              <div className="dapp-form-row">
-                <label>Network</label>
-                <select value={selectedNetwork} onChange={(e) => handleNetworkChange(e.target.value)}>
-                  {availableNetworks.map((n) => (<option key={n.id} value={n.id}>{n.name}</option>))}
-                </select>
-              </div>
-              <div className="dapp-form-row">
-                <label>Payment Token</label>
-                <select value={selectedToken} onChange={(e) => setSelectedToken(e.target.value)}>
-                  {tokenOptions.map((t) => (<option key={t} value={t}>{t} — ${prices[t]?.priceUsd || "..."}</option>))}
-                </select>
-              </div>
-              <div className="dapp-fee-summary">
-                <div className="dapp-fee-row"><span>Deployment Fee</span><span>${feeUsd} USD</span></div>
-                <div className="dapp-fee-row"><span>Pay in {selectedToken}</span><strong>{feeInToken} {selectedToken}</strong></div>
-                <div className="dapp-fee-row muted"><span>Estimated Gas</span><span>{selectedTemplate.estimatedGas}</span></div>
-              </div>
-              {error && <p className="error-text">{error}</p>}
-              <button className="btn btn-primary dapp-deploy-btn" onClick={handleDeploy} disabled={deploying || !walletConnected}>
-                {deploying ? "Processing Payment..." : !walletConnected ? "Connect Wallet First" : `Deploy & Pay ${feeInToken} ${selectedToken}`}
-              </button>
-              {!walletConnected && <p className="muted" style={{ textAlign: "center", fontSize: "0.82rem", marginTop: "0.4rem" }}>Wallet connection required before deployment</p>}
-            </div>
-            <div className="dapp-config-preview panel">
-              <h3>Template Details</h3>
-              <p className="muted">{selectedTemplate.description}</p>
-              <h4>Features</h4>
-              <ul className="list">{selectedTemplate.features.map((f) => (<li key={f}>{f}</li>))}</ul>
-              <h4>Supported Networks</h4>
-              <div className="pill-row">{selectedTemplate.networks.map((n) => (<span key={n} className="tiny-pill">{n}</span>))}</div>
-              <h4 style={{ marginTop: "1rem" }}>Payment Tokens</h4>
-              <div className="dapp-token-grid">
-                {Object.entries(prices).map(([sym, info]) => (
-                  <div key={sym} className={`dapp-token-card ${selectedToken === sym ? "active" : ""}`} onClick={() => tokenOptions.includes(sym) && setSelectedToken(sym)}>
-                    <strong>{sym}</strong>
-                    <span className="muted">${info.priceUsd}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {step === "success" && deployResult && (
-        <div className="dapp-success">
-          <div className="dapp-success-card panel">
-            <div className="dapp-success-icon">✓</div>
-            <h2>Deployment Successful!</h2>
-            <p className="muted">Your {deployResult.templateName} has been deployed to {deployResult.network}.</p>
-            <div className="dapp-success-details">
-              <div className="dapp-detail-row"><span className="muted">Contract Address</span><code>{deployResult.contractAddress}</code></div>
-              <div className="dapp-detail-row"><span className="muted">Network</span><span>{deployResult.network}</span></div>
-              <div className="dapp-detail-row"><span className="muted">Payment</span><span>{deployResult.payment.amountToken} {deployResult.payment.token} (${deployResult.payment.amountUsd})</span></div>
-              <div className="dapp-detail-row"><span className="muted">Tx Hash</span><code style={{ fontSize: "0.75rem" }}>{deployResult.payment.txHash.slice(0, 22)}...</code></div>
-              <div className="dapp-detail-row"><span className="muted">Status</span><span className="dapp-deploy-status">{deployResult.status}</span></div>
-            </div>
-            <div className="dapp-success-actions">
-              <a href={deployResult.explorerUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline">View on Explorer</a>
-              <Link to="/dapp-dashboard" className="btn btn-outline">Go to Dashboard</Link>
-              <button className="btn btn-primary" onClick={resetBuilder}>Deploy Another</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
 function DappDashboardPage() {
   const [stats, setStats] = useState(null);
   const [deployments, setDeployments] = useState([]);
@@ -2276,9 +1265,9 @@ function DappDashboardPage() {
     setLoading(true);
     try {
       const [statsRes, deploymentsRes, txRes] = await Promise.all([
-        fetch("/api/dapp/dashboard").then((r) => r.json()),
-        fetch("/api/dapp/deployments").then((r) => r.json()),
-        fetch("/api/dapp/transactions").then((r) => r.json()),
+        fetch(apiUrl("/api/dapp/dashboard")).then((r) => r.json()),
+        fetch(apiUrl("/api/dapp/deployments")).then((r) => r.json()),
+        fetch(apiUrl("/api/dapp/transactions")).then((r) => r.json()),
       ]);
       setStats(statsRes);
       setDeployments(deploymentsRes.deployments || []);

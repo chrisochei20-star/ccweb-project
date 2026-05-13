@@ -1,0 +1,38 @@
+export const CCWEB_COURSES = [
+  {
+    id: 1,
+    category: "Crypto",
+    title: "Blockchain Fundamentals",
+    level: "Beginner",
+    duration: "6h",
+    students: "12,400",
+    rating: "4.9",
+  },
+  {
+    id: 2,
+    category: "Crypto",
+    title: "Smart Contract Development",
+    level: "Intermediate",
+    duration: "10h",
+    students: "8,200",
+    rating: "4.8",
+  },
+  {
+    id: 3,
+    category: "Crypto",
+    title: "DeFi Masterclass",
+    level: "Advanced",
+    duration: "12h",
+    students: "5,100",
+    rating: "4.9",
+  },
+  {
+    id: 4,
+    category: "AI",
+    title: "AI & Machine Learning Basics",
+    level: "Beginner",
+    duration: "8h",
+    students: "15,600",
+    rating: "4.7",
+  },
+];

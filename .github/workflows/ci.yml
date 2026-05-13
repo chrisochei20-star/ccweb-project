@@ -1,0 +1,35 @@
+# Production-oriented CI: dependency graph, unit tests, and client build must pass before merge/deploy.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify declared dependencies match imports
+        run: npm run verify:imports
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build (Vite)
+        run: npm run build

@@ -25,10 +25,11 @@ describe("parseAllowedOrigins (CORS)", () => {
   it("parses comma-separated origins as list mode", async () => {
     process.env.CCWEB_ALLOWED_ORIGINS = "https://a.com, https://b.com";
     const { parseAllowedOrigins } = await import("../security/expressHardDefaults.js");
-    expect(parseAllowedOrigins()).toEqual({
-      mode: "list",
-      origins: ["https://a.com", "https://b.com"],
-    });
+    const o = parseAllowedOrigins();
+    expect(o.mode).toBe("list");
+    expect(o.origins).toContain("https://a.com");
+    expect(o.origins).toContain("https://b.com");
+    expect(o.origins).toContain("https://ccweb-project-hoiy.vercel.app");
   });
 
   it("merges PUBLIC_APP_URL origin into explicit allowlist for CORS", async () => {
@@ -39,6 +40,7 @@ describe("parseAllowedOrigins (CORS)", () => {
     expect(o.mode).toBe("list");
     expect(o.origins).toContain("https://a.com");
     expect(o.origins).toContain("https://b.com");
+    expect(o.origins).toContain("https://ccweb-project-hoiy.vercel.app");
   });
 
   it("allows all origins in production when CCWEB_BOOT_WARN_ONLY=1 and origins unset", async () => {

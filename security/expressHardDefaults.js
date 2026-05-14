@@ -7,6 +7,26 @@ const helmet = require("helmet");
 const cors = require("cors");
 const { trimOrigin } = require("../services/deploymentOrigins");
 
+/** Production Vercel frontend (Render API must accept browser credentialed requests from this origin). */
+const DEFAULT_BROWSER_DEPLOY_ORIGINS = ["https://ccweb-project-hoiy.vercel.app"];
+
+/**
+ * Appends fixed deploy origins plus CCWEB_EXTRA_ALLOWED_ORIGINS so split-host setups
+ * (Vercel UI + Render API) work without duplicating every hostname in CCWEB_ALLOWED_ORIGINS.
+ * @param {string[]} origins
+ */
+function mergeDeployBrowserOrigins(origins) {
+  const base = Array.isArray(origins) ? [...origins] : [];
+  const fromEnv = String(process.env.CCWEB_EXTRA_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((s) => trimOrigin(s))
+    .filter(Boolean);
+  for (const o of [...DEFAULT_BROWSER_DEPLOY_ORIGINS, ...fromEnv]) {
+    if (o && !base.includes(o)) base.push(o);
+  }
+  return base;
+}
+
 function parseAllowedOrigins() {
   const raw = (process.env.CCWEB_ALLOWED_ORIGINS || "").trim();
   if (raw === "*" || /^\*(\s*,\s*\*)*$/.test(raw)) {
@@ -14,7 +34,7 @@ function parseAllowedOrigins() {
   }
   if (raw) {
     const origins = raw.split(",").map((s) => s.trim()).filter(Boolean);
-    return { mode: "list", origins: mergePublicAppOrigin(origins) };
+    return { mode: "list", origins: mergeDeployBrowserOrigins(mergePublicAppOrigin(origins)) };
   }
   if (process.env.NODE_ENV === "production") {
     // Align with productionGate CCWEB_BOOT_WARN_ONLY=1 when origins unset (open dynamic CORS).
@@ -22,16 +42,18 @@ function parseAllowedOrigins() {
       return { mode: "all" };
     }
     const pub = publicAppOriginOrNull();
-    return { mode: "list", origins: pub ? [pub] : [] };
+    return { mode: "list", origins: mergeDeployBrowserOrigins(pub ? [pub] : []) };
   }
   return {
     mode: "list",
-    origins: mergePublicAppOrigin([
-      "http://localhost:5173",
-      "http://127.0.0.1:5173",
-      "http://localhost:3000",
-      "http://127.0.0.1:3000",
-    ]),
+    origins: mergeDeployBrowserOrigins(
+      mergePublicAppOrigin([
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+      ])
+    ),
   };
 }
 
@@ -124,28 +146,32 @@ function applyExpressSecurity(app) {
   const allowAll = parsed.mode === "all";
   const allowed = parsed.mode === "list" ? parsed.origins : [];
 
-  app.use(
-    cors({
-      origin: allowAll
-        ? true
-        : (origin, cb) => {
-            if (!origin) return cb(null, true);
-            if (allowed.includes(origin)) return cb(null, true);
-            return cb(null, false);
-          },
-      credentials: true,
-      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: [
-        "Content-Type",
-        "Authorization",
-        "CCWEB-API-Key",
-        "Cookie",
-        "Accept",
-        "Origin",
-        "X-Requested-With",
-      ],
-    })
-  );
+  const corsOptions = {
+    origin: allowAll
+      ? true
+      : (origin, cb) => {
+          if (!origin) return cb(null, true);
+          if (allowed.includes(origin)) return cb(null, true);
+          return cb(null, false);
+        },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "CCWEB-API-Key",
+      "Cookie",
+      "Accept",
+      "Origin",
+      "X-Requested-With",
+      "X-CCWEB-Admin",
+      "X-CCWEB-Admin-Label",
+    ],
+  };
+  const corsMw = cors(corsOptions);
+  app.use(corsMw);
+  // Express 5 path-to-regexp rejects bare "*"; use a regex so preflight matches all paths.
+  app.options(/.*/, corsMw);
 }
 
 module.exports = {

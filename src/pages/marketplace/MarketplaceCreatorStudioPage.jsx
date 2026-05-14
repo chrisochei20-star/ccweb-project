@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, ImagePlus, Loader2, Sparkles } from "lucide-react";
+import { CheckCircle2, ImagePlus, Loader2, Sparkles, Wand2 } from "lucide-react";
 import {
   fetchCreatorMarketplaceListings,
   fetchMarketplaceListingPrivateBundle,
@@ -12,10 +12,12 @@ import {
   uploadMarketplaceImage,
 } from "../../api/marketplaceCatalogApi";
 import { toast } from "../../lib/toastBus";
+import { CreatorLaunchWizard } from "../../components/marketplace/CreatorLaunchWizard";
 
 const KINDS = ["tool", "agent", "workflow", "prompt_pack", "bundle", "digital"];
 
 export function MarketplaceCreatorStudioPage() {
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [onboarded, setOnboarded] = useState(() =>
     typeof localStorage !== "undefined" ? localStorage.getItem("ccweb_mp_studio_onboarded") === "1" : true
   );
@@ -53,6 +55,17 @@ export function MarketplaceCreatorStudioPage() {
     } catch {
       /* */
     }
+  }, []);
+
+  const applyStarterTemplate = useCallback((t) => {
+    if (!t) return;
+    setNewTitle(t.title || "");
+    setNewSlug("");
+    setNewKind(t.kind || "tool");
+    setNewCategory(t.categorySlug || "general");
+    setNewTags(Array.isArray(t.tags) ? t.tags.join(", ") : "");
+    setNewDesc(t.description || "");
+    toast.success("Template applied — review and publish when ready.");
   }, []);
 
   const loadListings = useCallback(async () => {
@@ -232,6 +245,7 @@ export function MarketplaceCreatorStudioPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-3 pb-14 pt-4 transition-opacity duration-300">
+      <CreatorLaunchWizard open={wizardOpen} onClose={() => setWizardOpen(false)} onApplyTemplate={applyStarterTemplate} />
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-ccweb-violet">Creators</p>
@@ -246,6 +260,15 @@ export function MarketplaceCreatorStudioPage() {
         <Link to="/shop/creator/dashboard" className="text-sm font-medium text-ccweb-cyan hover:underline">
           Open analytics dashboard →
         </Link>
+        <button
+          type="button"
+          onClick={() => setWizardOpen(true)}
+          className="inline-flex items-center gap-2 rounded-full border border-ccweb-violet/40 bg-ccweb-violet/10 px-4 py-2 text-sm font-medium text-white hover:border-ccweb-cyan/50"
+          data-ccweb-e2e="creator-launch-wizard-open"
+        >
+          <Wand2 className="h-4 w-4 text-ccweb-cyan" aria-hidden />
+          Launch wizard
+        </button>
       </header>
 
       <details className="ccweb-glass rounded-2xl p-4 text-sm text-ccweb-muted open:border-ccweb-cyan/25">

@@ -11,6 +11,20 @@ const { parseAllowedOrigins } = require("../../security/expressHardDefaults");
 const chatPg = require("../../db/persistenceChat");
 const { logger } = require("../../logging/logger");
 
+const MAX_CONNECTS_PER_IP_PER_MIN = Math.max(12, Number(process.env.CCWEB_SOCKET_CONNECTS_PER_IP_PER_MIN || 72));
+const connectBuckets = new Map();
+const typingBuckets = new Map();
+
+function pruneTimestamps(arr, now, windowMs) {
+  return arr.filter((t) => now - t < windowMs);
+}
+
+function socketClientIp(socket) {
+  const fwd = (socket.handshake.headers["x-forwarded-for"] || "").toString();
+  const first = fwd.split(",")[0]?.trim();
+  return first || socket.handshake.address || "unknown";
+}
+
 let ioInstance = null;
 
 function corsOriginFn() {
@@ -75,6 +89,20 @@ function attachChatSocket(httpServer) {
   });
 
   io.use((socket, next) => {
+    const ip = socketClientIp(socket);
+    const now = Date.now();
+    const windowMs = 60_000;
+    const arr = pruneTimestamps(connectBuckets.get(ip) || [], now, windowMs);
+    if (arr.length >= MAX_CONNECTS_PER_IP_PER_MIN) {
+      logger.warn({ msg: "socket_connect_rate_limited", ip });
+      return next(new Error("Too many connections"));
+    }
+    arr.push(now);
+    connectBuckets.set(ip, arr);
+    next();
+  });
+
+  io.use((socket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.query?.token;
     const uid = authEngine.getUserIdFromAccess(String(token || "").trim());
     if (!uid) {
@@ -117,6 +145,16 @@ function attachChatSocket(httpServer) {
         try {
           const chatId = payload?.chatId;
           if (!chatId) return ack?.({ ok: false });
+          const tk = `${uid}:${chatId}`;
+          const now = Date.now();
+          const windowMs = 10_000;
+          const maxEv = 28;
+          const tarr = pruneTimestamps(typingBuckets.get(tk) || [], now, windowMs);
+          if (tarr.length >= maxEv) {
+            return ack?.({ ok: false, error: "rate_limited" });
+          }
+          tarr.push(now);
+          typingBuckets.set(tk, tarr);
           if (!(await chatPg.verifyMember(chatId, uid))) return ack?.({ ok: false, error: "forbidden" });
           socket.to(`chat:${chatId}`).emit("typing", {
             chatId,

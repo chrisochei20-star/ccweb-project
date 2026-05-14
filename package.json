@@ -23,6 +23,7 @@
     "test:e2e": "playwright test",
     "test:e2e:production": "PRODUCTION_E2E=1 playwright test e2e/production-smoke.spec.js --project=chromium",
     "test:e2e:marketplace": "playwright test e2e/marketplace-hardening.spec.js --project=chromium",
+    "test:e2e:mobile-launch": "playwright test e2e/mobile-launch-hints.spec.js --project=chromium",
     "record:preview": "PW_SLOW_MO=450 CI=1 playwright test e2e/preview-recording.spec.js --project=chromium",
     "mobile:sync": "npm run build && npx cap sync",
     "mobile:android": "npm run build && npx cap sync android"
@@ -41,7 +42,10 @@
   "license": "MIT",
   "dependencies": {
     "@capacitor/android": "7.4.3",
+    "@capacitor/app": "^7.1.2",
     "@capacitor/core": "7.4.3",
+    "@capacitor/push-notifications": "^7.0.6",
+    "@sentry/react": "^9.47.1",
     "axios": "^1.16.0",
     "bcrypt": "^6.0.0",
     "bs58": "^6.0.0",

@@ -639,6 +639,33 @@ async function fulfillMarketplaceSkuFromTx(row) {
     );
   }
 
+  try {
+    const ntf = require("./persistenceNotifications");
+    const { broadcastNotificationUpdate } = require("../server/realtime/chatSocket");
+    if (seller && ntf.enabled()) {
+      const amountLabel =
+        row.currency === "USD" ? `$${(creatorMinor / 100).toFixed(2)}` : `${(creatorMinor / 100).toFixed(0)} ${row.currency}`;
+      await ntf.insertRow({
+        recipientUserId: seller,
+        kind: "earn",
+        title: "Marketplace sale",
+        body: `You earned ${amountLabel} from ${(sku.label || "a listing").toString().slice(0, 80)}.`,
+        payload: {
+          marketplacePurchaseId: purchaseId,
+          listingId: sku.listingId,
+          skuId,
+          buyerUserId: row.user_id,
+          deepLink: "/shop/creator/dashboard",
+        },
+        actorUserId: row.user_id,
+        groupKey: `marketplace_sale:${purchaseId}`,
+      });
+      broadcastNotificationUpdate(seller, { kind: "earn" });
+    }
+  } catch {
+    /* non-fatal */
+  }
+
   return { applied: true, purchaseId };
 }
 

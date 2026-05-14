@@ -3,7 +3,11 @@
  */
 
 const { requireBearerJwt: authJwtMiddleware, optionalBearerJwt: optionalJwt } = require("./server/http/middleware/auth");
-const { apiRateLimitV1: apiRateShort, getClientIp } = require("./server/http/middleware/expressRateLimit");
+const {
+  apiRateLimitV1: apiRateShort,
+  getClientIp,
+  expressIpRateLimit,
+} = require("./server/http/middleware/expressRateLimit");
 const { errorHandler } = require("./server/http/middleware/errors");
 const express = require("express");
 const crypto = require("crypto");
@@ -48,6 +52,11 @@ const { createClientTelemetryRouter } = require("./clientTelemetryExpress");
 const pushDevices = require("./db/persistencePushDevices");
 const persistenceAiAgents = require("./db/persistenceAiAgents");
 const { getPool } = require("./db/pool");
+const pushDelivery = require("./services/pushDelivery");
+const { webhookUrl } = require("./services/opsAlert");
+
+const apiRateTelemetry = expressIpRateLimit("api_v1_telemetry", 40, 60 * 1000);
+const apiRateDevices = expressIpRateLimit("api_v1_devices", 18, 60 * 1000);
 
 function createPlatformApp(deps) {
   const app = express();
@@ -81,6 +90,12 @@ function createPlatformApp(deps) {
         profile: true,
         chat: true,
         courseThumbnail: Boolean((process.env.CCWEB_ADMIN_KEY || "").trim()),
+      },
+      push: {
+        fcmConfigured: pushDelivery.isFcmConfigured(),
+      },
+      opsAlerts: {
+        webhookConfigured: Boolean(webhookUrl()),
       },
     });
   });
@@ -546,7 +561,7 @@ function createPlatformApp(deps) {
   const marketplaceCatalogRouter = createMarketplaceCatalogRouter({ authJwtMiddleware, optionalJwt });
   v1.use("/marketplace/catalog", apiRateShort, marketplaceCatalogRouter);
 
-  v1.use("/telemetry", apiRateShort, createClientTelemetryRouter());
+  v1.use("/telemetry", apiRateTelemetry, createClientTelemetryRouter());
 
   const flutterwaveRouter = createFlutterwaveRouter({ authJwtMiddleware });
   v1.use("/payments/flutterwave", apiRateShort, flutterwaveRouter);
@@ -557,13 +572,17 @@ function createPlatformApp(deps) {
   const devicesRouter = express.Router();
   devicesRouter.post("/push-token", authJwtMiddleware, async (req, res, next) => {
     try {
-      await pushDevices.upsertDeviceToken(req.ccwebUserId, req.body?.platform, req.body?.token);
+      const token = String(req.body?.token || "").trim();
+      if (token.length < 16 || token.length > 4096) {
+        return res.status(400).json({ error: "Invalid device token.", code: "BAD_PUSH_TOKEN" });
+      }
+      await pushDevices.upsertDeviceToken(req.ccwebUserId, req.body?.platform, token);
       res.json({ ok: true });
     } catch (e) {
       next(e);
     }
   });
-  v1.use("/devices", apiRateShort, devicesRouter);
+  v1.use("/devices", apiRateDevices, devicesRouter);
 
   const agentRuns = [];
   const catalogAgents = [

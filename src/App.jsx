@@ -29,6 +29,7 @@ import { CourseLessonPage } from "./pages/CourseLessonPage";
 import { AiTutorPage } from "./pages/AiTutorPage";
 import { Skeleton } from "./components/ui/Skeleton";
 import { CcwebErrorBoundary } from "./components/CcwebErrorBoundary";
+import { NativeAppBindings } from "./native/NativeAppBindings";
 import { NotificationCenterPage } from "./components/notifications/NotificationCenter";
 import { LearningAdminPage } from "./learning/LearningAdminPage";
 import { LearningSessionPage } from "./learning/LearningSessionPage";
@@ -87,6 +88,7 @@ function App() {
     <BrowserRouter>
       <CcwebErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
+          <NativeAppBindings />
           <Routes>
         <Route element={<MobileLayout />}>
           <Route path="invite/:code" element={<BetaInvitePage />} />

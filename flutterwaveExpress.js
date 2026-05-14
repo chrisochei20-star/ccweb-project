@@ -71,8 +71,17 @@ function createFlutterwaveRouter({ authJwtMiddleware }) {
         const td = data || req.body?.data || {};
         await persistenceFlutterwave.applyTransferNotification(td);
       }
-    } catch {
-      /* avoid retry storms */
+    } catch (e) {
+      try {
+        const { postOpsAlert } = require("./services/opsAlert");
+        void postOpsAlert({
+          type: "flutterwave_webhook",
+          message: e?.message || String(e),
+          meta: { event: String(event || "") },
+        });
+      } catch {
+        /* ignore */
+      }
     }
     res.status(200).type("text/plain").send("ok");
   });

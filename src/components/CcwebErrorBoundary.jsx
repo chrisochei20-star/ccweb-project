@@ -22,6 +22,13 @@ export class CcwebErrorBoundary extends Component {
     } catch {
       /* ignore */
     }
+    try {
+      if (typeof window !== "undefined" && typeof window.__ccwebSentryCapture === "function") {
+        window.__ccwebSentryCapture(err, { contexts: { react: { componentStack: info?.componentStack } } });
+      }
+    } catch {
+      /* ignore */
+    }
   }
 
   render() {

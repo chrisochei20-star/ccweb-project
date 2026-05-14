@@ -61,6 +61,21 @@ async function insertRow({ recipientUserId, kind, title, body, payload, actorUse
      VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8)`,
     [id, recipientUserId, kind, title || "", body || "", pay, actorUserId || null, groupKey || null]
   );
+  const pObj = payload && typeof payload === "object" ? payload : {};
+  setImmediate(() => {
+    try {
+      const push = require("../services/pushDelivery");
+      void push.notifyUserForPgNotification(recipientUserId, {
+        id,
+        kind,
+        title: title || "",
+        body: body || "",
+        payload: pObj,
+      });
+    } catch {
+      /* optional push */
+    }
+  });
   return id;
 }
 

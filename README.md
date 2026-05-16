@@ -18,11 +18,11 @@ Run:
 
 ### Start the application
 
-Run:
+Copy `.env.example` to `.env` and set **`VITE_DEV_API_PROXY_TARGET`** (for example `http://127.0.0.1:3000`) so the Vite dev server can proxy `/api` to the Node API.
 
-`npm run dev`
+In one terminal run `npm run dev:api`, in another run `npm run dev`, then open the URL Vite prints (usually `http://localhost:5173`).
 
-Then open `http://localhost:3000`.
+For a **Vercel UI + Render API** build, set **`VITE_API_BASE_URL`** on Vercel to your public API origin (see `.env.example`).
 
 ### Production-style run
 

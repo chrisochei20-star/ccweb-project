@@ -10,6 +10,7 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { apiUrl } from "./config/env.js";
 import "./styles.css";
 
 const navItems = [
@@ -420,7 +421,7 @@ function AiStreamingPage() {
 
   async function loadRooms() {
     try {
-      const res = await fetch("/api/streaming/rooms");
+      const res = await fetch(apiUrl("/api/streaming/rooms"));
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Could not load rooms.");
@@ -450,7 +451,7 @@ function AiStreamingPage() {
     setError("");
     try {
       const expectedGross = Number(payload.expectedAudience) * Number(payload.expectedArppuUsd);
-      const res = await fetch("/api/streaming/rooms", {
+      const res = await fetch(apiUrl("/api/streaming/rooms"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -488,7 +489,7 @@ function AiStreamingPage() {
         throw new Error(roomData.error || "Could not create room.");
       }
 
-      const payoutRes = await fetch("/api/streaming/payouts", {
+      const payoutRes = await fetch(apiUrl("/api/streaming/payouts"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -523,7 +524,7 @@ function AiStreamingPage() {
     setJoinLoading(true);
     setJoinError("");
     try {
-      const res = await fetch(`/api/streaming/rooms/${selectedRoomId}/attendance`, {
+      const res = await fetch(apiUrl(`/api/streaming/rooms/${selectedRoomId}/attendance`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -559,7 +560,7 @@ function AiStreamingPage() {
     setJoinLoading(true);
     setJoinError("");
     try {
-      const res = await fetch(`/api/streaming/rooms/${selectedRoomId}/attendance`, {
+      const res = await fetch(apiUrl(`/api/streaming/rooms/${selectedRoomId}/attendance`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -594,7 +595,7 @@ function AiStreamingPage() {
     setJoinLoading(true);
     setJoinError("");
     try {
-      const res = await fetch(`/api/streaming/rooms/${selectedRoomId}/finish`, {
+      const res = await fetch(apiUrl(`/api/streaming/rooms/${selectedRoomId}/finish`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1284,7 +1285,7 @@ function FindPage({ initialTab = "scanner" }) {
       const params = new URLSearchParams();
       if (scanSymbol.trim()) params.set("token", scanSymbol.trim().toUpperCase());
       if (scanAddress.trim()) params.set("address", scanAddress.trim());
-      const res = await fetch(`/api/scan-token?${params.toString()}`);
+      const res = await fetch(apiUrl(`/api/scan-token?${params.toString()}`));
       const data = await res.json();
       setScanResult(data);
     } catch {
@@ -1296,7 +1297,7 @@ function FindPage({ initialTab = "scanner" }) {
   async function loadSignals() {
     setLoadingSignals(true);
     try {
-      const res = await fetch("/api/find/signals");
+      const res = await fetch(apiUrl("/api/find/signals"));
       const data = await res.json();
       setSignals(data.signals || []);
     } catch {
@@ -1308,7 +1309,7 @@ function FindPage({ initialTab = "scanner" }) {
   async function loadSmartMoney() {
     setLoadingSm(true);
     try {
-      const res = await fetch("/api/find/smart-money");
+      const res = await fetch(apiUrl("/api/find/smart-money"));
       const data = await res.json();
       setSmartMoney(data);
     } catch {
@@ -1320,7 +1321,7 @@ function FindPage({ initialTab = "scanner" }) {
   async function loadDiscover() {
     setLoadingDiscover(true);
     try {
-      const res = await fetch("/api/discover-tokens");
+      const res = await fetch(apiUrl("/api/discover-tokens"));
       const data = await res.json();
       setDiscover(data);
     } catch {
@@ -1332,7 +1333,7 @@ function FindPage({ initialTab = "scanner" }) {
   async function loadAlerts() {
     setLoadingAlerts(true);
     try {
-      const res = await fetch("/api/crypto/alerts");
+      const res = await fetch(apiUrl("/api/crypto/alerts"));
       const data = await res.json();
       setAlerts(data);
     } catch {
@@ -1348,7 +1349,7 @@ function FindPage({ initialTab = "scanner" }) {
     setWalletTrackMsg(null);
     try {
       const res = await fetch(
-        `/api/scan-wallet?address=${encodeURIComponent(walletInput.trim())}`
+        apiUrl(`/api/scan-wallet?address=${encodeURIComponent(walletInput.trim())}`)
       );
       const data = await res.json();
       setWalletScan(data.error ? null : data);
@@ -1362,7 +1363,7 @@ function FindPage({ initialTab = "scanner" }) {
     if (!walletInput.trim()) return;
     setWalletTrackMsg(null);
     try {
-      const res = await fetch("/api/track-wallet", {
+      const res = await fetch(apiUrl("/api/track-wallet"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1877,7 +1878,7 @@ function AiAgentsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/build/agents").then((r) => r.json()).then((d) => { setAgents(d.agents || []); setLoading(false); });
+    fetch(apiUrl("/api/build/agents")).then((r) => r.json()).then((d) => { setAgents(d.agents || []); setLoading(false); });
   }, []);
 
   return (
@@ -2010,10 +2011,10 @@ function DappBuilderPage() {
   const [filterCategory, setFilterCategory] = useState("All");
 
   useEffect(() => {
-    fetch("/api/dapp/templates").then((r) => r.json()).then((d) => setTemplates(d.templates || []));
-    fetch("/api/dapp/networks").then((r) => r.json()).then((d) => setNetworks(d.networks || []));
-    fetch("/api/dapp/prices").then((r) => r.json()).then((d) => setPrices(d.prices || {}));
-    fetch("/api/dapp/deployments").then((r) => r.json()).then((d) => setDeployments(d.deployments || []));
+    fetch(apiUrl("/api/dapp/templates")).then((r) => r.json()).then((d) => setTemplates(d.templates || []));
+    fetch(apiUrl("/api/dapp/networks")).then((r) => r.json()).then((d) => setNetworks(d.networks || []));
+    fetch(apiUrl("/api/dapp/prices")).then((r) => r.json()).then((d) => setPrices(d.prices || {}));
+    fetch(apiUrl("/api/dapp/deployments")).then((r) => r.json()).then((d) => setDeployments(d.deployments || []));
   }, []);
 
   const categories = ["All", ...new Set(templates.map((t) => t.category))];
@@ -2074,7 +2075,7 @@ function DappBuilderPage() {
     const idempotencyKey = `${walletAddress}-${selectedTemplate.id}-${selectedNetwork}-${Date.now()}`;
 
     try {
-      const resp = await fetch("/api/dapp/deploy", {
+      const resp = await fetch(apiUrl("/api/dapp/deploy"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2276,9 +2277,9 @@ function DappDashboardPage() {
     setLoading(true);
     try {
       const [statsRes, deploymentsRes, txRes] = await Promise.all([
-        fetch("/api/dapp/dashboard").then((r) => r.json()),
-        fetch("/api/dapp/deployments").then((r) => r.json()),
-        fetch("/api/dapp/transactions").then((r) => r.json()),
+        fetch(apiUrl("/api/dapp/dashboard")).then((r) => r.json()),
+        fetch(apiUrl("/api/dapp/deployments")).then((r) => r.json()),
+        fetch(apiUrl("/api/dapp/transactions")).then((r) => r.json()),
       ]);
       setStats(statsRes);
       setDeployments(deploymentsRes.deployments || []);

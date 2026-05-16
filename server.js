@@ -6,6 +6,20 @@ const { URL } = require("url");
 const cryptoSafety = require("./cryptoSafety");
 
 const PORT = Number(process.env.PORT || 3000);
+
+/** Base URL for `new URL(req.url, base)` — must be absolute. Prefer public API URL in production. */
+function requestParsingBaseUrl() {
+  for (const key of ["CCWEB_REQUEST_PARSE_BASE", "CCWEB_API_PUBLIC_URL", "PUBLIC_APP_URL"]) {
+    const raw = String(process.env[key] || "").trim();
+    if (!raw || !/^https?:\/\//i.test(raw)) continue;
+    try {
+      return new URL(raw.endsWith("/") ? raw : `${raw}/`).origin;
+    } catch {
+      /* try next */
+    }
+  }
+  return `http://0.0.0.0:${PORT}`;
+}
 const PLATFORM_FEE_RATE = 0.08;
 
 const deals = new Map();
@@ -2797,7 +2811,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const requestUrl = new URL(req.url, `http://localhost:${PORT}`);
+  const requestUrl = new URL(req.url, `${requestParsingBaseUrl()}/`);
   const { pathname } = requestUrl;
 
   if (pathname === "/health") {
@@ -3125,5 +3139,10 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`ccweb-project app running on http://localhost:${PORT}`);
+  const pub = String(process.env.CCWEB_API_PUBLIC_URL || process.env.PUBLIC_APP_URL || "").trim();
+  if (pub) {
+    console.log(`ccweb-project listening on port ${PORT} (public API ${pub})`);
+  } else {
+    console.log(`ccweb-project listening on port ${PORT}`);
+  }
 });

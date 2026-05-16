@@ -3,7 +3,7 @@
  */
 
 const crypto = require("crypto");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const { generateSecret: otplibGenerateSecret, generateURI, verifySync } = require("otplib");
 
 function generateSecret() {

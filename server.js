@@ -6,9 +6,17 @@ const { URL } = require("url");
 const cryptoSafety = require("./cryptoSafety");
 
 const PORT = Number(process.env.PORT || 3000);
+const HOST = String(process.env.HOST || "0.0.0.0").trim() || "0.0.0.0";
 
 /** Structured stderr for Railway log drains (no extra dependencies). */
 const logger = {
+  info(payload) {
+    const entry =
+      payload && typeof payload === "object"
+        ? { level: "info", ts: new Date().toISOString(), ...payload }
+        : { level: "info", ts: new Date().toISOString(), msg: String(payload) };
+    console.log(JSON.stringify(entry));
+  },
   error(payload) {
     const entry =
       payload && typeof payload === "object"
@@ -3266,22 +3274,44 @@ const server = http.createServer(async (req, res) => {
   await serveStaticSite(req, res, pathname);
 });
 
-server.once("error", (err) => {
-  logger.error({
-    msg: "server_listen_error",
-    error: err.message,
-    code: err.code,
-    stack: err.stack,
-  });
+function bootServer() {
+  try {
+    server.once("error", (err) => {
+      logger.error({
+        msg: "server_listen_error",
+        error: err.message,
+        code: err.code,
+        stack: err.stack,
+      });
 
-  process.exit(1);
-});
+      process.exit(1);
+    });
 
-server.listen(PORT, "0.0.0.0", () => {
-  const pub = String(process.env.CCWEB_API_PUBLIC_URL || process.env.PUBLIC_APP_URL || "").trim();
-  if (pub) {
-    console.log(`ccweb-project listening on port ${PORT} (public API ${pub})`);
-  } else {
-    console.log(`ccweb-project listening on port ${PORT}`);
+    server.listen(PORT, HOST, () => {
+      logger.info({
+        msg: "server_started_successfully",
+        port: PORT,
+        host: HOST,
+        env: process.env.NODE_ENV,
+      });
+
+      const pub = String(process.env.CCWEB_API_PUBLIC_URL || process.env.PUBLIC_APP_URL || "").trim();
+      if (pub) {
+        console.log(`ccweb-project listening on port ${PORT} (public API ${pub})`);
+      } else {
+        console.log(`ccweb-project listening on port ${PORT}`);
+      }
+    });
+  } catch (e) {
+    logger.error({
+      msg: "boot_server_fatal",
+      error: e.message,
+      stack: e.stack,
+      code: e.code,
+    });
+
+    process.exit(1);
   }
-});
+}
+
+bootServer();

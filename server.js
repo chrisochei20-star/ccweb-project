@@ -7,6 +7,20 @@ const cryptoSafety = require("./cryptoSafety");
 
 const PORT = Number(process.env.PORT || 3000);
 
+/** Structured stderr for Railway log drains (no extra dependencies). */
+const logger = {
+  error(payload) {
+    const entry =
+      payload && typeof payload === "object"
+        ? { level: "error", ts: new Date().toISOString(), ...payload }
+        : { level: "error", ts: new Date().toISOString(), msg: String(payload) };
+    console.error(JSON.stringify(entry));
+    if (payload && typeof payload.stack === "string") {
+      console.error(payload.stack);
+    }
+  },
+};
+
 /** Base URL for `new URL(req.url, base)` — must be absolute. Prefer public API URL in production. */
 function requestParsingBaseUrl() {
   for (const key of ["CCWEB_REQUEST_PARSE_BASE", "CCWEB_API_PUBLIC_URL", "PUBLIC_APP_URL"]) {
@@ -3252,7 +3266,18 @@ const server = http.createServer(async (req, res) => {
   await serveStaticSite(req, res, pathname);
 });
 
-server.listen(PORT, () => {
+server.once("error", (err) => {
+  logger.error({
+    msg: "server_listen_error",
+    error: err.message,
+    code: err.code,
+    stack: err.stack,
+  });
+
+  process.exit(1);
+});
+
+server.listen(PORT, "0.0.0.0", () => {
   const pub = String(process.env.CCWEB_API_PUBLIC_URL || process.env.PUBLIC_APP_URL || "").trim();
   if (pub) {
     console.log(`ccweb-project listening on port ${PORT} (public API ${pub})`);

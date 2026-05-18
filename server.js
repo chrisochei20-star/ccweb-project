@@ -20,6 +20,22 @@ function requestParsingBaseUrl() {
   }
   return `http://0.0.0.0:${PORT}`;
 }
+
+/**
+ * Static files: Vite `dist/` in production (Railway, Render), legacy `public/` in development.
+ * Override with CCWEB_STATIC_ROOT=dist|public
+ */
+function staticRootDir() {
+  const explicit = String(process.env.CCWEB_STATIC_ROOT || "").trim().toLowerCase();
+  if (explicit === "dist" || explicit === "public") return explicit;
+  return process.env.NODE_ENV === "production" ? "dist" : "public";
+}
+
+function isInsideDir(filePath, dirPath) {
+  const resolvedFile = path.resolve(filePath);
+  const resolvedDir = path.resolve(dirPath);
+  return resolvedFile === resolvedDir || resolvedFile.startsWith(resolvedDir + path.sep);
+}
 const PLATFORM_FEE_RATE = 0.08;
 
 const deals = new Map();
@@ -192,8 +208,19 @@ const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
+  ".mjs": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",
+  ".svg": "image/svg+xml; charset=utf-8",
+  ".ico": "image/x-icon",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".map": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
 };
 
 function clamp(value, min, max) {
@@ -1170,6 +1197,103 @@ async function serveFile(filePath, res) {
     res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
     res.end("Internal server error");
   }
+}
+
+/**
+ * Send a file from disk with optional long cache (Vite-hashed /assets).
+ * Supports HEAD (no body) for CDN compatibility.
+ */
+async function sendLocalFileWithHeaders(filePath, res, req, { cacheImmutable = false } = {}) {
+  try {
+    const st = await fs.stat(filePath);
+    if (!st.isFile()) {
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Not found");
+      return;
+    }
+    const data = await fs.readFile(filePath);
+    const ext = path.extname(filePath).toLowerCase();
+    const contentType = MIME_TYPES[ext] || "application/octet-stream";
+    /** @type {Record<string, string>} */
+    const headers = { "Content-Type": contentType };
+    if (cacheImmutable) {
+      headers["Cache-Control"] = "public, max-age=31536000, immutable";
+    }
+    res.writeHead(200, headers);
+    if (req.method === "HEAD") {
+      res.end();
+    } else {
+      res.end(data);
+    }
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Not found");
+      return;
+    }
+    res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Internal server error");
+  }
+}
+
+/**
+ * Static site: `public/` in dev (multi-page), `dist/` in production (Vite SPA + hashed assets).
+ */
+async function serveStaticSite(req, res, pathname) {
+  const rootName = staticRootDir();
+  const rootAbs = path.join(__dirname, rootName);
+
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.writeHead(405, { "Allow": "GET, HEAD", "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Method Not Allowed");
+    return;
+  }
+
+  if (rootName !== "dist") {
+    const urlPath =
+      pathname === "/"
+        ? "/index.html"
+        : pathname === "/about"
+          ? "/about.html"
+          : pathname === "/system"
+            ? "/system.html"
+            : pathname;
+    const safePath = path.normalize(urlPath).replace(/^(\.\.[/\\])+/, "");
+    const filePath = path.join(rootAbs, safePath);
+    await serveFile(filePath, res);
+    return;
+  }
+
+  const posixPath = String(pathname || "/").replace(/\\/g, "/");
+  const normalized = path.posix.normalize(posixPath);
+  if (normalized.includes("..")) {
+    res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Forbidden");
+    return;
+  }
+
+  let rel = normalized.replace(/^\/+/, "");
+  if (!rel) rel = "index.html";
+  const filePath = path.join(rootAbs, rel);
+
+  if (!isInsideDir(filePath, rootAbs)) {
+    res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Forbidden");
+    return;
+  }
+
+  try {
+    const st = await fs.stat(filePath);
+    if (st.isFile()) {
+      await sendLocalFileWithHeaders(filePath, res, req, { cacheImmutable: normalized.startsWith("/assets/") });
+      return;
+    }
+  } catch {
+    /* fall through to SPA */
+  }
+
+  const indexPath = path.join(rootAbs, "index.html");
+  await sendLocalFileWithHeaders(indexPath, res, req, { cacheImmutable: false });
 }
 
 function sendJson(res, statusCode, payload) {
@@ -3125,17 +3249,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const urlPath =
-    pathname === "/"
-      ? "/index.html"
-      : pathname === "/about"
-      ? "/about.html"
-      : pathname === "/system"
-      ? "/system.html"
-      : pathname;
-  const safePath = path.normalize(urlPath).replace(/^(\.\.[/\\])+/, "");
-  const filePath = path.join(__dirname, "public", safePath);
-  await serveFile(filePath, res);
+  await serveStaticSite(req, res, pathname);
 });
 
 server.listen(PORT, () => {

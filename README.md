@@ -26,9 +26,11 @@ For a **Vercel UI + Render API** build, set **`VITE_API_BASE_URL`** on Vercel to
 
 ### Production-style run
 
-Run:
+Build the SPA, then start the API + static host (serves **`dist/`** when `NODE_ENV=production`, otherwise **`public/`**):
 
-`npm start`
+`npm run build && NODE_ENV=production npm start`
+
+Railway/Render: set **`NODE_ENV=production`**, run **`npm run build`** in the build step and **`npm start`** at release. Optional: **`CCWEB_STATIC_ROOT=dist|public`** to force which folder is used.
 
 ## Business applicant + income engine APIs
 

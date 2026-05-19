@@ -1,6 +1,6 @@
 /**
- * Production API origin for split deploys (Vercel ↔ Render).
- * Primary: `import.meta.env.VITE_API_BASE_URL` (set in Vercel or `.env.production` at build time).
+ * Production API origin for split deploys (Vercel / Railway ↔ Node API).
+ * Primary: `import.meta.env.VITE_API_BASE_URL` (set in CI or `.env.production` at build time).
  * Fallback: `<meta name="ccweb-api-base-url">` for emergency overrides without rebuild.
  */
 

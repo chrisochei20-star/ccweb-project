@@ -64,11 +64,11 @@ If the API does **not** need to serve the built SPA, you can use a minimal build
 
 | Variable | Required | Notes |
 |----------|----------|--------|
-| **`VITE_API_BASE_URL`** | Yes | Full URL of the Render API, **no trailing slash**, e.g. `https://your-service.onrender.com`. All browser API and Socket traffic should target this. |
+| **`VITE_API_BASE_URL`** | Yes | Full URL of the production API, **no trailing slash**, e.g. `https://ccweb-api-production.up.railway.app`. All browser API and Socket traffic should target this. |
 | **`VITE_WALLETCONNECT_PROJECT_ID`** | If using WalletConnect | From Reown (WalletConnect Cloud). |
 | **`VITE_APP_ENV`** | Optional | e.g. `production` for logging/behavior toggles. |
 
-**Previews:** either set `VITE_API_BASE_URL` to a staging API or the same production API; ensure **`CCWEB_ALLOWED_ORIGINS`** on Render includes each Vercel preview origin you use, or use a single staging API with fixed preview domain patterns.
+**Previews:** either set `VITE_API_BASE_URL` to a staging API or the same production API; ensure **`CCWEB_ALLOWED_ORIGINS`** on the API host includes each Vercel preview origin you use, or use a single staging API with fixed preview domain patterns.
 
 ### After deploy
 
@@ -82,7 +82,7 @@ If the API does **not** need to serve the built SPA, you can use a minimal build
 ## Quick verification commands (replace URLs)
 
 ```bash
-curl -sS -H "Accept: application/json" "https://YOUR-RENDER.onrender.com/"
+curl -sS -H "Accept: application/json" "https://ccweb-api-production.up.railway.app/"
 npm test && npm run build
 ```
 

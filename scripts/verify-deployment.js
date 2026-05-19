@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Post-deploy smoke checks for Render API + optional Postgres schema verify (when DATABASE_URL is set locally).
+ * Post-deploy smoke checks for the production API + optional Postgres schema verify (when DATABASE_URL is set locally).
  *
  * Before shipping, run locally or in CI: `npm run verify:predeploy` (imports + tests + Vite build).
  * Human checklist: docs/PRODUCTION_DEPLOY_CHECKLIST.md
  *
  * Usage:
- *   DEPLOY_VERIFY_API_URL=https://your-api.onrender.com node scripts/verify-deployment.js
- *   node scripts/verify-deployment.js https://your-api.onrender.com
+ *   DEPLOY_VERIFY_API_URL=https://ccweb-api-production.up.railway.app node scripts/verify-deployment.js
+ *   node scripts/verify-deployment.js https://ccweb-api-production.up.railway.app
  *
  * With DATABASE_URL in env (same shell as CI or ops laptop):
  *   DATABASE_URL=... DEPLOY_VERIFY_API_URL=https://api.example.com node scripts/verify-deployment.js
@@ -33,8 +33,8 @@ async function fetchJson(url, init = {}) {
 async function main() {
   if (!apiBase) {
     console.error(
-      "Usage: DEPLOY_VERIFY_API_URL=https://your-api.onrender.com node scripts/verify-deployment.js\n" +
-        "   or: node scripts/verify-deployment.js https://your-api.onrender.com"
+      "Usage: DEPLOY_VERIFY_API_URL=https://ccweb-api-production.up.railway.app node scripts/verify-deployment.js\n" +
+        "   or: node scripts/verify-deployment.js https://ccweb-api-production.up.railway.app"
     );
     process.exit(1);
   }

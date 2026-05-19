@@ -4600,6 +4600,18 @@ async function bootServer() {
     logger.warn({ msg: "migrations_skipped", detail: "CCWEB_SKIP_MIGRATIONS=1" });
   }
 
+  server.once("error", (err) => {
+    logger.error({
+      msg: "server_listen_error",
+      err: err.message,
+      code: err.code,
+      syscall: err.syscall,
+      errno: err.errno,
+      stack: err.stack,
+    });
+    process.exit(1);
+  });
+
   server.listen(PORT, HOST, () => {
     logger.info({
       msg: "server_listen",
@@ -4607,11 +4619,6 @@ async function bootServer() {
       port: PORT,
       env: process.env.NODE_ENV || "development",
     });
-  });
-
-  server.once("error", (err) => {
-    logger.error({ msg: "server_listen_error", err: err.message });
-    process.exit(1);
   });
 }
 

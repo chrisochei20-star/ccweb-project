@@ -2171,6 +2171,119 @@ async function serveFile(filePath, res) {
   }
 }
 
+/** Vite build output in production unless CCWEB_STATIC_ROOT overrides. */
+function staticRootDir() {
+  const override = (process.env.CCWEB_STATIC_ROOT || "").trim().toLowerCase();
+  if (override === "dist" || override === "public") {
+    return override;
+  }
+  return process.env.NODE_ENV === "production" ? "dist" : "public";
+}
+
+function pathnameHasKnownStaticExtension(urlPath) {
+  const base = path.posix.basename((urlPath || "").split("?")[0] || "");
+  const ext = path.extname(base).toLowerCase();
+  return Boolean(ext && Object.prototype.hasOwnProperty.call(MIME_TYPES, ext));
+}
+
+function resolvedPathIsUnderRoot(rootDir, candidatePath) {
+  const rootAbs = path.resolve(rootDir);
+  const targetAbs = path.resolve(candidatePath);
+  const rel = path.relative(rootAbs, targetAbs);
+  if (rel === "") return true;
+  return !rel.startsWith(`..${path.sep}`) && rel !== ".." && !path.isAbsolute(rel);
+}
+
+/**
+ * Serves built SPA (dist/ in production) or dev public/. SPA fallback returns index.html
+ * when the path is not a real file and does not look like a missing asset (e.g. .js).
+ */
+async function serveStaticSite(req, res, pathname) {
+  const method = req.method || "GET";
+  if (method !== "GET" && method !== "HEAD") {
+    res.writeHead(405, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Method Not Allowed");
+    return;
+  }
+
+  const root = path.resolve(process.cwd(), staticRootDir());
+  let decoded;
+  try {
+    decoded = decodeURIComponent((pathname || "/").split("?")[0]);
+  } catch {
+    sendJson(res, 400, { error: "Invalid path." });
+    return;
+  }
+
+  const parts = decoded.split(/[/\\]/).filter((p) => p && p !== ".");
+  if (parts.some((p) => p === "..")) {
+    sendJson(res, 403, { error: "Forbidden." });
+    return;
+  }
+
+  let resolved = path.resolve(path.join(root, ...parts));
+  if (!resolvedPathIsUnderRoot(root, resolved)) {
+    sendJson(res, 403, { error: "Forbidden." });
+    return;
+  }
+
+  let st = null;
+  try {
+    st = await fs.stat(resolved);
+  } catch {
+    st = null;
+  }
+
+  if (st && st.isDirectory()) {
+    resolved = path.resolve(resolved, "index.html");
+    try {
+      st = await fs.stat(resolved);
+    } catch {
+      st = null;
+    }
+  }
+
+  if (st && st.isFile()) {
+    if (method === "HEAD") {
+      const ext = path.extname(resolved).toLowerCase();
+      const contentType = MIME_TYPES[ext] || "application/octet-stream";
+      res.writeHead(200, { "Content-Type": contentType, "Content-Length": String(st.size) });
+      res.end();
+      return;
+    }
+    await serveFile(resolved, res);
+    return;
+  }
+
+  if (pathnameHasKnownStaticExtension(pathname)) {
+    sendJson(res, 404, { error: "Not found." });
+    return;
+  }
+
+  const indexResolved = path.resolve(root, "index.html");
+  if (!resolvedPathIsUnderRoot(root, indexResolved)) {
+    sendJson(res, 403, { error: "Forbidden." });
+    return;
+  }
+
+  let ist = null;
+  try {
+    ist = await fs.stat(indexResolved);
+  } catch {
+    ist = null;
+  }
+  if (!ist || !ist.isFile()) {
+    sendJson(res, 404, { error: "Not found." });
+    return;
+  }
+  if (method === "HEAD") {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Content-Length": String(ist.size) });
+    res.end();
+    return;
+  }
+  await serveFile(indexResolved, res);
+}
+
 function sendJson(res, statusCode, payload, req) {
   if (req) {
     setRawCorsHeaders(req, res, {
@@ -4073,6 +4186,8 @@ const server = http.createServer(async (req, res) => {
       sendRawHealth(res, req);
       return;
     }
+    await serveStaticSite(req, res, pathname);
+    return;
   }
 
   if (

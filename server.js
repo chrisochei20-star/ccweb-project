@@ -245,8 +245,19 @@ const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
+  ".mjs": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",
+  ".svg": "image/svg+xml; charset=utf-8",
+  ".ico": "image/x-icon",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".map": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
 };
 
 function clamp(value, min, max) {
@@ -4559,17 +4570,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const urlPath =
-    pathname === "/"
-      ? "/index.html"
-      : pathname === "/about"
-      ? "/about.html"
-      : pathname === "/system"
-      ? "/system.html"
-      : pathname;
-  const safePath = path.normalize(urlPath).replace(/^(\.\.[/\\])+/, "");
-  const filePath = path.join(__dirname, "public", safePath);
-  await serveFile(filePath, res);
+  await serveStaticSite(req, res, pathname);
 });
 
 attachChatSocket(server);

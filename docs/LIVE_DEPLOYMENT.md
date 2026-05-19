@@ -25,7 +25,7 @@ This repo cannot create **your** live URLs. Follow these steps in **Render** (or
 | `NODE_ENV` | `production` |
 | `DATABASE_URL` | Postgres URL |
 | `PUBLIC_APP_URL` | `https://your-app.vercel.app` (HTTPS, no trailing slash) |
-| `CCWEB_API_PUBLIC_URL` | `https://ccweb-api.onrender.com` (your API’s public URL) |
+| `CCWEB_API_PUBLIC_URL` | `https://ccweb-api-production.up.railway.app` (your API’s public URL) |
 | `CCWEB_ALLOWED_ORIGINS` | `https://your-app.vercel.app` (comma-separated if multiple) |
 | `AUTH_JWT_SECRET` | 32+ random chars |
 | `STRIPE_SECRET_KEY` | Live or test key |
@@ -42,7 +42,7 @@ This repo cannot create **your** live URLs. Follow these steps in **Render** (or
    - `curl -sS https://<api-host>/health`
    - `curl -sS https://<api-host>/api/v1/config`
 
-**Your live API URL** will be shown in Render (e.g. `https://ccweb-api.onrender.com`) — it is **not** fixed in this repository.
+**Your live API URL** is shown in your host’s dashboard (e.g. Railway: `https://ccweb-api-production.up.railway.app`) — it is **not** fixed in this repository.
 
 ## 3. Frontend (Vercel example)
 

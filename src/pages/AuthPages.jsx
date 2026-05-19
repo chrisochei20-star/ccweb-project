@@ -12,11 +12,11 @@ function mapNetworkError(err) {
     const base = getApiBaseUrl();
     if (base) {
       return (
-        `Cannot reach ${base}. Confirm Render is up, HTTPS works, and CCWEB_ALLOWED_ORIGINS includes your Vercel origin (e.g. https://ccweb-project-hoiy.vercel.app) or use * for open beta.`
+        `Cannot reach ${base}. Confirm the API is up over HTTPS and CCWEB_ALLOWED_ORIGINS includes your app origin (Vercel, Railway, or custom domain), or use * for open beta.`
       );
     }
     return (
-      "API URL is missing or unreachable. Set VITE_API_BASE_URL on Vercel to https://ccweb-render-main.onrender.com (or rely on the repo .env.production), redeploy, then verify Render CORS."
+      "API URL is missing or unreachable. Set VITE_API_BASE_URL at build time (e.g. on Vercel or Railway) to https://ccweb-api-production.up.railway.app (or rely on the repo .env.production), redeploy, then verify CORS (CCWEB_ALLOWED_ORIGINS)."
     );
   }
   return msg;
@@ -159,7 +159,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
     try {
       if (!getApiBaseUrl()) {
         throw new Error(
-        "API URL is not configured. Production builds use repo `.env.production` or set VITE_API_BASE_URL on Vercel; optional `<meta name=\"ccweb-api-base-url\">` fallback."
+        "API URL is not configured. Production builds use repo `.env.production` or set VITE_API_BASE_URL in the host build environment (Vercel, Railway, etc.); optional `<meta name=\"ccweb-api-base-url\">` fallback."
         );
       }
       if (mode === "signup") {
@@ -183,7 +183,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
         try {
           regData = await reg.json();
         } catch {
-          throw new Error(reg.ok ? "Invalid response from API." : `Registration failed (HTTP ${reg.status}). Check VITE_API_BASE_URL points to Render.`);
+          throw new Error(reg.ok ? "Invalid response from API." : `Registration failed (HTTP ${reg.status}). Check VITE_API_BASE_URL points to your API origin (e.g. Railway).`);
         }
         if (!reg.ok) throw new Error(regData.error || "Registration failed");
       }

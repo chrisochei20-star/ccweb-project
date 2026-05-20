@@ -65,7 +65,9 @@ function appendLearningChannelMessage(roomId, msg) {
 
 const PORT = Number(process.env.PORT || 3000);
 /** Render / Docker / cloud load balancers require binding all interfaces (not only localhost). */
-const HOST = (process.env.HOST || "0.0.0.0").trim() || "0.0.0.0";
+const rawListenHost = (process.env.HOST || "").trim();
+/** `HOST=[::]` is a mistaken URL-style value and breaks `server.listen`; use IPv6 `::` if you need v6-all. */
+const HOST = rawListenHost && rawListenHost !== "[::]" ? rawListenHost : "0.0.0.0";
 const CCWEB_ADMIN_KEY = (process.env.CCWEB_ADMIN_KEY || "").trim();
 const intelligenceApp = createIntelligenceApp();
 const growthApp = createGrowthApp();

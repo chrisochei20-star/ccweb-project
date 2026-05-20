@@ -1,4 +1,4 @@
-import { Gift, Radio, Share2, TrendingUp } from "lucide-react";
+import { Gift, Loader2, Radio, Share2, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
@@ -6,17 +6,18 @@ import { GrowthLoopCard } from "../components/GrowthLoopCard";
 import { ShareActions } from "../components/ShareCard";
 import { Skeleton } from "../components/ui/Skeleton";
 import { useCachedFetch } from "../hooks/useCachedFetch";
+import { getSessionToken } from "../session";
 
 export function EarnShellPage() {
-  const { user } = useOutletContext() || {};
-  const { data: analytics, loading, error, refresh } = useCachedFetch(user ? "/api/v1/analytics/user" : null, {
-    enabled: Boolean(user),
+  const { user, authHydrated } = useOutletContext() || {};
+  const { data: analytics, loading, error, refresh } = useCachedFetch(user && authHydrated ? "/api/v1/analytics/user" : null, {
+    enabled: Boolean(authHydrated && user),
     ttlMs: 60_000,
     toastOnError: true,
   });
 
-  const { data: lb, loading: lbLoading } = useCachedFetch(user ? "/api/v1/growth/leaderboards?limit=15" : null, {
-    enabled: Boolean(user),
+  const { data: lb, loading: lbLoading } = useCachedFetch(user && authHydrated ? "/api/v1/growth/leaderboards?limit=15" : null, {
+    enabled: Boolean(authHydrated && user),
     ttlMs: 120_000,
     toastOnError: true,
   });
@@ -56,7 +57,14 @@ export function EarnShellPage() {
         </p>
       </header>
 
-      {!user && (
+      {!authHydrated && getSessionToken() && (
+        <div className="ccweb-glass flex items-center gap-2 rounded-2xl p-5 text-sm text-ccweb-muted">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+          Checking session…
+        </div>
+      )}
+
+      {authHydrated && !user && (
         <div className="ccweb-glass rounded-2xl p-5">
           <p className="text-sm text-ccweb-muted">Sign in to load your credits, XP, invite link, and marketplace orders.</p>
           <Link to="/login" className="mt-3 inline-block ccweb-gradient-btn text-sm">

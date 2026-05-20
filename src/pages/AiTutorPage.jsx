@@ -20,6 +20,7 @@ import {
   fetchTutorMemory,
   streamTutor,
 } from "../api/coursesApi";
+import { getSessionToken } from "../session";
 
 const MODES = [
   { id: "general", label: "General", icon: BookOpen },
@@ -29,7 +30,7 @@ const MODES = [
 ];
 
 export function AiTutorPage() {
-  const { user } = useOutletContext() || {};
+  const { user, authHydrated } = useOutletContext() || {};
   const [mode, setMode] = useState("general");
   const [conversations, setConversations] = useState([]);
   const [activeId, setActiveId] = useState(null);
@@ -182,7 +183,24 @@ export function AiTutorPage() {
     }
   }
 
+  if (!authHydrated) {
+    return (
+      <div className="mx-auto flex min-h-[40vh] max-w-lg flex-col items-center justify-center gap-2 px-4 text-ccweb-muted" role="status">
+        <Loader2 className="h-7 w-7 shrink-0 animate-spin" aria-hidden />
+        <span className="text-sm">Loading AI tutor…</span>
+      </div>
+    );
+  }
+
   if (!user) {
+    if (getSessionToken()) {
+      return (
+        <div className="mx-auto flex min-h-[40vh] max-w-lg flex-col items-center justify-center gap-2 px-4 text-ccweb-muted" role="status">
+          <Loader2 className="h-7 w-7 shrink-0 animate-spin" aria-hidden />
+          <span className="text-sm">Syncing account…</span>
+        </div>
+      );
+    }
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
         <p className="text-ccweb-muted">Sign in to use the full CCWEB AI tutor with saved chats and memory.</p>

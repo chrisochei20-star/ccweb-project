@@ -10,11 +10,12 @@ import {
   postQuizSubmit,
   streamTutor,
 } from "../api/coursesApi";
+import { getSessionToken } from "../session";
 
 export function CourseLessonPage() {
   const { slug, lessonId } = useParams();
   const navigate = useNavigate();
-  const { user } = useOutletContext() || {};
+  const { user, authHydrated } = useOutletContext() || {};
   const [course, setCourse] = useState(null);
   const [lesson, setLesson] = useState(null);
   const [lessons, setLessons] = useState([]);
@@ -65,7 +66,7 @@ export function CourseLessonPage() {
   }, [slug, lessonId]);
 
   useEffect(() => {
-    if (!user || !lessonId || !slug) return;
+    if (!authHydrated || !user || !lessonId || !slug) return;
     let c = false;
     (async () => {
       try {
@@ -84,6 +85,7 @@ export function CourseLessonPage() {
   }, [user?.id, slug, lessonId]);
 
   async function markComplete() {
+    if (!authHydrated) return;
     if (!user || !lesson) {
       navigate("/login");
       return;
@@ -241,7 +243,13 @@ export function CourseLessonPage() {
           Full lesson context, your profile, and long-term memory power replies when{" "}
           <code className="text-ccweb-cyan">OPENAI_API_KEY</code> and PostgreSQL are set.
         </p>
-        {!user && <p className="mt-2 text-sm text-amber-200">Sign in to use the tutor.</p>}
+        {!authHydrated && getSessionToken() && (
+          <p className="mt-2 flex items-center gap-2 text-sm text-ccweb-muted">
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+            Checking session…
+          </p>
+        )}
+        {authHydrated && !user && <p className="mt-2 text-sm text-amber-200">Sign in to use the tutor.</p>}
         {user && (
           <>
             <div className="mt-4 max-h-64 space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-black/30 p-3 text-sm">

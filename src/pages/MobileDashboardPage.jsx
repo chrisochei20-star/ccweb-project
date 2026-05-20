@@ -8,6 +8,7 @@ import {
   Clock,
   Cpu,
   Gift,
+  Loader2,
   Sparkles,
   TrendingUp,
   Users,
@@ -18,7 +19,7 @@ import { useEffect, useMemo } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import { useCachedFetch } from "../hooks/useCachedFetch";
 import { http } from "../api/http";
-import { fetchMe } from "../session";
+import { fetchMe, getSessionToken } from "../session";
 import { Skeleton } from "../components/ui/Skeleton";
 
 function timeGreeting() {
@@ -53,11 +54,11 @@ const REC_ACCENT = {
 };
 
 export function MobileDashboardPage() {
-  const { user } = useOutletContext() || {};
+  const { user, authHydrated } = useOutletContext() || {};
   const canAnalytics = Boolean(user);
 
   useEffect(() => {
-    if (!user) return undefined;
+    if (!authHydrated || !user) return undefined;
     let cancelled = false;
     (async () => {
       try {
@@ -220,7 +221,13 @@ export function MobileDashboardPage() {
             Premium intelligence, courses, and automation — one fluid surface inspired by Linear, Discord, and modern
             on-chain apps.
           </p>
-          {!user && (
+          {!authHydrated && getSessionToken() && (
+            <p className="mt-3 flex items-center gap-2 text-sm text-ccweb-muted">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+              Checking session…
+            </p>
+          )}
+          {authHydrated && !user && (
             <div className="mt-6 flex flex-wrap gap-3">
               <Link to="/login" className="ccweb-gradient-btn inline-flex items-center gap-2 text-sm">
                 Sign in <ArrowRight className="h-4 w-4" />

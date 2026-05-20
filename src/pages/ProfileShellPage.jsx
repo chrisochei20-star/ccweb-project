@@ -1,4 +1,4 @@
-import { KeyRound, LogOut, Shield, Wallet } from "lucide-react";
+import { KeyRound, Loader2, LogOut, Shield, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { uploadProfileAvatar, uploadProfileBanner } from "../api/uploadsApi";
@@ -9,7 +9,7 @@ import { toast } from "../lib/toastBus";
 import { getSessionToken, logoutApi, setSession } from "../session";
 
 export function ProfileShellPage() {
-  const { user, setUser } = useOutletContext() || {};
+  const { user, setUser, authHydrated } = useOutletContext() || {};
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState("");
   const [pushEnabled, setPushEnabled] = useState(true);
@@ -150,7 +150,24 @@ export function ProfileShellPage() {
     navigate("/login");
   }
 
+  if (!authHydrated) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 px-4 text-ccweb-muted" role="status">
+        <Loader2 className="h-7 w-7 shrink-0 animate-spin" aria-hidden />
+        <span className="text-sm">Loading profile…</span>
+      </div>
+    );
+  }
+
   if (!user) {
+    if (getSessionToken()) {
+      return (
+        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 px-4 text-ccweb-muted" role="status">
+          <Loader2 className="h-7 w-7 shrink-0 animate-spin" aria-hidden />
+          <span className="text-sm">Syncing account…</span>
+        </div>
+      );
+    }
     return (
       <div className="mx-auto max-w-lg px-3 pb-24 pt-8">
         <div className="ccweb-glass rounded-2xl p-6 text-center">

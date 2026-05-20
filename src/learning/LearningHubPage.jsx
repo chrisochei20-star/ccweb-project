@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import { createStreamRoom, fetchLearningProfile, fetchLearningSessions, listStreamRooms } from "../api/learningApi";
 
 export function LearningHubPage({ compact = false }) {
-  const { user } = useOutletContext() || {};
+  const { user, authHydrated } = useOutletContext() || {};
   const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
   const [dbSessions, setDbSessions] = useState(null);
@@ -43,6 +44,7 @@ export function LearningHubPage({ compact = false }) {
   }, [user?.id]);
 
   async function handleCreate() {
+    if (!authHydrated) return;
     if (!user?.id) {
       navigate("/login");
       return;
@@ -109,7 +111,13 @@ export function LearningHubPage({ compact = false }) {
       <div className="learning-grid learning-grid--2">
         <article className="panel learning-glass">
           <h3>Your learning wallet</h3>
-          {!user && (
+          {!authHydrated && (
+            <p className="muted flex items-center gap-2">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+              Checking session…
+            </p>
+          )}
+          {authHydrated && !user && (
             <p className="muted">
               <Link to="/login">Sign in</Link> to sync credits, XP, and subscriptions from the server.
             </p>

@@ -71,7 +71,7 @@ export function ProfileShellPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
       setUser(data.user);
-      setSession(token, data.user, undefined);
+      setSession(token, data.user);
       if (data.betaSlug) setBetaSlug(data.betaSlug);
       setMsg(data.betaPublicUrl ? `Profile saved. Share: ${data.betaPublicUrl}` : "Profile saved.");
       toast.success("Profile saved.");
@@ -136,7 +136,7 @@ export function ProfileShellPage() {
       const me = await meRes.json();
       if (me.user) {
         setUser(me.user);
-        setSession(token, me.user, undefined);
+        setSession(token, me.user);
       }
     } catch (e) {
       setErr(e.message);
@@ -213,7 +213,7 @@ export function ProfileShellPage() {
               try {
                 const data = await uploadProfileBanner(file, token);
                 setUser(data.user);
-                setSession(token, data.user, undefined);
+                setSession(token, data.user);
                 setMsg("Banner updated.");
               } catch (e) {
                 setErr(e.message);
@@ -239,7 +239,7 @@ export function ProfileShellPage() {
                 try {
                   const data = await uploadProfileAvatar(file, token);
                   setUser(data.user);
-                  setSession(token, data.user, undefined);
+                  setSession(token, data.user);
                   setMsg("Profile photo updated.");
                 } catch (e) {
                   setErr(e.message);

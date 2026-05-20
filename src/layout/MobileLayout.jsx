@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "../components/shell/ThemeToggle";
 import { NotificationBell } from "../components/notifications/NotificationCenter";
-import { fetchMe, getStoredUser, logoutApi } from "../session";
+import { fetchMe, getSessionToken, getStoredUser, logoutApi } from "../session";
 import { captureInviteFromSearch, postBetaClientEvent } from "../lib/betaTelemetry";
 
 const tabs = [
@@ -39,6 +39,12 @@ export function MobileLayout() {
       cancelled = true;
     };
   }, []);
+
+  /** If /me transiently fails, keep React user in sync with sessionStorage (token + cached user). */
+  useEffect(() => {
+    if (user) return;
+    if (getSessionToken() && getStoredUser()) setUser(getStoredUser());
+  }, [user]);
 
   async function handleLogout() {
     await logoutApi();

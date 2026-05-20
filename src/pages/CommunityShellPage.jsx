@@ -1,4 +1,4 @@
-import { Hash, MessagesSquare, Newspaper, Radio, Sparkles, TrendingUp } from "lucide-react";
+import { Hash, Loader2, MessagesSquare, Newspaper, Radio, Sparkles, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import {
@@ -17,7 +17,7 @@ import { getSessionToken } from "../session";
 const CHANNELS = ["general", "trading", "builders"];
 
 export function CommunityShellPage() {
-  const { user } = useOutletContext() || {};
+  const { user, authHydrated } = useOutletContext() || {};
   const [tab, setTab] = useState("feed");
   const [posts, setPosts] = useState([]);
   const [feedMode, setFeedMode] = useState("latest");
@@ -235,7 +235,7 @@ export function CommunityShellPage() {
 
       {tab === "feed" && (
         <>
-          {user ? (
+          {authHydrated && user ? (
             <form
               onSubmit={submitPost}
               className="ccweb-card-premium space-y-3 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-transparent p-5"
@@ -255,6 +255,11 @@ export function CommunityShellPage() {
                 Post to feed
               </button>
             </form>
+          ) : !authHydrated ? (
+            <div className="ccweb-glass flex items-center justify-center gap-2 rounded-2xl p-5 text-sm text-ccweb-muted">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+              Checking session…
+            </div>
           ) : (
             <div className="ccweb-glass rounded-2xl p-5 text-center">
               <p className="text-sm text-ccweb-muted">
@@ -375,7 +380,7 @@ export function CommunityShellPage() {
                 </div>
               ))}
           </div>
-          {user ? (
+          {authHydrated && user ? (
             <form onSubmit={sendChat} className="flex gap-2 border-t border-white/10 bg-black/40 p-3">
               <input
                 className="ccweb-input flex-1 text-sm"
@@ -387,6 +392,11 @@ export function CommunityShellPage() {
                 Send
               </button>
             </form>
+          ) : !authHydrated ? (
+            <p className="flex items-center justify-center gap-2 border-t border-white/10 p-4 text-center text-sm text-ccweb-muted">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+              Checking session…
+            </p>
           ) : (
             <p className="border-t border-white/10 p-4 text-center text-sm text-ccweb-muted">
               <Link to="/login" className="text-ccweb-cyan underline">

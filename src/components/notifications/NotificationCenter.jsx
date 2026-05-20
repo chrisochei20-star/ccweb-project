@@ -5,6 +5,7 @@ import {
   Briefcase,
   Hammer,
   Heart,
+  Loader2,
   MessageCircle,
   Repeat2,
   Sparkles,
@@ -12,10 +13,12 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 import { fetchNotificationSummary, fetchNotifications, markNotificationsRead } from "../../api/notificationsApi";
 import { createChatSocket } from "../../lib/chatSocket";
 import { toast } from "../../lib/toastBus";
+import { getSessionToken } from "../../session";
+import { AuthSessionChecking } from "../auth/AuthSessionChecking";
 import { Skeleton } from "../ui/Skeleton";
 
 function hrefForNotification(n) {
@@ -68,6 +71,7 @@ function kindIcon(kind) {
 }
 
 export function NotificationCenterPage() {
+  const { authHydrated } = useOutletContext() || {};
   const [items, setItems] = useState([]);
   const [grouped, setGrouped] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
@@ -106,8 +110,9 @@ export function NotificationCenterPage() {
   );
 
   useEffect(() => {
+    if (!authHydrated) return;
     load(null, false);
-  }, [load]);
+  }, [load, authHydrated]);
 
   useEffect(() => {
     const socket = createChatSocket();
@@ -142,6 +147,17 @@ export function NotificationCenterPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 px-3 pb-24 pt-4 md:pb-10">
+      {!authHydrated && getSessionToken() && <AuthSessionChecking message="Loading notifications…" />}
+      {!authHydrated && !getSessionToken() && (
+        <div className="ccweb-card-premium rounded-2xl border border-white/10 p-8 text-center text-sm text-ccweb-muted">
+          <Link to="/login" className="ccweb-gradient-btn inline-block">
+            Sign in
+          </Link>{" "}
+          to see notifications.
+        </div>
+      )}
+      {authHydrated && (
+      <>
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="ccweb-kicker text-xs font-semibold uppercase tracking-widest text-ccweb-cyan">Activity</p>
@@ -265,11 +281,13 @@ export function NotificationCenterPage() {
           </button>
         </div>
       )}
+      </>
+      )}
     </div>
   );
 }
 
-export function NotificationBell({ user }) {
+export function NotificationBell({ user, authHydrated = true }) {
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [preview, setPreview] = useState([]);
@@ -277,6 +295,7 @@ export function NotificationBell({ user }) {
   const [err, setErr] = useState(null);
 
   const refresh = useCallback(async () => {
+    if (!authHydrated) return;
     if (!user) {
       setUnread(0);
       setPreview([]);
@@ -295,14 +314,14 @@ export function NotificationBell({ user }) {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, authHydrated]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
   useEffect(() => {
-    if (!user) return undefined;
+    if (!authHydrated || !user) return undefined;
     const socket = createChatSocket();
     if (!socket) return undefined;
     const onUp = () => refresh();
@@ -310,7 +329,17 @@ export function NotificationBell({ user }) {
     return () => {
       socket.off("notifications:update", onUp);
     };
-  }, [user, refresh]);
+  }, [user, refresh, authHydrated]);
+
+  if (!authHydrated && getSessionToken()) {
+    return (
+      <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-ccweb-muted" title="Checking session">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+      </div>
+    );
+  }
+
+  if (!authHydrated) return null;
 
   if (!user) return null;
 

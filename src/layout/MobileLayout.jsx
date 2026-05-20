@@ -1,4 +1,4 @@
-import { BookOpen, Briefcase, Hammer, MessageCircle, MessageSquare, Search, User } from "lucide-react";
+import { BookOpen, Briefcase, Hammer, Loader2, MessageCircle, MessageSquare, Search, User } from "lucide-react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "../components/shell/ThemeToggle";
@@ -18,6 +18,7 @@ const tabs = [
 
 export function MobileLayout() {
   const [user, setUser] = useState(() => getStoredUser());
+  const [authHydrated, setAuthHydrated] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -32,8 +33,12 @@ export function MobileLayout() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const u = await fetchMe();
-      if (!cancelled) setUser(u);
+      try {
+        const u = await fetchMe();
+        if (!cancelled) setUser(u);
+      } finally {
+        if (!cancelled) setAuthHydrated(true);
+      }
     })();
     return () => {
       cancelled = true;
@@ -64,7 +69,7 @@ export function MobileLayout() {
           </NavLink>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <NotificationBell user={user} />
+            <NotificationBell user={user} authHydrated={authHydrated} />
             {user ? (
               <>
                 <span className="hidden max-w-[140px] truncate text-xs text-ccweb-muted sm:inline">{user.displayName}</span>
@@ -72,6 +77,11 @@ export function MobileLayout() {
                   Log out
                 </button>
               </>
+            ) : !authHydrated ? (
+              <span className="flex items-center gap-1.5 text-xs text-ccweb-muted" title="Checking session">
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />
+                <span className="hidden sm:inline">Session…</span>
+              </span>
             ) : (
               <>
                 <NavLink to="/login" className="text-xs font-medium text-ccweb-muted hover:text-white">
@@ -118,7 +128,7 @@ export function MobileLayout() {
       </nav>
 
       <main className="ccweb-main-pad mx-auto max-w-3xl md:max-w-5xl">
-        <Outlet context={{ user, setUser }} />
+        <Outlet context={{ user, setUser, authHydrated }} />
       </main>
 
       <div className="ccweb-floating-shell lg:hidden" aria-hidden={false}>

@@ -18,7 +18,7 @@ function authHeaders() {
 }
 
 export function ChatPage() {
-  const { user } = useOutletContext() || {};
+  const { user, authHydrated } = useOutletContext() || {};
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState([]);
@@ -291,7 +291,24 @@ export function ChatPage() {
     }
   }
 
+  if (!authHydrated) {
+    return (
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 px-4 text-ccweb-muted" role="status">
+        <Loader2 className="h-6 w-6 shrink-0 animate-spin" aria-hidden />
+        <span className="text-sm">Loading messages…</span>
+      </div>
+    );
+  }
+
   if (!user) {
+    if (getSessionToken()) {
+      return (
+        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 px-4 text-ccweb-muted" role="status">
+          <Loader2 className="h-6 w-6 shrink-0 animate-spin" aria-hidden />
+          <span className="text-sm">Syncing account…</span>
+        </div>
+      );
+    }
     return (
       <div className="px-4 py-10 text-center text-sm text-ccweb-muted">
         Sign in to use direct messages.

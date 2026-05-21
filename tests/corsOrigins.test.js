@@ -41,6 +41,15 @@ describe("parseAllowedOrigins (CORS)", () => {
     expect(o.origins).toContain("https://b.com");
   });
 
+  it("normalizes trailing paths in CCWEB_ALLOWED_ORIGINS to scheme-host only", async () => {
+    process.env.CCWEB_ALLOWED_ORIGINS = "https://spa.vercel.app/foo, https://other.example/path";
+    const { parseAllowedOrigins } = await import("../security/expressHardDefaults.js");
+    const o = parseAllowedOrigins();
+    expect(o.mode).toBe("list");
+    expect(o.origins).toContain("https://spa.vercel.app");
+    expect(o.origins).toContain("https://other.example");
+  });
+
   it("allows all origins in production when CCWEB_BOOT_WARN_ONLY=1 and origins unset", async () => {
     process.env.NODE_ENV = "production";
     process.env.CCWEB_BOOT_WARN_ONLY = "1";

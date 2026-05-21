@@ -21,7 +21,10 @@ function corsOriginFn() {
   const allowed = new Set(parsed.origins || []);
   return (origin, cb) => {
     if (!origin) return cb(null, true);
-    return cb(null, allowed.has(origin));
+    if (allowed.has(origin)) return cb(null, true);
+    logger.warn({ msg: "socketio_cors_origin_rejected", origin, allowlistSize: allowed.size });
+    // Match express `cors` behaviour: `false` skips CORS handling; empty list denies with a proper preflight.
+    return cb(null, []);
   };
 }
 

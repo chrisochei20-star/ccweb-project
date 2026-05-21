@@ -11,6 +11,7 @@ const { decryptSecret } = require("./cryptoSecret");
 const totpLib = require("./totp");
 const { verifyGoogleIdToken, verifyAppleIdToken } = require("./oauthProviders");
 const { logger } = require("../logging/logger");
+const { trimOrigin } = require("../services/deploymentOrigins");
 
 function getClientIp(req) {
   return (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "";
@@ -18,10 +19,24 @@ function getClientIp(req) {
 
 function cookieOpts() {
   const secure = process.env.NODE_ENV === "production" || process.env.AUTH_COOKIE_SECURE === "1";
+  let sameSite = "lax";
+  if (secure) {
+    try {
+      const pub = trimOrigin(process.env.PUBLIC_APP_URL || "");
+      const api = trimOrigin(process.env.CCWEB_API_PUBLIC_URL || "");
+      if (pub && api && /^https:\/\//i.test(pub) && /^https:\/\//i.test(api)) {
+        if (new URL(pub).origin !== new URL(api).origin) {
+          sameSite = "none";
+        }
+      }
+    } catch {
+      /* keep lax */
+    }
+  }
   return {
     httpOnly: true,
     secure,
-    sameSite: "lax",
+    sameSite,
     path: "/",
     maxAge: 14 * 24 * 60 * 60 * 1000,
   };

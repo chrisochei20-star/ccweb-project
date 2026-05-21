@@ -5,7 +5,23 @@
 
 const helmet = require("helmet");
 const cors = require("cors");
+const vary = require("vary");
+const { logger } = require("../logging/logger");
 const { trimOrigin } = require("../services/deploymentOrigins");
+
+/** Normalize allowlist entries so `https://spa.vercel.app/` matches browser `Origin: https://spa.vercel.app`. */
+function normalizeOriginEntry(entry) {
+  const s = String(entry || "").trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      return new URL(s).origin;
+    } catch {
+      return trimOrigin(s);
+    }
+  }
+  return trimOrigin(s);
+}
 
 function parseAllowedOrigins() {
   const raw = (process.env.CCWEB_ALLOWED_ORIGINS || "").trim();
@@ -13,7 +29,7 @@ function parseAllowedOrigins() {
     return { mode: "all" };
   }
   if (raw) {
-    const origins = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    const origins = raw.split(",").map((s) => normalizeOriginEntry(s)).filter(Boolean);
     return { mode: "list", origins: mergePublicAppOrigin(origins) };
   }
   if (process.env.NODE_ENV === "production") {
@@ -37,10 +53,11 @@ function parseAllowedOrigins() {
 
 /** @param {string[]} origins */
 function mergePublicAppOrigin(origins) {
+  const normalized = origins.map((o) => normalizeOriginEntry(o)).filter(Boolean);
   const pub = publicAppOriginOrNull();
-  if (!pub) return origins;
-  if (origins.includes(pub)) return origins;
-  return [...origins, pub];
+  if (!pub) return normalized;
+  if (normalized.includes(pub)) return normalized;
+  return [...normalized, pub];
 }
 
 function publicAppOriginOrNull() {
@@ -68,6 +85,7 @@ function setRawCorsHeaders(req, res, opts = {}) {
   const maxAge = opts.maxAgeSec ?? 7200;
   const origin = String(req.headers.origin || "").trim();
   const parsed = parseAllowedOrigins();
+  const path = String(req.url || "").split("?")[0];
 
   res.setHeader("Access-Control-Allow-Methods", methods);
   res.setHeader("Access-Control-Allow-Headers", headers);
@@ -75,6 +93,7 @@ function setRawCorsHeaders(req, res, opts = {}) {
 
   if (parsed.mode === "all") {
     if (origin) {
+      vary(res, "Origin");
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Access-Control-Allow-Credentials", "true");
     } else {
@@ -85,9 +104,19 @@ function setRawCorsHeaders(req, res, opts = {}) {
 
   const allowed = parsed.origins;
   if (origin && allowed.includes(origin)) {
+    vary(res, "Origin");
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
     return;
+  }
+  if (origin && !allowed.includes(origin)) {
+    logger.warn({
+      msg: "cors_origin_rejected",
+      origin,
+      path,
+      method: req.method,
+      allowlistSize: allowed.length,
+    });
   }
   if (!origin) {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -109,7 +138,10 @@ function writeRawOptions(req, res, opts = {}) {
  * @param {import('express').Express} app
  */
 function applyExpressSecurity(app) {
-  if (process.env.TRUST_PROXY === "1") {
+  const trustProxyExplicit = process.env.TRUST_PROXY === "1";
+  const trustProxyRailway =
+    process.env.TRUST_PROXY !== "0" && Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PUBLIC_DOMAIN);
+  if (trustProxyExplicit || trustProxyRailway) {
     app.set("trust proxy", 1);
   }
 
@@ -131,7 +163,15 @@ function applyExpressSecurity(app) {
         : (origin, cb) => {
             if (!origin) return cb(null, true);
             if (allowed.includes(origin)) return cb(null, true);
-            return cb(null, false);
+            logger.warn({
+              msg: "cors_origin_rejected",
+              origin,
+              layer: "express_cors_delegate",
+              allowlistSize: allowed.length,
+            });
+            // `cors` treats `callback(null, false)` as "skip middleware" (no CORS headers) which breaks
+            // OPTIONS preflight. Use an empty allowlist so the library ends the preflight without ACAO.
+            return cb(null, []);
           },
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -143,7 +183,10 @@ function applyExpressSecurity(app) {
         "Accept",
         "Origin",
         "X-Requested-With",
+        "X-CCWEB-Admin",
       ],
+      maxAge: 7200,
+      optionsSuccessStatus: 204,
     })
   );
 }
@@ -151,6 +194,7 @@ function applyExpressSecurity(app) {
 module.exports = {
   applyExpressSecurity,
   parseAllowedOrigins,
+  normalizeOriginEntry,
   setRawCorsHeaders,
   writeRawOptions,
 };

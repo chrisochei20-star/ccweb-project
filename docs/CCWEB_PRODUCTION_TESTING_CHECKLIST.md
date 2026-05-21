@@ -1,6 +1,6 @@
 # CCWEB — production testing checklist
 
-Use **after** each production deploy (e.g. Railway API + SPA). Confirm **`VITE_API_BASE_URL`** matches your live API (e.g. `https://ccweb-api-production.up.railway.app`), **`CCWEB_ALLOWED_ORIGINS`** includes the SPA origin, and required secrets are set (`AUTH_JWT_SECRET`, `DATABASE_URL`, API keys as needed).
+Use **after** each production deploy (e.g. Railway API + SPA). Confirm **`VITE_API_BASE_URL`** matches your live API (e.g. `https://ccweb-api-production-a92c.up.railway.app`), **`CCWEB_ALLOWED_ORIGINS`** includes the SPA origin, and required secrets are set (`AUTH_JWT_SECRET`, `DATABASE_URL`, API keys as needed).
 
 **Related:** [PRODUCTION_DEPLOY_CHECKLIST.md](./PRODUCTION_DEPLOY_CHECKLIST.md) · [QA_PRODUCTION_CHECKLIST.md](./QA_PRODUCTION_CHECKLIST.md) (Playwright + shorter manual) · [POST_MERGE_VERIFICATION.md](./POST_MERGE_VERIFICATION.md)
 

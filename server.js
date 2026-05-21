@@ -4826,6 +4826,20 @@ async function bootServer() {
       port: PORT,
       env: process.env.NODE_ENV || "development",
     });
+    const parsed = parseAllowedOrigins();
+    const trustProxyExplicit = process.env.TRUST_PROXY === "1";
+    const trustProxyRailway =
+      process.env.TRUST_PROXY !== "0" && Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PUBLIC_DOMAIN);
+    logger.info({
+      msg: "ccweb_startup_diagnostics",
+      nodeEnv: process.env.NODE_ENV || null,
+      publicAppUrl: process.env.PUBLIC_APP_URL || null,
+      ccwebApiPublicUrl: process.env.CCWEB_API_PUBLIC_URL || null,
+      trustProxyEnabled: Boolean(trustProxyExplicit || trustProxyRailway),
+      corsMode: parsed.mode,
+      corsAllowlistSize: parsed.mode === "list" ? parsed.origins.length : null,
+      noteViteApiBaseUrl: "VITE_API_BASE_URL is browser build-time only; set on Vercel for the SPA bundle.",
+    });
   });
 }
 

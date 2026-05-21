@@ -5,9 +5,20 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const apiProxy = (env.VITE_DEV_API_PROXY_TARGET || "http://127.0.0.1:3000").replace(/\/$/, "");
+  const ccwebBuildId =
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.RAILWAY_GIT_COMMIT_SHA ||
+    process.env.RAILWAY_GIT_COMMIT ||
+    process.env.GITHUB_SHA ||
+    process.env.CCWEB_BUILD_ID ||
+    env.CCWEB_BUILD_ID ||
+    "";
 
   return {
     base: "/",
+    define: {
+      "import.meta.env.VITE_CCWEB_BUILD_ID": JSON.stringify(ccwebBuildId),
+    },
     plugins: [react(), tailwindcss()],
     server: {
       proxy: {

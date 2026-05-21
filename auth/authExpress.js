@@ -168,6 +168,15 @@ function mountAt(app, basePath) {
   });
 
   app.post(`${p}/login`, async (req, res) => {
+    if (process.env.CCWEB_AUTH_TRACE === "1") {
+      logger.info({
+        msg: "auth_login_post_hit",
+        path: `${p}/login`,
+        origin: req.headers.origin || null,
+        cookieNames: Object.keys(req.cookies || {}),
+        authorizationPresent: Boolean(String(req.headers.authorization || "").replace(/^Bearer\s+/i, "").trim()),
+      });
+    }
     try {
       const { ccwebUsers, sanitizeUser, buildUserProfile } = getDeps(req);
       const ip = getClientIp(req);
@@ -177,7 +186,16 @@ function mountAt(app, basePath) {
         return res.status(429).json({ error: out.error, code: "RATE_LIMITED" });
       }
       if (out.status === 423) return res.status(423).json({ error: out.error, code: "ACCOUNT_LOCKED" });
-      if (out.error) return res.status(401).json({ error: out.error, code: out.code || "AUTH_FAILED" });
+      if (out.error) {
+        if (process.env.CCWEB_AUTH_TRACE === "1") {
+          logger.info({
+            msg: "auth_login_post_denied",
+            origin: req.headers.origin || null,
+            code: out.code || "AUTH_FAILED",
+          });
+        }
+        return res.status(401).json({ error: out.error, code: out.code || "AUTH_FAILED" });
+      }
       if (out.needsTwoFactor) {
         return res.status(200).json({
           needsTwoFactor: true,
@@ -247,12 +265,37 @@ function mountAt(app, basePath) {
   });
 
   app.post(`${p}/refresh`, async (req, res) => {
+    if (process.env.CCWEB_AUTH_TRACE === "1") {
+      logger.info({
+        msg: "auth_refresh_attempt",
+        path: `${p}/refresh`,
+        origin: req.headers.origin || null,
+        hasBodyRefresh: Boolean(req.body?.refreshToken),
+        hasCookieRefresh: Boolean(req.cookies?.ccweb_refresh),
+        cookieNames: Object.keys(req.cookies || {}),
+      });
+    }
     try {
       const { ccwebUsers, sanitizeUser, buildUserProfile } = getDeps(req);
       const refresh = req.body?.refreshToken || req.cookies?.ccweb_refresh;
-      if (!refresh) return res.status(400).json({ error: "refreshToken required (body or ccweb_refresh cookie).", code: "REFRESH_REQUIRED" });
+      if (!refresh) {
+        if (process.env.CCWEB_AUTH_TRACE === "1") {
+          logger.warn({ msg: "auth_refresh_failure", reason: "missing_refresh", origin: req.headers.origin || null });
+        }
+        return res.status(400).json({ error: "refreshToken required (body or ccweb_refresh cookie).", code: "REFRESH_REQUIRED" });
+      }
       const out = await authEngine.refreshTokens(ccwebUsers, buildUserProfile, refresh);
-      if (out.error) return res.status(401).json({ error: out.error, code: out.code || "INVALID_REFRESH" });
+      if (out.error) {
+        if (process.env.CCWEB_AUTH_TRACE === "1") {
+          logger.warn({
+            msg: "auth_refresh_failure",
+            reason: "engine_reject",
+            code: out.code || "INVALID_REFRESH",
+            origin: req.headers.origin || null,
+          });
+        }
+        return res.status(401).json({ error: out.error, code: out.code || "INVALID_REFRESH" });
+      }
       sendTokens(
         res,
         200,
@@ -439,6 +482,7 @@ function createAuthApp(deps) {
         origin: req.headers.origin || null,
         authorizationPresent: Boolean(String(req.headers.authorization || "").replace(/^Bearer\s+/i, "").trim()),
         refreshCookiePresent: Boolean(req.cookies?.ccweb_refresh),
+        cookieNames: Object.keys(req.cookies || {}),
       });
       next();
     });

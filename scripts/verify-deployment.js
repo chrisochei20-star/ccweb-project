@@ -6,8 +6,8 @@
  * Human checklist: docs/PRODUCTION_DEPLOY_CHECKLIST.md
  *
  * Usage:
- *   DEPLOY_VERIFY_API_URL=https://ccweb-api-production.up.railway.app node scripts/verify-deployment.js
- *   node scripts/verify-deployment.js https://ccweb-api-production.up.railway.app
+ *   DEPLOY_VERIFY_API_URL=https://ccweb-api-production-a92c.up.railway.app node scripts/verify-deployment.js
+ *   node scripts/verify-deployment.js https://ccweb-api-production-a92c.up.railway.app
  *
  * With DATABASE_URL in env (same shell as CI or ops laptop):
  *   DATABASE_URL=... DEPLOY_VERIFY_API_URL=https://api.example.com node scripts/verify-deployment.js
@@ -33,8 +33,8 @@ async function fetchJson(url, init = {}) {
 async function main() {
   if (!apiBase) {
     console.error(
-      "Usage: DEPLOY_VERIFY_API_URL=https://ccweb-api-production.up.railway.app node scripts/verify-deployment.js\n" +
-        "   or: node scripts/verify-deployment.js https://ccweb-api-production.up.railway.app"
+      "Usage: DEPLOY_VERIFY_API_URL=https://ccweb-api-production-a92c.up.railway.app node scripts/verify-deployment.js\n" +
+        "   or: node scripts/verify-deployment.js https://ccweb-api-production-a92c.up.railway.app"
     );
     process.exit(1);
   }

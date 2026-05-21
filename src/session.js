@@ -80,7 +80,12 @@ async function tryRefreshSession() {
  * On 401, attempts refresh once (cookie or body refresh) before clearing session.
  */
 export async function fetchMe() {
+  const trace = import.meta.env.VITE_CCWEB_AUTH_TRACE === "1";
   let token = getSessionToken();
+  if (trace) {
+    // eslint-disable-next-line no-console -- gated auth diagnostics
+    console.info("[ccweb-auth-trace] fetchMe_start", { hasAccessToken: Boolean(token) });
+  }
 
   async function callMe(access) {
     const apiOrigin = getApiBaseUrl();
@@ -97,20 +102,41 @@ export async function fetchMe() {
   }
 
   if (!token) {
-    return tryRefreshSession();
+    const u = await tryRefreshSession();
+    if (trace) {
+      // eslint-disable-next-line no-console -- gated auth diagnostics
+      console.info("[ccweb-auth-trace] fetchMe_hydrate_no_token_refresh", { ok: Boolean(u) });
+    }
+    return u;
   }
 
   let res = await callMe(token);
+  if (trace) {
+    // eslint-disable-next-line no-console -- gated auth diagnostics
+    console.info("[ccweb-auth-trace] fetchMe_me_first", { status: res.status });
+  }
   if (res.status === 401) {
     await tryRefreshSession();
     token = getSessionToken();
+    if (trace) {
+      // eslint-disable-next-line no-console -- gated auth diagnostics
+      console.info("[ccweb-auth-trace] fetchMe_after_refresh_retry", { hasAccessToken: Boolean(token) });
+    }
     if (token) res = await callMe(token);
   }
 
   if (!res.ok) {
     if (res.status === 401 || res.status === 403) {
+      if (trace) {
+        // eslint-disable-next-line no-console -- gated auth diagnostics
+        console.info("[ccweb-auth-trace] fetchMe_clear_session", { status: res.status });
+      }
       clearSession();
       return null;
+    }
+    if (trace) {
+      // eslint-disable-next-line no-console -- gated auth diagnostics
+      console.info("[ccweb-auth-trace] fetchMe_fallback_stored_user", { status: res.status });
     }
     return getStoredUser();
   }
@@ -118,6 +144,10 @@ export async function fetchMe() {
   const nextAccess = data.accessToken || data.token;
   const nextRefresh = data.refreshToken;
   setSession(nextAccess || token, data.user, nextRefresh !== undefined ? nextRefresh : undefined);
+  if (trace) {
+    // eslint-disable-next-line no-console -- gated auth diagnostics
+    console.info("[ccweb-auth-trace] fetchMe_ok", { hasUser: Boolean(data.user) });
+  }
   return data.user;
 }
 

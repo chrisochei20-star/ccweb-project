@@ -1,5 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { logCcwebApiRuntimeDebug } from "./config/env";
 import App from "./App";
 import { ToastViewport } from "./components/ui/ToastViewport";
 import "./index.css";
@@ -14,6 +15,8 @@ try {
 } catch {
   /* ignore */
 }
+
+logCcwebApiRuntimeDebug();
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>

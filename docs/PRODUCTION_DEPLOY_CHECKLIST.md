@@ -1,4 +1,4 @@
-# CCWEB production deploy checklist (Vercel + Render)
+# CCWEB production deploy checklist (Vercel + Railway)
 
 Use this after changing domains or when “Cannot reach API” / CORS errors appear.
 
@@ -10,21 +10,21 @@ Use this after changing domains or when “Cannot reach API” / CORS errors app
 - [ ] Production URL loads (e.g. `https://ccweb-project-hoiy.vercel.app`)
 - [ ] Browser devtools → Network: API calls go to the Railway API host, not `localhost`
 
-## Backend (Render Web Service)
+## Backend (Railway service)
 
 - [ ] **Runtime**
-  - [ ] `NODE_VERSION` / engines: **Node 20.x** (see `package.json`, `render.yaml`)
-  - [ ] `PORT`: Render injects automatically; app listens on `0.0.0.0` (`HOST=0.0.0.0` in `render.yaml`)
+  - [ ] `NODE_VERSION` / engines: **Node 20.x** (see `package.json`)
+  - [ ] `PORT` / `HOST`: listen on `0.0.0.0` (see `server.js` / platform env)
 - [ ] **URLs & CORS**
   - [ ] `PUBLIC_APP_URL` = your **Vercel SPA** origin, e.g. `https://ccweb-project-hoiy.vercel.app` (https, no trailing slash)
   - [ ] `CCWEB_ALLOWED_ORIGINS` includes that same origin (comma-separated if several). Using `*` allows any origin (open beta only).
   - [ ] `PUBLIC_APP_URL` is **automatically merged** into the CORS allowlist when `CCWEB_ALLOWED_ORIGINS` is a comma-separated list (see `security/expressHardDefaults.js`).
 - [ ] **Auth**
   - [ ] `AUTH_JWT_SECRET` — 32+ characters
-  - [ ] `AUTH_REFRESH_IN_BODY=1` if the SPA reads refresh tokens from JSON (matches `render.yaml` default)
+  - [ ] `AUTH_REFRESH_IN_BODY=1` if the SPA reads refresh tokens from JSON
 - [ ] **Database**
   - [ ] `DATABASE_URL` (PostgreSQL)
-  - [ ] Build / pre-deploy runs `npm run migrate` successfully (check Render logs)
+  - [ ] Deploy / start runs migrations successfully (check Railway logs)
 
 ## Quick verification (browser or curl)
 
@@ -36,10 +36,10 @@ Use this after changing domains or when “Cannot reach API” / CORS errors app
 
 | Symptom | Likely cause |
 |--------|----------------|
-| “Cannot reach https://…” | API service asleep, crashed on boot (check logs), wrong URL, or DNS |
+| “Cannot reach https://…” | API service crashed on boot (check logs), wrong URL, or DNS |
 | CORS error in console | `CCWEB_ALLOWED_ORIGINS` / `PUBLIC_APP_URL` missing or wrong; preflight used to send `Access-Control-Allow-Origin: *` with credentials — fixed in server `writeRawOptions` + Express `cors` |
 | 502 / connection reset | App exited on `productionGate` (missing `DATABASE_URL`, `AUTH_JWT_SECRET`, etc.) |
 
 ## Legacy hostnames
 
-Replace any old API base URLs with **`https://ccweb-api-production.up.railway.app`** in Vercel env, Railway build env, `.env.production`, and documentation.
+The SPA rewrites any baked-in `*.onrender.com` API base to **`https://ccweb-api-production.up.railway.app`** at runtime, but you should still set **`VITE_API_BASE_URL`** correctly on Vercel and redeploy so the bundle and meta defaults stay clean.

@@ -1,12 +1,12 @@
 # CCWEB release QA checklist
 
-Use this before tagging a production release or promoting Render/Vercel deployments. Adjust URLs and secrets for your environment.
+Use this before tagging a production release or promoting Railway/Vercel deployments. Adjust URLs and secrets for your environment.
 
-**See also:** [POST_MERGE_VERIFICATION.md](./POST_MERGE_VERIFICATION.md) (after deploy), [DEPLOYMENT_RENDER_VERCEL.md](./DEPLOYMENT_RENDER_VERCEL.md) (Render + Vercel env).
+**See also:** [POST_MERGE_VERIFICATION.md](./POST_MERGE_VERIFICATION.md) (after deploy), [DEPLOYMENT_VERCEL_RAILWAY.md](./DEPLOYMENT_VERCEL_RAILWAY.md) (Railway + Vercel env).
 
 ## Environment and deploy
 
-- [ ] **Render API**: `NODE_VERSION` / Node 20.x, `PORT` bound correctly, `AUTH_JWT_SECRET` (32+ chars), `DATABASE_URL` when Postgres is required.
+- [ ] **Railway API** (or your Node host): Node 20.x, process listens on the platform `PORT`, `AUTH_JWT_SECRET` (32+ chars), `DATABASE_URL` when Postgres is required.
 - [ ] **CORS**: `CCWEB_ALLOWED_ORIGINS` includes the Vercel app origin and `PUBLIC_APP_URL` matches the canonical frontend URL.
 - [ ] **Vercel**: `VITE_API_BASE_URL` points at the live API (no `localhost`).
 - [ ] **Migrations**: `npm run migrate` (or server boot migrations) completes without SQL errors; `ccweb_notifications` actor/group columns present if using notification grouping.

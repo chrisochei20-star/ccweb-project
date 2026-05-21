@@ -2,9 +2,9 @@
 
 Use **`.env.production.example`** as the checklist for real hosts. Copy to `.env` on each machine (API vs build runner). `.env*` is gitignored except `.env.example` and `.env.production.example`.
 
-**Step-by-step cloud deploy:** see [LIVE_DEPLOYMENT.md](./LIVE_DEPLOYMENT.md) and repo root **`render.yaml`** (Render Blueprint for the API).
+**Step-by-step cloud deploy:** see [LIVE_DEPLOYMENT.md](./LIVE_DEPLOYMENT.md) and [DEPLOYMENT_VERCEL_RAILWAY.md](./DEPLOYMENT_VERCEL_RAILWAY.md). Optional **`render.yaml`** exists for alternate IaC workflows.
 
-**Repo layout (Render + Vercel from one tree):** [PROJECT_LAYOUT.md](./PROJECT_LAYOUT.md).
+**Repo layout (Railway API + Vercel SPA from one tree):** [PROJECT_LAYOUT.md](./PROJECT_LAYOUT.md).
 
 ## Split frontend + API
 

@@ -1,8 +1,8 @@
 # Post-merge verification checklist
 
-Run this **after** `main` is deployed to **Render** (API) and **Vercel** (frontend), with production-like env vars. Check each box; note failures with URL, user step, and response status.
+Run this **after** `main` is deployed to **Railway** (API) and **Vercel** (frontend), with production-like env vars. Check each box; note failures with URL, user step, and response status.
 
-**Prereqs:** `VITE_API_BASE_URL` on Vercel points at Render; Render has `AUTH_JWT_SECRET`, `DATABASE_URL` (if using Postgres features), `CCWEB_ALLOWED_ORIGINS` + `PUBLIC_APP_URL` including the Vercel origin.
+**Prereqs:** `VITE_API_BASE_URL` on Vercel points at `https://ccweb-api-production.up.railway.app` (or your live API); the API has `AUTH_JWT_SECRET`, `DATABASE_URL` (if using Postgres features), `CCWEB_ALLOWED_ORIGINS` + `PUBLIC_APP_URL` including the Vercel origin.
 
 ---
 
@@ -85,4 +85,4 @@ Run this **after** `main` is deployed to **Render** (API) and **Vercel** (fronte
 |------|--------|------|--------------------|
 | Completed | | | |
 
-Related: **`docs/QA_RELEASE_CHECKLIST.md`** (pre-release), **`docs/DEPLOYMENT_RENDER_VERCEL.md`** (env deploy).
+Related: **`docs/QA_RELEASE_CHECKLIST.md`** (pre-release), **`docs/DEPLOYMENT_VERCEL_RAILWAY.md`** (env deploy).

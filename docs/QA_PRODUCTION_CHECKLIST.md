@@ -1,5 +1,7 @@
 # CCWEB — production QA checklist
 
+**Extended manual matrix:** [CCWEB_PRODUCTION_TESTING_CHECKLIST.md](./CCWEB_PRODUCTION_TESTING_CHECKLIST.md) (auth, profile, community, chat, academy, Web3, payments, mobile, errors).
+
 Run this **after** you have live `PLAYWRIGHT_BASE_URL` (frontend) and `E2E_API_BASE_URL` (API). Automated smoke: `npm run test:e2e:production` (see `e2e/production-smoke.spec.js`).
 
 ## Automated (Playwright)

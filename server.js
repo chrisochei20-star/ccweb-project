@@ -27,7 +27,8 @@ const { handleStripeWebhook } = require("./payments/stripeWebhook");
 const { handleStripeCheckoutEscrow } = require("./payments/stripeCheckout");
 const { createPlatformApp } = require("./platformExpress");
 const { sendRawHealth } = require("./server/http/controllers/health.controller");
-const { writeRawOptions, setRawCorsHeaders } = require("./security/expressHardDefaults");
+const { writeRawOptions, setRawCorsHeaders, parseAllowedOrigins } = require("./security/expressHardDefaults");
+const { trimOrigin } = require("./services/deploymentOrigins");
 const { attachChatSocket, closeChatSocket, broadcastNotificationUpdate } = require("./server/realtime/chatSocket");
 const monetizationEngine = require("./services/monetizationEngine");
 const monPg = require("./db/persistenceMonetization");
@@ -2315,6 +2316,81 @@ function getBearerToken(req) {
   return m ? m[1].trim() : null;
 }
 
+/**
+ * Split-deploy diagnostics (enable on Railway with CCWEB_DIAGNOSTIC_ROUTES=1).
+ * @returns {boolean} true if the request was fully handled.
+ */
+function handleDiagnosticApiRequest(req, res, pathname) {
+  if (process.env.CCWEB_DIAGNOSTIC_ROUTES !== "1") return false;
+  if (pathname !== "/api/debug/cors" && pathname !== "/api/debug/auth" && pathname !== "/api/debug/session") {
+    return false;
+  }
+  if (req.method === "OPTIONS") {
+    writeRawOptions(req, res, {
+      methods: "GET, OPTIONS",
+      headers: "Accept, Content-Type, Authorization, Cookie, Origin, X-Requested-With",
+    });
+    return true;
+  }
+  if (req.method !== "GET") return false;
+
+  const origin = String(req.headers.origin || "").trim();
+  const parsed = parseAllowedOrigins();
+  const originAllowed =
+    parsed.mode === "all" || !origin || (parsed.mode === "list" && parsed.origins.includes(origin));
+
+  if (pathname === "/api/debug/cors") {
+    setRawCorsHeaders(req, res, {
+      methods: "GET, OPTIONS",
+      headers: "Accept, Content-Type, Authorization, Cookie, Origin",
+    });
+    sendJson(
+      res,
+      200,
+      {
+        ok: true,
+        path: "/api/debug/cors",
+        requestOrigin: origin || null,
+        corsMode: parsed.mode,
+        originAllowed,
+        allowedOriginsSample: parsed.mode === "list" ? parsed.origins.slice(0, 12) : null,
+        publicAppUrl: trimOrigin(process.env.PUBLIC_APP_URL || "") || null,
+        ccwebApiPublicUrl: trimOrigin(process.env.CCWEB_API_PUBLIC_URL || "") || null,
+        trustProxyEnabled:
+          process.env.TRUST_PROXY === "1" ||
+          (process.env.TRUST_PROXY !== "0" && Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PUBLIC_DOMAIN)),
+        nodeEnv: process.env.NODE_ENV || null,
+      },
+      req
+    );
+    return true;
+  }
+
+  setRawCorsHeaders(req, res, {
+    methods: "GET, OPTIONS",
+    headers: "Accept, Content-Type, Authorization, Cookie, Origin",
+  });
+  const bearer = getBearerToken(req);
+  const cookieHdr = String(req.headers.cookie || "");
+  const refreshPresent = /\bccweb_refresh=/.test(cookieHdr);
+  const uid = bearer ? authEngine.getUserIdFromAccess(bearer) : null;
+  sendJson(
+    res,
+    200,
+    {
+      ok: true,
+      path: pathname,
+      requestOrigin: origin || null,
+      originAllowed,
+      authorizationPresent: Boolean(bearer),
+      bearerUserId: uid,
+      refreshCookiePresent: refreshPresent,
+    },
+    req
+  );
+  return true;
+}
+
 async function readJsonBody(req) {
   const chunks = [];
   for await (const chunk of req) {
@@ -4162,6 +4238,10 @@ const server = http.createServer(async (req, res) => {
   const requestUrl = new URL(req.url, "https://ccweb.internal");
   const { pathname } = requestUrl;
 
+  if (handleDiagnosticApiRequest(req, res, pathname)) {
+    return;
+  }
+
   if (pathname === "/health" || pathname === "/api/health") {
     if (req.method === "OPTIONS") {
       writeRawOptions(req, res, {
@@ -4335,12 +4415,19 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (
-    (pathname.startsWith("/api/auth") || pathname.startsWith("/auth")) &&
-    ["GET", "POST", "OPTIONS"].includes(req.method || "GET")
-  ) {
-    delegateAuth(req, res);
-    return;
+  if (pathname.startsWith("/api/auth") || pathname.startsWith("/auth")) {
+    if (req.method === "OPTIONS") {
+      writeRawOptions(req, res, {
+        methods: "GET, POST, OPTIONS",
+        headers:
+          "Content-Type, Authorization, Cookie, Accept, Origin, X-Requested-With, CCWEB-API-Key, X-CCWEB-Admin",
+      });
+      return;
+    }
+    if (req.method === "GET" || req.method === "POST") {
+      delegateAuth(req, res);
+      return;
+    }
   }
 
   if (pathname === "/api/maps-search" && req.method === "GET") {

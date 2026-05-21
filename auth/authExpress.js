@@ -430,6 +430,20 @@ function createAuthApp(deps) {
   const cookieParser = require("cookie-parser");
   app.use(cookieParser());
 
+  if (process.env.CCWEB_AUTH_TRACE === "1") {
+    app.use((req, res, next) => {
+      logger.info({
+        msg: "auth_http",
+        method: req.method,
+        path: req.originalUrl || req.url,
+        origin: req.headers.origin || null,
+        authorizationPresent: Boolean(String(req.headers.authorization || "").replace(/^Bearer\s+/i, "").trim()),
+        refreshCookiePresent: Boolean(req.cookies?.ccweb_refresh),
+      });
+      next();
+    });
+  }
+
   mountAt(app, "/auth");
   mountAt(app, "/api/auth");
   mountWalletAt(app, "/auth");

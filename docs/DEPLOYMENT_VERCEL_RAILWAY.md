@@ -64,7 +64,7 @@ If the API does **not** serve the built SPA, you can use `npm ci` (or `npm ci &&
 
 | Variable | Required | Notes |
 |----------|----------|-------|
-| **`VITE_API_BASE_URL`** | Yes | Full URL of the production API, **no trailing slash**, e.g. `https://ccweb-api-production.up.railway.app`. All browser API and Socket traffic should target this. |
+| **`VITE_API_BASE_URL`** | Yes | Full URL of the production API, **no trailing slash**, e.g. `https://ccweb-api-production-a92c.up.railway.app`. All browser API and Socket traffic should target this. |
 | **`VITE_CCWEB_API_DEBUG`** | Optional | Set to `1` for one-off builds to log resolved API / auth / Socket hosts in the browser console; omit in normal production. |
 | **`VITE_WALLETCONNECT_PROJECT_ID`** | If using WalletConnect | From Reown (WalletConnect Cloud). |
 | **`VITE_APP_ENV`** | Optional | e.g. `production` for logging/behavior toggles. |

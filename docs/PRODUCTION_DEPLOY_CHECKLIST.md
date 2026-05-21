@@ -5,7 +5,7 @@ Use this after changing domains or when “Cannot reach API” / CORS errors app
 ## Frontend (Vercel)
 
 - [ ] **Project → Settings → Environment Variables → Production**
-  - [ ] `VITE_API_BASE_URL` = `https://ccweb-api-production.up.railway.app` (no trailing slash)
+  - [ ] `VITE_API_BASE_URL` = `https://ccweb-api-production-a92c.up.railway.app` (no trailing slash)
   - [ ] Redeploy after changing env vars (Vite bakes `VITE_*` at build time)
 - [ ] Production URL loads (e.g. `https://ccweb-project-hoiy.vercel.app`)
 - [ ] Browser devtools → Network: API calls go to the Railway API host, not `localhost`
@@ -28,8 +28,8 @@ Use this after changing domains or when “Cannot reach API” / CORS errors app
 
 ## Quick verification (browser or curl)
 
-- [ ] `GET https://ccweb-api-production.up.railway.app/health` → JSON with `"status":"ok"`
-- [ ] `GET https://ccweb-api-production.up.railway.app/` with header `Accept: application/json` (and **without** `text/html`) → JSON health; opening `/` in a **browser tab** still prefers HTML when `text/html` is in `Accept`
+- [ ] `GET https://ccweb-api-production-a92c.up.railway.app/health` → JSON with `"status":"ok"`
+- [ ] `GET https://ccweb-api-production-a92c.up.railway.app/` with header `Accept: application/json` (and **without** `text/html`) → JSON health; opening `/` in a **browser tab** still prefers HTML when `text/html` is in `Accept`
 - [ ] From the Vercel origin, open devtools → a `POST /api/auth/login` preflight (`OPTIONS`) returns **204** and `Access-Control-Allow-Origin` matches your Vercel origin (not `*` when using cookies / credentials)
 
 ## Common failures
@@ -42,4 +42,4 @@ Use this after changing domains or when “Cannot reach API” / CORS errors app
 
 ## Legacy hostnames
 
-The SPA rewrites any baked-in `*.onrender.com` API base to **`https://ccweb-api-production.up.railway.app`** at runtime, but you should still set **`VITE_API_BASE_URL`** correctly on Vercel and redeploy so the bundle and meta defaults stay clean.
+The SPA rewrites any baked-in `*.onrender.com` API base to **`https://ccweb-api-production-a92c.up.railway.app`** at runtime, but you should still set **`VITE_API_BASE_URL`** correctly on Vercel and redeploy so the bundle and meta defaults stay clean.

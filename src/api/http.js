@@ -46,7 +46,11 @@ http.interceptors.response.use(
           original.headers.Authorization = `Bearer ${access}`;
           return http(original);
         }
-      } catch {
+      } catch (e) {
+        if (import.meta.env.VITE_CCWEB_AUTH_TRACE === "1") {
+          // eslint-disable-next-line no-console -- gated auth diagnostics
+          console.warn("[ccweb-auth-trace] axios_refresh_failed", { message: e?.message || String(e) });
+        }
         clearSession();
       }
     }

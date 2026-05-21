@@ -12,7 +12,12 @@ function isLikelyNetworkFailure(err) {
   return /failed to fetch|load failed|networkerror/i.test(m);
 }
 
+function ccwebApiDiagEnabled() {
+  return import.meta.env.VITE_CCWEB_API_DEBUG === "1" || import.meta.env.VITE_CCWEB_AUTH_TRACE === "1";
+}
+
 function logApiFailure(phase, input, err, attempt) {
+  if (!ccwebApiDiagEnabled()) return;
   try {
     const raw = typeof input === "string" ? input : input?.url || String(input || "");
     let origin = raw;
@@ -28,7 +33,7 @@ function logApiFailure(phase, input, err, attempt) {
       message: String(err?.message || err),
       ...(trace ? { cause: err?.cause ? String(err.cause) : undefined, name: err?.name } : {}),
     };
-    // eslint-disable-next-line no-console -- intentional production diagnostics for split-deploy debugging
+    // eslint-disable-next-line no-console -- gated split-deploy diagnostics
     console.warn("[ccweb-api]", phase, payload);
   } catch {
     /* ignore */
@@ -83,7 +88,17 @@ export async function apiFetch(input, init = {}, options = {}) {
   const finalInit = mergeInitWithAuth(input, init);
   for (let i = 0; i < attempts; i += 1) {
     try {
-      return await fetch(input, finalInit);
+      const res = await fetch(input, finalInit);
+      if (!res.ok && ccwebApiDiagEnabled()) {
+        const urlStr = typeof input === "string" ? input : input instanceof Request ? input.url : input?.url || "";
+        // eslint-disable-next-line no-console -- gated split-deploy diagnostics
+        console.warn("[ccweb-api] fetch_non_ok", {
+          url: urlStr,
+          status: res.status,
+          statusText: res.statusText,
+        });
+      }
+      return res;
     } catch (e) {
       lastErr = e;
       logApiFailure("fetch_failed", input, e, i + 1);

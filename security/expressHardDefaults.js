@@ -129,8 +129,10 @@ function setRawCorsHeaders(req, res, opts = {}) {
  * @param {{ methods?: string; headers?: string }} [opts]
  */
 function writeRawOptions(req, res, opts = {}) {
-  if (process.env.CCWEB_AUTH_TRACE === "1") {
-    const path = String(req.url || "").split("?")[0];
+  const traceCors =
+    process.env.CCWEB_AUTH_TRACE === "1" || process.env.CCWEB_DIAGNOSTIC_ROUTES === "1";
+  const path = String(req.url || "").split("?")[0];
+  if (traceCors) {
     logger.info({
       msg: "http_options",
       path,
@@ -140,6 +142,16 @@ function writeRawOptions(req, res, opts = {}) {
     });
   }
   setRawCorsHeaders(req, res, opts);
+  if (traceCors) {
+    logger.info({
+      msg: "cors_preflight_result",
+      path,
+      origin: req.headers.origin || null,
+      accessControlAllowOrigin: res.getHeader("Access-Control-Allow-Origin") || null,
+      accessControlAllowCredentials: res.getHeader("Access-Control-Allow-Credentials") || null,
+      vary: res.getHeader("Vary") || null,
+    });
+  }
   res.writeHead(204);
   res.end();
 }

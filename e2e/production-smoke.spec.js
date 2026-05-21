@@ -3,7 +3,7 @@
  *
  * Usage (production / staging):
  *   PLAYWRIGHT_BASE_URL=https://your-app.vercel.app \
- *   E2E_API_BASE_URL=https://ccweb-api-production.up.railway.app \
+ *   E2E_API_BASE_URL=https://ccweb-api-production-a92c.up.railway.app \
  *   PRODUCTION_E2E=1 \
  *   npm run test:e2e:production
  *

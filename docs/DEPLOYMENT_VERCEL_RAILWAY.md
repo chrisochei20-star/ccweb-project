@@ -32,8 +32,9 @@ If the API does **not** serve the built SPA, you can use `npm ci` (or `npm ci &&
 |----------|---------|
 | **`AUTH_JWT_SECRET`** | 32+ random characters; required in production. |
 | **`PUBLIC_APP_URL`** | Canonical **frontend** URL (e.g. `https://your-app.vercel.app`). Merged into CORS allowlist when supported. |
-| **`CCWEB_ALLOWED_ORIGINS`** | Comma-separated origins allowed for credentialed API calls; **must include** the exact Vercel production URL (and preview URLs if you use previews). |
-| **`TRUST_PROXY`** | Set to `1` behind the platform reverse proxy so secure cookies and client IPs behave correctly. |
+| **`CCWEB_API_PUBLIC_URL`** | Public API base (https, no trailing slash). Used with `PUBLIC_APP_URL` so **`ccweb_refresh`** uses **`SameSite=None`** when the SPA and API are on different sites (Vercel → Railway). |
+| **`CCWEB_ALLOWED_ORIGINS`** | Comma-separated browser origins; each entry is normalized to `scheme://host` (trailing paths ignored). **Must match** the `Origin` header the browser sends (exact Vercel host, no trailing slash). |
+| **`TRUST_PROXY`** | Set to `1` to trust `X-Forwarded-*` from the load balancer (recommended). If unset, **Railway** is auto-detected via `RAILWAY_ENVIRONMENT` / `RAILWAY_PUBLIC_DOMAIN` and trust proxy is still enabled. Set **`TRUST_PROXY=0`** only for local debugging behind no proxy. |
 
 ### Realtime (chat + notifications)
 

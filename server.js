@@ -763,11 +763,14 @@ function handleLearningSse(req, res, streamRoomId) {
     sendJson(res, 404, { error: "Stream room not found." });
     return;
   }
+  setRawCorsHeaders(req, res, {
+    methods: "GET, OPTIONS",
+    headers: "Accept, Cache-Control, Content-Type, Authorization, Cookie, Origin, Last-Event-ID",
+  });
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
     Connection: "keep-alive",
-    "Access-Control-Allow-Origin": "*",
   });
   res.write(": ccweb-learning-sse\n\n");
   let set = learningStreamSseClients.get(streamRoomId);

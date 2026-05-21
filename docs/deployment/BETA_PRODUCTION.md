@@ -5,7 +5,7 @@ This document describes how to run CCWEB on separate **CDN frontend** and **API 
 ## Architecture
 
 - **Frontend**: Static SPA (Vite `dist/`) on **Vercel** or **Netlify** — global CDN.
-- **Backend**: Node `server.js` on **Render**, **Railway**, **Fly.io**, **AWS ECS**, **GCP Cloud Run**, etc.
+- **Backend**: Node `server.js` on **Railway**, **Fly.io**, **AWS ECS**, **GCP Cloud Run**, etc.
 - **Database**: **PostgreSQL** (Neon, Supabase, RDS, Cloud SQL). Set `DATABASE_URL` and run migrations: `node db/migrate.js`.
 
 ## Required environment variables
@@ -50,7 +50,7 @@ After deploy and DB migration:
 ## DNS
 
 - `beta.ccweb.app` → CDN (Vercel/Netlify)
-- `api.ccweb.app` → API load balancer / Render custom domain
+- `api.ccweb.app` → API load balancer / PaaS custom domain
 
 We cannot provision `ccweb.app` from this repository; configure DNS at your registrar.
 

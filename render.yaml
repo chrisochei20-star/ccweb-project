@@ -1,6 +1,6 @@
 # Render Blueprint — CCWEB API (Node). Connect this repo in Render → Blueprints → New Blueprint Instance.
 # Set every env var marked sync: false in the Render Dashboard (secrets + PUBLIC_APP_URL + CORS).
-# Docs: https://docs.render.com/blueprint-spec
+# Blueprint format — optional IaC for alternate hosts; schema is vendor-specific.
 
 services:
   - type: web

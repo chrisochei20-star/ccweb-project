@@ -1,6 +1,6 @@
 # CCWEB production layout (logical map)
 
-This repository ships as a **single deployable app**: Node serves `/api` and static/Vite `dist/` on one host (Render, Fly, VPS). The layout below maps your requested `ccweb/backend` and `ccweb/frontend` modules to **actual paths** in this repo—no duplicate codebase.
+This repository ships as a **single deployable app**: Node serves `/api` and static/Vite `dist/` on one host (Railway, Fly, VPS). The layout below maps your requested `ccweb/backend` and `ccweb/frontend` modules to **actual paths** in this repo—no duplicate codebase.
 
 | Requested path | Repository location |
 |----------------|---------------------|
@@ -32,7 +32,7 @@ This repository ships as a **single deployable app**: Node serves `/api` and sta
 - **Sessions (runtime):** `GET/POST /api/streaming/rooms`, attendance, finish  
 - **Learning (persistent):** `GET /api/learning/sessions`, `GET /api/learning/access/quote`, `POST /api/payments/stripe/checkout/learning`, tutor + SSE channel under `/api/learning/sessions/:streamRoomId/*`
 
-Deploy: build frontend (`npm run build`), run API (`npm start` or `node server.js`), point DNS + HTTPS terminator (Render/Fly/nginx) at the Node process.
+Deploy: build frontend (`npm run build`), run API (`npm start` or `node server.js`), point DNS + HTTPS terminator (Railway/Fly/nginx) at the Node process.
 
 ### Build from this folder
 

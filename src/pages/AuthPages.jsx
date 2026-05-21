@@ -12,11 +12,11 @@ function mapNetworkError(err) {
     const base = getApiBaseUrl();
     if (base) {
       return (
-        `Cannot reach ${base}. Confirm the API is up over HTTPS and CCWEB_ALLOWED_ORIGINS includes your app origin (Vercel, Railway, or custom domain), or use * for open beta.`
+        `Cannot reach ${base}. If the API is up, this is usually a CORS or browser-network block: set CCWEB_ALLOWED_ORIGINS on Railway to include your exact Vercel origin (https://…vercel.app), redeploy the API, and confirm VITE_API_BASE_URL matches your Railway public URL.`
       );
     }
     return (
-      "API URL is missing or unreachable. Set VITE_API_BASE_URL at build time (e.g. on Vercel or Railway) to https://ccweb-api-production.up.railway.app (or rely on the repo .env.production), redeploy, then verify CORS (CCWEB_ALLOWED_ORIGINS)."
+      "API URL is not configured. Set VITE_API_BASE_URL at build time on Vercel (and optionally VITE_CCWEB_PRODUCTION_API_FALLBACK), redeploy the SPA, and set CCWEB_ALLOWED_ORIGINS on the API."
     );
   }
   return msg;
@@ -157,6 +157,14 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
     setError(null);
     setLoading(true);
     try {
+      if (import.meta.env.VITE_CCWEB_AUTH_TRACE === "1") {
+        // eslint-disable-next-line no-console -- gated production diagnostics
+        console.info("[ccweb-auth-trace] submitPassword", {
+          apiBase: getApiBaseUrl(),
+          loginUrl: apiUrl("/api/auth/login"),
+          mode,
+        });
+      }
       if (!getApiBaseUrl()) {
         throw new Error(
         "API URL is not configured. Production builds use repo `.env.production` or set VITE_API_BASE_URL in the host build environment (Vercel, Railway, etc.); optional `<meta name=\"ccweb-api-base-url\">` fallback."
@@ -216,6 +224,10 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
       setUser(data.user);
       navigate("/", { replace: true });
     } catch (e) {
+      if (import.meta.env.VITE_CCWEB_AUTH_TRACE === "1") {
+        // eslint-disable-next-line no-console -- gated production diagnostics
+        console.warn("[ccweb-auth-trace] submitPassword error", e?.message || e, e?.cause || "");
+      }
       setError(mapNetworkError(e));
     } finally {
       setLoading(false);

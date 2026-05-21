@@ -21,8 +21,15 @@ function logApiFailure(phase, input, err, attempt) {
     } catch {
       /* keep raw */
     }
+    const trace = import.meta.env.VITE_CCWEB_AUTH_TRACE === "1";
+    const payload = {
+      attempt,
+      origin,
+      message: String(err?.message || err),
+      ...(trace ? { cause: err?.cause ? String(err.cause) : undefined, name: err?.name } : {}),
+    };
     // eslint-disable-next-line no-console -- intentional production diagnostics for split-deploy debugging
-    console.warn("[ccweb-api]", phase, { attempt, origin, message: String(err?.message || err) });
+    console.warn("[ccweb-api]", phase, payload);
   } catch {
     /* ignore */
   }

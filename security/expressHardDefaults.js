@@ -129,6 +129,16 @@ function setRawCorsHeaders(req, res, opts = {}) {
  * @param {{ methods?: string; headers?: string }} [opts]
  */
 function writeRawOptions(req, res, opts = {}) {
+  if (process.env.CCWEB_AUTH_TRACE === "1") {
+    const path = String(req.url || "").split("?")[0];
+    logger.info({
+      msg: "http_options",
+      path,
+      origin: req.headers.origin || null,
+      acrh: req.headers["access-control-request-headers"] || null,
+      acrm: req.headers["access-control-request-method"] || null,
+    });
+  }
   setRawCorsHeaders(req, res, opts);
   res.writeHead(204);
   res.end();

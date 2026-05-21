@@ -82,10 +82,23 @@ If you previously shipped a bundle with a wrong API host, trigger a **fresh prod
 
 ---
 
+### Split-deploy diagnostics (temporary)
+
+On **Railway**, set **`CCWEB_DIAGNOSTIC_ROUTES=1`**, redeploy, then from a browser (or curl with `-H Origin: https://your-spa.vercel.app`):
+
+- `GET https://<api>/api/debug/cors` — CORS mode, whether your `Origin` is allowlisted, public URLs, trust proxy.
+- `GET https://<api>/api/debug/auth` — presence of `Authorization` / `ccweb_refresh` cookie (no secrets echoed).
+
+Set **`CCWEB_AUTH_TRACE=1`** on Railway to log every **OPTIONS** and auth HTTP hit (structured logs).
+
+On **Vercel** build env (then redeploy SPA): **`VITE_CCWEB_API_DEBUG=1`** and/or **`VITE_CCWEB_AUTH_TRACE=1`** for browser console traces. Remove these flags after debugging.
+
+---
+
 ## Quick verification commands (replace URLs if needed)
 
 ```bash
-curl -sS -H "Accept: application/json" "https://ccweb-api-production.up.railway.app/"
+curl -sS -H "Accept: application/json" "https://<your-railway-api-host>/"
 npm test && npm run build
 ```
 

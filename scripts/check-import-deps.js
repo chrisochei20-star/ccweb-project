@@ -111,7 +111,8 @@ if (missing.length) {
   console.error("[verify:imports] Missing from package.json (imported but not declared):\n");
   for (const m of missing) {
     console.error(`  • ${m.name}`);
-    for (const f of [...new Set(m.files)].slice(0, 5)) console.error(`      ${f}`);
+    console.error("      imported from:");
+    for (const f of [...new Set(m.files)].slice(0, 5)) console.error(`        ${f}`);
     if (m.files.length > 5) console.error(`      … +${m.files.length - 5} more`);
   }
   process.exit(1);

@@ -231,7 +231,7 @@ function createDeveloperApp(opts) {
         period: "all_time",
         ...agg,
         platformTransactionsUsd: platformTotal?.grossUsd ?? null,
-        note: "Attributed rows include metadata.projectId or metadata.ccwebProjectId set at Stripe checkout (escrow supports ccwebProjectId on payment/create).",
+        note: "Attributed rows include metadata.projectId or metadata.ccwebProjectId set at Flutterwave checkout (escrow supports ccwebProjectId on payment/create).",
       });
     } catch (e) {
       next(e);

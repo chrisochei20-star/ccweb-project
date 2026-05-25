@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useOutletContext, useParams, useSearchParams } from "react-router-dom";
+import { closePaymentModal, useFlutterwave } from "flutterwave-react-v3";
 import {
   fetchChannelMessages,
   fetchSessionDetail,
@@ -8,9 +9,10 @@ import {
   listAttendance,
   postChannelMessage,
   postTutorMessage,
-  quoteAccess,
-  startLearningCheckout,
+  prepareLearningFlutterwave,
   upsertAttendance,
+  quoteAccess,
+  verifyFlutterwavePayment,
 } from "../api/learningApi";
 import { useLearningStore } from "../store/learningStore";
 import { apiUrl } from "../config/env";
@@ -20,6 +22,16 @@ function formatDuration(totalSeconds) {
   const s = totalSeconds % 60;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
+
+const IDLE_FW_CONFIG = {
+  public_key: "FLWPUBK_TEST-00000000000000000000000000000000-X",
+  tx_ref: "ccweb_idle",
+  amount: 1,
+  currency: "USD",
+  payment_options: "card",
+  customer: { email: "idle@ccweb.local", phone_number: "08000000000", name: "Idle" },
+  customizations: { title: "CCWEB", description: "Idle" },
+};
 
 export function LearningSessionPage() {
   const { roomId } = useParams();
@@ -41,10 +53,35 @@ export function LearningSessionPage() {
   const [hours, setHours] = useState(1);
   const [payLoading, setPayLoading] = useState(false);
   const [chatInput, setChatInput] = useState("");
+  const [fwLearnPayload, setFwLearnPayload] = useState(null);
   const [tutorInput, setTutorInput] = useState("");
   const [tutorThread, setTutorThread] = useState([]);
   const [elapsed, setElapsed] = useState(0);
   const [watchMinutes, setWatchMinutes] = useState(0);
+
+  const fwPublicKey = (import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY || "").trim();
+
+  const fwLearnConfig = useMemo(() => {
+    if (!fwLearnPayload || !fwPublicKey) return IDLE_FW_CONFIG;
+    return {
+      public_key: fwPublicKey,
+      tx_ref: fwLearnPayload.txRef,
+      amount: fwLearnPayload.amountUsd,
+      currency: "USD",
+      payment_options: "card",
+      customer: {
+        email: user?.email || "learner@ccweb.local",
+        phone_number: (user?.phone || "").toString().trim() || "08000000000",
+        name: user?.displayName || "Learner",
+      },
+      customizations: {
+        title: "CCWEB Learning",
+        description: fwLearnPayload.narration || "Learning checkout",
+      },
+    };
+  }, [fwLearnPayload, fwPublicKey, user?.email, user?.displayName, user?.phone]);
+
+  const openFlutterwaveLearning = useFlutterwave(fwLearnConfig);
 
   const { isLiveJoined, setSessionState, resetSession } = useLearningStore();
 
@@ -82,6 +119,33 @@ export function LearningSessionPage() {
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    if (!fwLearnPayload) return undefined;
+    let cancelled = false;
+    const payload = fwLearnPayload;
+    openFlutterwaveLearning({
+      callback: async () => {
+        if (cancelled) return;
+        closePaymentModal();
+        try {
+          await verifyFlutterwavePayment(payload.txRef);
+          setInfo("Payment verified — you can join or refresh access.");
+          setFwLearnPayload(null);
+          await loadAll();
+        } catch (e) {
+          setError(e.response?.data?.error || e.message || "Verification failed");
+          setFwLearnPayload(null);
+        }
+      },
+      onClose: () => {
+        if (!cancelled) setFwLearnPayload(null);
+      },
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fwLearnPayload, openFlutterwaveLearning, loadAll]);
 
   useEffect(() => {
     if (!roomId || !room) return undefined;
@@ -229,20 +293,28 @@ export function LearningSessionPage() {
       setError("Sign in to pay.");
       return;
     }
+    if (!fwPublicKey) {
+      setError("Payments are not configured (missing VITE_FLUTTERWAVE_PUBLIC_KEY).");
+      return;
+    }
     setPayLoading(true);
     setError("");
     try {
-      const successUrl = `${window.location.origin}/learn/session/${roomId}?paid=1`;
-      const cancelUrl = `${window.location.origin}/learn/session/${roomId}?cancelled=1`;
-      const { checkoutUrl } = await startLearningCheckout({
+      const prep = await prepareLearningFlutterwave({
         kind: "session_access",
         userId: uid,
         streamRoomId: roomId,
         hours,
-        successUrl,
-        cancelUrl,
       });
-      if (checkoutUrl) window.location.href = checkoutUrl;
+      if (prep.txRef && prep.amountUsd != null) {
+        setFwLearnPayload({
+          txRef: prep.txRef,
+          amountUsd: Number(prep.amountUsd),
+          narration: prep.narration || "Session access",
+        });
+        return;
+      }
+      setError(prep.error || "Could not start checkout.");
     } catch (e) {
       setError(e.response?.data?.error || e.message || "Checkout failed");
     } finally {
@@ -252,17 +324,27 @@ export function LearningSessionPage() {
 
   async function handleBuyCredits() {
     if (!uid) return;
+    if (!fwPublicKey) {
+      setError("Payments are not configured (missing VITE_FLUTTERWAVE_PUBLIC_KEY).");
+      return;
+    }
     setPayLoading(true);
     setError("");
     try {
-      const { checkoutUrl } = await startLearningCheckout({
+      const prep = await prepareLearningFlutterwave({
         kind: "credits",
         userId: uid,
         amountUsd: 25,
-        successUrl: `${window.location.origin}/learn?paid=1`,
-        cancelUrl: `${window.location.origin}/learn/session/${roomId}`,
       });
-      if (checkoutUrl) window.location.href = checkoutUrl;
+      if (prep.txRef && prep.amountUsd != null) {
+        setFwLearnPayload({
+          txRef: prep.txRef,
+          amountUsd: Number(prep.amountUsd),
+          narration: prep.narration || "Learning credits",
+        });
+        return;
+      }
+      setError(prep.error || "Could not start checkout.");
     } catch (e) {
       setError(e.response?.data?.error || e.message || "Checkout failed");
     } finally {
@@ -272,17 +354,27 @@ export function LearningSessionPage() {
 
   async function handleSubscribe(tier) {
     if (!uid) return;
+    if (!fwPublicKey) {
+      setError("Payments are not configured (missing VITE_FLUTTERWAVE_PUBLIC_KEY).");
+      return;
+    }
     setPayLoading(true);
     setError("");
     try {
-      const { checkoutUrl } = await startLearningCheckout({
+      const prep = await prepareLearningFlutterwave({
         kind: "subscription",
         userId: uid,
         tier,
-        successUrl: `${window.location.origin}/learn?paid=1`,
-        cancelUrl: `${window.location.origin}/learn/session/${roomId}`,
       });
-      if (checkoutUrl) window.location.href = checkoutUrl;
+      if (prep.txRef && prep.amountUsd != null) {
+        setFwLearnPayload({
+          txRef: prep.txRef,
+          amountUsd: Number(prep.amountUsd),
+          narration: prep.narration || "Subscription",
+        });
+        return;
+      }
+      setError(prep.error || "Could not start checkout.");
     } catch (e) {
       setError(e.response?.data?.error || e.message || "Checkout failed");
     } finally {
@@ -403,7 +495,7 @@ export function LearningSessionPage() {
               Leave
             </button>
             <button type="button" className="btn btn-outline" disabled={payLoading} onClick={handlePaySession}>
-              Stripe · pay session
+              Pay session
             </button>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>

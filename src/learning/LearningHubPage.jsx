@@ -103,7 +103,7 @@ export function LearningHubPage({ compact = false }) {
         <header className="page-header">
           <h1 className="section-title">Learn · AI streaming &amp; tutor</h1>
           <p className="muted">
-            Join live CCWEB sessions, track time, and pay securely with Stripe when the database is configured.
+            Join live CCWEB sessions, track time, and pay securely with Flutterwave when the database is configured.
           </p>
         </header>
       )}
@@ -124,8 +124,8 @@ export function LearningHubPage({ compact = false }) {
           )}
           {user && profile?.postgres === false && (
             <p className="muted">
-              Wallet sync requires <code>DATABASE_URL</code> on the API. Streaming and tutor chat still work; Stripe
-              checkout for learning returns 503 until Postgres is enabled.
+              Wallet sync requires <code>DATABASE_URL</code> on the API. Streaming and tutor chat still work; Flutterwave
+              checkout for learning returns 503 until Postgres and <code>FLUTTERWAVE_SECRET_KEY</code> are enabled.
             </p>
           )}
           {user && profile?.postgres && profile.profile && (
@@ -169,7 +169,7 @@ export function LearningHubPage({ compact = false }) {
             {creating ? "Creating…" : "Create live room"}
           </button>
           <p className="muted" style={{ marginTop: "0.75rem" }}>
-            Opens the live console with join, timer, Stripe pay-per-hour, tutor chat, and SSE updates.
+            Opens the live console with join, timer, Flutterwave pay-per-hour, tutor chat, and SSE updates.
           </p>
         </article>
       </div>

@@ -248,7 +248,7 @@ export function ProfileShellPage() {
               const token = getSessionToken();
               setMediaBusy((m) => ({ ...m, banner: true }));
               try {
-                const data = await uploadProfileBanner(file, token);
+                const data = await uploadProfileBanner(file);
                 setUser(data.user);
                 setSession(token, data.user);
                 setMsg("Banner updated.");
@@ -274,7 +274,7 @@ export function ProfileShellPage() {
                 const token = getSessionToken();
                 setMediaBusy((m) => ({ ...m, avatar: true }));
                 try {
-                  const data = await uploadProfileAvatar(file, token);
+                  const data = await uploadProfileAvatar(file);
                   setUser(data.user);
                   setSession(token, data.user);
                   setMsg("Profile photo updated.");

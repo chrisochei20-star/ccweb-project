@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchMe, getStoredUser } from "./session";
 import { getApiBaseUrl, apiUrl } from "./config/env";
+import { apiFetch } from "./lib/apiClient";
 
 const LS_KEY = "ccweb_dev_api_key";
 const LS_PROJECT = "ccweb_dev_onboarding_project_id";
@@ -67,7 +68,7 @@ export function DeveloperOnboardingPage() {
 
   const loadProjects = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl("/api/developer/projects"));
+      const res = await apiFetch(apiUrl("/api/developer/projects"));
       const data = await res.json();
       setProjects(data.projects || []);
       if (!projectId && data.projects?.length) {
@@ -107,9 +108,8 @@ export function DeveloperOnboardingPage() {
     setBusy(true);
     try {
       const ownerUserId = user?.email || user?.id || "anonymous";
-      const res = await fetch(apiUrl("/api/developer/projects"), {
+      const res = await apiFetch(apiUrl("/api/developer/projects"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: projectName.trim() || "My project", ownerUserId }),
       });
       const data = await res.json();
@@ -129,9 +129,8 @@ export function DeveloperOnboardingPage() {
     setBusy(true);
     try {
       const pid = projectId || (projects[0] && projects[0].id);
-      const res = await fetch(apiUrl("/api/developer/keys"), {
+      const res = await apiFetch(apiUrl("/api/developer/keys"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: keyName,
           projectId: pid,
@@ -154,9 +153,8 @@ export function DeveloperOnboardingPage() {
     setSandboxResult(null);
     setBusy(true);
     try {
-      const res = await fetch(apiUrl("/api/developer/sandbox/echo"), {
+      const res = await apiFetch(apiUrl("/api/developer/sandbox/echo"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source: "onboarding", at: new Date().toISOString() }),
       });
       const data = await res.json();
@@ -177,7 +175,7 @@ export function DeveloperOnboardingPage() {
     }
     setBusy(true);
     try {
-      const res = await fetch(apiUrl("/v1/analytics"), { headers: { CCWEB_API_KEY: apiKey.trim() } });
+      const res = await apiFetch(apiUrl("/v1/analytics"), { headers: { CCWEB_API_KEY: apiKey.trim() } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || res.statusText);
       setApiTestResult(data);

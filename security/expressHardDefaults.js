@@ -40,14 +40,19 @@ function parseAllowedOrigins() {
     const pub = publicAppOriginOrNull();
     return { mode: "list", origins: pub ? [pub] : [] };
   }
+  const fromEnv = (process.env.CCWEB_DEV_CORS_ORIGINS || "")
+    .split(",")
+    .map((s) => normalizeOriginEntry(s))
+    .filter(Boolean);
+  const apiOrigin = normalizeOriginEntry(process.env.VITE_API_BASE_URL || process.env.VITE_DEV_API_PROXY_TARGET || "");
+  const spaOrigin = normalizeOriginEntry(process.env.VITE_DEV_SPA_ORIGIN || "");
+  const merged = mergePublicAppOrigin([...fromEnv, ...(apiOrigin ? [apiOrigin] : []), ...(spaOrigin ? [spaOrigin] : [])]);
+  if (merged.length) {
+    return { mode: "list", origins: merged };
+  }
   return {
     mode: "list",
-    origins: mergePublicAppOrigin([
-      "http://localhost:5173",
-      "http://127.0.0.1:5173",
-      "http://localhost:3000",
-      "http://127.0.0.1:3000",
-    ]),
+    origins: mergePublicAppOrigin(["http://127.0.0.1:5173", "http://127.0.0.1:3000"]),
   };
 }
 

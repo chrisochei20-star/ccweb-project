@@ -12,13 +12,6 @@ const QUICK_EMOJIS = ["😀", "🙂", "😂", "🔥", "❤️", "👍", "🎉", 
 
 const CHAT_LOAD_TIMEOUT_MS = 8000;
 
-function authHeaders() {
-  const t = getSessionToken();
-  const h = {};
-  if (t) h.Authorization = `Bearer ${t}`;
-  return h;
-}
-
 export function ChatPage() {
   const { user, authHydrated } = useOutletContext() || {};
   const [err, setErr] = useState(null);
@@ -42,37 +35,26 @@ export function ChatPage() {
   const activeConv = useMemo(() => conversations.find((c) => c.chatId === activeId), [conversations, activeId]);
 
   const loadConversations = useCallback(async () => {
-    const res = await apiFetch(apiUrl("/api/v1/chat/conversations"), {
-      headers: authHeaders(),
-      credentials: "include",
-    });
+    const res = await apiFetch(apiUrl("/api/v1/chat/conversations"));
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "Could not load chats.");
     const list = data.conversations || [];
     setConversations(list);
     const ids = [...new Set(list.map((c) => c.otherUserId).filter(Boolean))];
     if (ids.length) {
-      const pr = await apiFetch(apiUrl(`/api/v1/chat/presence?ids=${encodeURIComponent(ids.join(","))}`), {
-        headers: authHeaders(),
-        credentials: "include",
-      });
+      const pr = await apiFetch(apiUrl(`/api/v1/chat/presence?ids=${encodeURIComponent(ids.join(","))}`));
       const pd = await pr.json().catch(() => ({}));
       if (pr.ok && pd.presence) setPresence(pd.presence);
     }
   }, []);
 
   const loadMessages = useCallback(async (chatId) => {
-    const res = await apiFetch(apiUrl(`/api/v1/chat/${encodeURIComponent(chatId)}/messages?limit=80`), {
-      headers: authHeaders(),
-      credentials: "include",
-    });
+    const res = await apiFetch(apiUrl(`/api/v1/chat/${encodeURIComponent(chatId)}/messages?limit=80`));
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "Could not load messages.");
     setMessages(data.messages || []);
     await apiFetch(apiUrl(`/api/v1/chat/${encodeURIComponent(chatId)}/read`), {
       method: "POST",
-      headers: authHeaders(),
-      credentials: "include",
     });
     setConversations((prev) =>
       prev.map((c) => (c.chatId === chatId ? { ...c, unreadCount: 0 } : c))
@@ -262,8 +244,6 @@ export function ChatPage() {
         apiUrl(`/api/v1/chat/${encodeURIComponent(activeId)}/messages`),
         {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders() },
-          credentials: "include",
           body: JSON.stringify({ body: text }),
         },
         { networkRetries: 1 }
@@ -296,8 +276,6 @@ export function ChatPage() {
         apiUrl(`/api/v1/chat/${encodeURIComponent(activeId)}/upload`),
         {
           method: "POST",
-          headers: authHeaders(),
-          credentials: "include",
           body: fd,
         },
         { networkRetries: 1 }
@@ -321,8 +299,6 @@ export function ChatPage() {
         apiUrl("/api/v1/chat/direct"),
         {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders() },
-          credentials: "include",
           body: JSON.stringify({ otherUserId: id }),
         },
         { networkRetries: 1 }

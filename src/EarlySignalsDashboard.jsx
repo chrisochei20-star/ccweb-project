@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiUrl } from "./config/env";
+import { apiFetch } from "./lib/apiClient";
+import { useStaleLoadingGuard } from "./hooks/useStaleLoadingGuard";
 
 const trendLabel = {
   warming: "Warming",
@@ -24,13 +26,14 @@ export function EarlySignalsDashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const loadStalled = useStaleLoadingGuard(loading);
   const [trackAddr, setTrackAddr] = useState("");
   const [trackLabel, setTrackLabel] = useState("");
   const [trackMsg, setTrackMsg] = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl("/api/intelligence/dashboard"));
+      const res = await apiFetch(apiUrl("/api/intelligence/dashboard"), {}, { timeoutMs: 8000 });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load dashboard");
       setData(json);
@@ -65,9 +68,8 @@ export function EarlySignalsDashboard() {
     setTrackMsg(null);
     if (!trackAddr.trim()) return;
     try {
-      const res = await fetch(apiUrl("/api/intelligence/tracked-wallets"), {
+      const res = await apiFetch(apiUrl("/api/intelligence/tracked-wallets"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           address: trackAddr.trim(),
           label: trackLabel.trim() || "Tracked wallet",
@@ -87,6 +89,15 @@ export function EarlySignalsDashboard() {
     } catch (e) {
       setTrackMsg(e.message);
     }
+  }
+
+  if (loading && loadStalled) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 px-4 text-center text-ccweb-muted">
+        <p>This view is taking longer than expected to load.</p>
+        <p className="text-sm text-rose-200/90">Check your network or API configuration, then refresh the page.</p>
+      </div>
+    );
   }
 
   if (loading) {

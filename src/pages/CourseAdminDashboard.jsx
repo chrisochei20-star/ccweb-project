@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { uploadCourseThumbnail } from "../api/uploadsApi";
 import { apiUrl } from "../config/env";
+import { apiFetch } from "../lib/apiClient";
 import { ImageDropZone } from "../components/uploads/ImageDropZone";
 
 /**
@@ -52,7 +53,7 @@ export function CourseAdminDashboard() {
   }
 
   async function post(path, body) {
-    const res = await fetch(apiUrl(path), {
+    const res = await apiFetch(apiUrl(path), {
       method: "POST",
       headers: headers(),
       body: JSON.stringify(body),

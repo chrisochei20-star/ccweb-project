@@ -36,6 +36,8 @@ function publicAppBaseUrl(opts = {}) {
   if (opts.allowDevFallback === false) {
     return "";
   }
+  const devSpa = trimOrigin(process.env.VITE_DEV_SPA_ORIGIN || process.env.CCWEB_DEV_SPA_ORIGIN || "");
+  if (devSpa) return devSpa;
   return "http://127.0.0.1:5173";
 }
 

@@ -1,6 +1,7 @@
 /** Browser fetch with bounded retries for transient network failures (split CDN ↔ API). */
 
 import { SESSION_TOKEN_KEY } from "../authStorageKeys";
+import { getSupabaseAccessToken } from "./supabaseClient";
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -40,12 +41,22 @@ function logApiFailure(phase, input, err, attempt) {
   }
 }
 
-function readAccessToken() {
+function readCcwebAccessToken() {
   try {
     return sessionStorage.getItem(SESSION_TOKEN_KEY);
   } catch {
     return null;
   }
+}
+
+/**
+ * Prefer Supabase session JWT when configured; otherwise CCWEB access token from sessionStorage.
+ * @returns {Promise<string|null>}
+ */
+export async function getApiBearerToken() {
+  const supa = await getSupabaseAccessToken();
+  if (supa) return supa;
+  return readCcwebAccessToken();
 }
 
 function shouldSkipAutoBearer(urlStr) {
@@ -55,21 +66,58 @@ function shouldSkipAutoBearer(urlStr) {
       path.includes("/api/auth/refresh") ||
       path.includes("/api/auth/login") ||
       path.includes("/api/auth/register") ||
-      path.includes("/api/auth/oauth/")
+      path.includes("/api/auth/oauth/") ||
+      path.includes("/api/auth/verify-email") ||
+      path.includes("/api/auth/password")
     );
   } catch {
     return false;
   }
 }
 
-function mergeInitWithAuth(input, init) {
+function isFormDataBody(body) {
+  return typeof FormData !== "undefined" && body instanceof FormData;
+}
+
+function mergeAbortSignals(parent, child) {
+  if (!parent) return child;
+  if (!child) return parent;
+  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.any === "function") {
+    return AbortSignal.any([parent, child]);
+  }
+  parent.addEventListener("abort", () => child.abort(), { once: true });
+  return child;
+}
+
+function applyRequestTimeout(init, timeoutMs) {
+  if (!timeoutMs || timeoutMs <= 0) return { init: init || {}, clearTimer: () => {} };
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  const clearTimer = () => clearTimeout(t);
+  const merged = { ...(init || {}) };
+  merged.signal = mergeAbortSignals(init?.signal, ctrl.signal);
+  return { init: merged, clearTimer };
+}
+
+/**
+ * @param {RequestInfo} input
+ * @param {RequestInit} [init]
+ * @returns {Promise<RequestInit>}
+ */
+async function mergeInitWithApiDefaults(input, init = {}) {
   const merged = { credentials: "include", ...init };
   const headers = new Headers(init.headers || {});
   const urlStr =
     typeof input === "string" ? input : input instanceof Request ? input.url : input?.url || "";
+
+  const hasCT = [...headers.keys()].some((k) => k.toLowerCase() === "content-type");
+  if (!hasCT && !isFormDataBody(merged.body)) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const hasAuth = [...headers.keys()].some((k) => k.toLowerCase() === "authorization");
   if (!hasAuth && !shouldSkipAutoBearer(urlStr)) {
-    const t = readAccessToken();
+    const t = await getApiBearerToken();
     if (t) headers.set("Authorization", `Bearer ${t}`);
   }
   merged.headers = headers;
@@ -79,33 +127,41 @@ function mergeInitWithAuth(input, init) {
 /**
  * @param {RequestInfo} input
  * @param {RequestInit} [init]
- * @param {{ networkRetries?: number }} [options]
+ * @param {{ networkRetries?: number; timeoutMs?: number }} [options]
  */
 export async function apiFetch(input, init = {}, options = {}) {
   const networkRetries = Number.isFinite(options.networkRetries) ? options.networkRetries : 2;
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 0;
+  const { init: timedInit, clearTimer } = applyRequestTimeout(init, timeoutMs);
   let lastErr;
   const attempts = 1 + Math.max(0, networkRetries);
-  const finalInit = mergeInitWithAuth(input, init);
-  for (let i = 0; i < attempts; i += 1) {
-    try {
-      const res = await fetch(input, finalInit);
-      if (!res.ok && ccwebApiDiagEnabled()) {
-        const urlStr = typeof input === "string" ? input : input instanceof Request ? input.url : input?.url || "";
-        // eslint-disable-next-line no-console -- gated split-deploy diagnostics
-        console.warn("[ccweb-api] fetch_non_ok", {
-          url: urlStr,
-          status: res.status,
-          statusText: res.statusText,
-        });
+  try {
+    for (let i = 0; i < attempts; i += 1) {
+      try {
+        const finalInit = await mergeInitWithApiDefaults(input, timedInit);
+        const res = await fetch(input, finalInit);
+        if (!res.ok && ccwebApiDiagEnabled()) {
+          const urlStr =
+            typeof input === "string" ? input : input instanceof Request ? input.url : input?.url || "";
+          // eslint-disable-next-line no-console -- gated split-deploy diagnostics
+          console.warn("[ccweb-api] fetch_non_ok", {
+            url: urlStr,
+            status: res.status,
+            statusText: res.statusText,
+          });
+        }
+        return res;
+      } catch (e) {
+        lastErr = e;
+        if (e?.name === "AbortError") throw e;
+        logApiFailure("fetch_failed", input, e, i + 1);
+        const canRetry = i < attempts - 1 && isLikelyNetworkFailure(e);
+        if (!canRetry) throw e;
+        await sleep(320 * (i + 1));
       }
-      return res;
-    } catch (e) {
-      lastErr = e;
-      logApiFailure("fetch_failed", input, e, i + 1);
-      const canRetry = i < attempts - 1 && isLikelyNetworkFailure(e);
-      if (!canRetry) throw e;
-      await sleep(320 * (i + 1));
     }
+    throw lastErr;
+  } finally {
+    clearTimer();
   }
-  throw lastErr;
 }

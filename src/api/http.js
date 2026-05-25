@@ -1,6 +1,7 @@
 import axios from "axios";
-import { clearSession, getRefreshToken, getSessionToken, getStoredUser, setSession } from "../session";
+import { clearSession, getRefreshToken, getStoredUser, setSession } from "../session";
 import { getApiBaseUrl } from "../config/env";
+import { getApiBearerToken } from "../lib/apiClient";
 
 export const http = axios.create({
   baseURL: "",
@@ -9,10 +10,10 @@ export const http = axios.create({
   withCredentials: true,
 });
 
-http.interceptors.request.use((config) => {
+http.interceptors.request.use(async (config) => {
   const base = getApiBaseUrl();
   if (base) config.baseURL = base;
-  const token = getSessionToken();
+  const token = await getApiBearerToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

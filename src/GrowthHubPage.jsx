@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { closePaymentModal, useFlutterwave } from "flutterwave-react-v3";
 import { http } from "./api/http";
 import { apiUrl } from "./config/env";
+import { apiFetch } from "./lib/apiClient";
 
 const IDLE_FW_CONFIG = {
   public_key: "FLWPUBK_TEST-00000000000000000000000000000000-X",
@@ -15,10 +16,7 @@ const IDLE_FW_CONFIG = {
 };
 
 async function j(path, opts = {}) {
-  const res = await fetch(apiUrl(`/api/growth${path}`), {
-    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
-    ...opts,
-  });
+  const res = await apiFetch(apiUrl(`/api/growth${path}`), opts);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
@@ -103,9 +101,8 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
       setCampaigns(cmp.campaigns || []);
       await loadOrders();
       if (user?.id) {
-        const leadRes = await fetch(apiUrl(`/api/growth/leads?businessId=${encodeURIComponent(user.id)}`)).then((r) =>
-          r.json()
-        );
+        const leadR = await apiFetch(apiUrl(`/api/growth/leads?businessId=${encodeURIComponent(user.id)}`));
+        const leadRes = await leadR.json();
         setLeads(leadRes.leads || []);
       } else {
         setLeads([]);

@@ -28,10 +28,12 @@ import { AiTutorPage } from "./pages/AiTutorPage";
 import { Skeleton } from "./components/ui/Skeleton";
 import { CcwebErrorBoundary } from "./components/CcwebErrorBoundary";
 import { NotificationCenterPage } from "./components/notifications/NotificationCenter";
+import { useStaleLoadingGuard } from "./hooks/useStaleLoadingGuard";
 import { LearningAdminPage } from "./learning/LearningAdminPage";
 import { LearningSessionPage } from "./learning/LearningSessionPage";
 import { BetaInvitePage, BetaTestUserPage, BetaUserSlugPage } from "./pages/BetaPages";
 import { apiUrl } from "./config/env";
+import { apiFetch } from "./lib/apiClient";
 
 const FindPage = lazy(() => import("./pages/FindPage").then((m) => ({ default: m.FindPage })));
 const EarlySignalsDashboard = lazy(() =>
@@ -320,7 +322,7 @@ function AiStreamingPage() {
 
   async function loadRooms() {
     try {
-      const res = await fetch(apiUrl("/api/streaming/rooms"));
+      const res = await apiFetch(apiUrl("/api/streaming/rooms"));
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Could not load rooms.");
@@ -350,9 +352,8 @@ function AiStreamingPage() {
     setError("");
     try {
       const expectedGross = Number(payload.expectedAudience) * Number(payload.expectedArppuUsd);
-      const res = await fetch(apiUrl("/api/streaming/rooms"), {
+      const res = await apiFetch(apiUrl("/api/streaming/rooms"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           roomName: payload.roomTitle,
           topic: `${payload.curriculum} live masterclass`,
@@ -388,9 +389,8 @@ function AiStreamingPage() {
         throw new Error(roomData.error || "Could not create room.");
       }
 
-      const payoutRes = await fetch(apiUrl("/api/streaming/payouts"), {
+      const payoutRes = await apiFetch(apiUrl("/api/streaming/payouts"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           roomId: roomData.id,
           periodLabel: "Projected first live cycle",
@@ -423,9 +423,8 @@ function AiStreamingPage() {
     setJoinLoading(true);
     setJoinError("");
     try {
-      const res = await fetch(apiUrl(`/api/streaming/rooms/${selectedRoomId}/attendance`), {
+      const res = await apiFetch(apiUrl(`/api/streaming/rooms/${selectedRoomId}/attendance`), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: joinPayload.userId,
           displayName: joinPayload.displayName,
@@ -459,9 +458,8 @@ function AiStreamingPage() {
     setJoinLoading(true);
     setJoinError("");
     try {
-      const res = await fetch(apiUrl(`/api/streaming/rooms/${selectedRoomId}/attendance`), {
+      const res = await apiFetch(apiUrl(`/api/streaming/rooms/${selectedRoomId}/attendance`), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: joinPayload.userId,
           displayName: joinPayload.displayName,
@@ -494,9 +492,8 @@ function AiStreamingPage() {
     setJoinLoading(true);
     setJoinError("");
     try {
-      const res = await fetch(apiUrl(`/api/streaming/rooms/${selectedRoomId}/finish`), {
+      const res = await apiFetch(apiUrl(`/api/streaming/rooms/${selectedRoomId}/finish`), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           finishedBy: "ccweb-stream-studio",
         }),
@@ -1004,7 +1001,7 @@ function VerifyEmailPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(apiUrl(`/api/auth/verify-email?token=${encodeURIComponent(token)}`));
+        const res = await apiFetch(apiUrl(`/api/auth/verify-email?token=${encodeURIComponent(token)}`));
         const data = await res.json();
         if (cancelled) return;
         if (res.ok) setMsg("Your email is verified. You can continue using the app.");
@@ -1045,9 +1042,8 @@ function ForgotPasswordPage() {
     setErr(null);
     setMsg(null);
     try {
-      const res = await fetch(apiUrl("/api/auth/password/request"), {
+      const res = await apiFetch(apiUrl("/api/auth/password/request"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
       const data = await res.json();
@@ -1064,9 +1060,8 @@ function ForgotPasswordPage() {
     setErr(null);
     setMsg(null);
     try {
-      const res = await fetch(apiUrl("/api/auth/password/reset"), {
+      const res = await apiFetch(apiUrl("/api/auth/password/reset"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, token, newPassword: pw }),
       });
       const data = await res.json();
@@ -1196,14 +1191,31 @@ function TermsPage() {
 function AiAgentsPage() {
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState(null);
 
   useEffect(() => {
-    fetch(apiUrl("/api/build/agents"))
-      .then((r) => r.json())
-      .then((d) => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setLoadErr(null);
+      try {
+        const res = await apiFetch(apiUrl("/api/build/agents"), {}, { timeoutMs: 8000 });
+        const d = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) throw new Error(d.error || "Could not load agents");
         setAgents(d.agents || []);
-        setLoading(false);
-      });
+      } catch (e) {
+        if (!cancelled) {
+          setLoadErr(e?.name === "AbortError" ? "Loading timed out. Try again." : e.message || "Could not load agents");
+          setAgents([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -1217,6 +1229,7 @@ function AiAgentsPage() {
       </header>
 
       {loading && <p className="muted">Loading agents...</p>}
+      {loadErr && !loading && <p className="muted" style={{ color: "#f87171" }}>{loadErr}</p>}
 
       <div className="agents-grid">
         {agents.map((agent) => (
@@ -1257,20 +1270,23 @@ function DappDashboardPage() {
   const [transactions, setTransactions] = useState([]);
   const [tab, setTab] = useState("overview");
   const [loading, setLoading] = useState(true);
+  const loadStalled = useStaleLoadingGuard(loading);
   const [expandedDeploy, setExpandedDeploy] = useState(null);
 
   async function loadAll() {
     setLoading(true);
     try {
       const [statsRes, deploymentsRes, txRes] = await Promise.all([
-        fetch(apiUrl("/api/dapp/dashboard")).then((r) => r.json()),
-        fetch(apiUrl("/api/dapp/deployments")).then((r) => r.json()),
-        fetch(apiUrl("/api/dapp/transactions")).then((r) => r.json()),
+        apiFetch(apiUrl("/api/dapp/dashboard"), {}, { timeoutMs: 8000 }).then((r) => r.json()),
+        apiFetch(apiUrl("/api/dapp/deployments"), {}, { timeoutMs: 8000 }).then((r) => r.json()),
+        apiFetch(apiUrl("/api/dapp/transactions"), {}, { timeoutMs: 8000 }).then((r) => r.json()),
       ]);
       setStats(statsRes);
       setDeployments(deploymentsRes.deployments || []);
       setTransactions(txRes.transactions || []);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setLoading(false);
   }
 
@@ -1302,7 +1318,16 @@ function DappDashboardPage() {
         ))}
       </div>
 
-      {loading && <p className="muted" style={{ textAlign: "center", padding: "2rem" }}>Loading dashboard...</p>}
+      {loading && loadStalled && (
+        <p className="muted" style={{ textAlign: "center", padding: "2rem", color: "#f87171" }}>
+          Dashboard data is taking too long to load. Check your connection and use Refresh.
+        </p>
+      )}
+      {loading && !loadStalled && (
+        <p className="muted" style={{ textAlign: "center", padding: "2rem" }}>
+          Loading dashboard...
+        </p>
+      )}
 
       {!loading && tab === "overview" && stats && (
         <>

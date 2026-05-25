@@ -1,13 +1,5 @@
 import { apiFetch } from "../lib/apiClient";
 import { apiUrl } from "../config/env";
-import { getSessionToken } from "../session";
-
-function authHeaders() {
-  const t = getSessionToken();
-  const h = { "Content-Type": "application/json" };
-  if (t) h.Authorization = `Bearer ${t}`;
-  return h;
-}
 
 export async function fetchCourseCategories() {
   const res = await apiFetch(apiUrl("/api/v1/courses/catalog/categories"));
@@ -32,27 +24,21 @@ export async function fetchRecommendedCourses(params = {}) {
   if (params.category) qs.set("category", params.category);
   if (params.exclude) qs.set("exclude", params.exclude);
   const path = apiUrl("/api/v1/courses/catalog/recommended") + (qs.toString() ? `?${qs}` : "");
-  const res = await apiFetch(path, { headers: authHeaders(), credentials: "include" });
+  const res = await apiFetch(path);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Recommended failed");
   return data.courses || [];
 }
 
 export async function fetchCourseDetail(slug) {
-  const res = await apiFetch(apiUrl(`/api/v1/courses/catalog/${encodeURIComponent(slug)}`), {
-    headers: authHeaders(),
-    credentials: "include",
-  });
+  const res = await apiFetch(apiUrl(`/api/v1/courses/catalog/${encodeURIComponent(slug)}`));
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Course failed");
   return data;
 }
 
 export async function fetchLessonQuiz(lessonId) {
-  const res = await apiFetch(apiUrl(`/api/v1/courses/catalog/lessons/${encodeURIComponent(lessonId)}/quiz`), {
-    headers: authHeaders(),
-    credentials: "include",
-  });
+  const res = await apiFetch(apiUrl(`/api/v1/courses/catalog/lessons/${encodeURIComponent(lessonId)}/quiz`));
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Quiz not available");
   return data.quiz;
@@ -61,8 +47,6 @@ export async function fetchLessonQuiz(lessonId) {
 export async function postLessonComplete(lessonId) {
   const res = await apiFetch(apiUrl(`/api/v1/courses/me/lessons/${encodeURIComponent(lessonId)}/complete`), {
     method: "POST",
-    headers: authHeaders(),
-    credentials: "include",
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Could not save progress");
@@ -72,8 +56,6 @@ export async function postLessonComplete(lessonId) {
 export async function postQuizSubmit(quizId, answers) {
   const res = await apiFetch(apiUrl(`/api/v1/courses/me/quiz/${encodeURIComponent(quizId)}/submit`), {
     method: "POST",
-    headers: authHeaders(),
-    credentials: "include",
     body: JSON.stringify({ answers }),
   });
   const data = await res.json().catch(() => ({}));
@@ -84,8 +66,6 @@ export async function postQuizSubmit(quizId, answers) {
 export async function postBookmark(courseId) {
   const res = await apiFetch(apiUrl(`/api/v1/courses/me/bookmarks/${encodeURIComponent(courseId)}`), {
     method: "POST",
-    headers: authHeaders(),
-    credentials: "include",
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -96,8 +76,6 @@ export async function postBookmark(courseId) {
 export async function deleteBookmark(courseId) {
   const res = await apiFetch(apiUrl(`/api/v1/courses/me/bookmarks/${encodeURIComponent(courseId)}`), {
     method: "DELETE",
-    headers: authHeaders(),
-    credentials: "include",
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -106,10 +84,7 @@ export async function deleteBookmark(courseId) {
 }
 
 export async function fetchMyBookmarks() {
-  const res = await apiFetch(apiUrl("/api/v1/courses/me/bookmarks"), {
-    headers: authHeaders(),
-    credentials: "include",
-  });
+  const res = await apiFetch(apiUrl("/api/v1/courses/me/bookmarks"));
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Bookmarks failed");
   return data.bookmarks || [];
@@ -123,10 +98,8 @@ export async function streamTutor({
   conversationId,
   onDelta,
 }) {
-  const res = await fetch(apiUrl("/api/v1/courses/tutor/stream"), {
+  const res = await apiFetch(apiUrl("/api/v1/courses/tutor/stream"), {
     method: "POST",
-    headers: authHeaders(),
-    credentials: "include",
     body: JSON.stringify({
       message,
       courseSlug,
@@ -156,8 +129,6 @@ export async function streamTutor({
 export async function ensureTutorConversation({ mode = "general", courseSlug, lessonId, forceNew = false }) {
   const res = await apiFetch(apiUrl("/api/v1/courses/tutor/conversations"), {
     method: "POST",
-    headers: authHeaders(),
-    credentials: "include",
     body: JSON.stringify({ mode, courseSlug, lessonId, forceNew }),
   });
   const data = await res.json().catch(() => ({}));
@@ -166,10 +137,7 @@ export async function ensureTutorConversation({ mode = "general", courseSlug, le
 }
 
 export async function fetchTutorConversations() {
-  const res = await apiFetch(apiUrl("/api/v1/courses/tutor/conversations"), {
-    headers: authHeaders(),
-    credentials: "include",
-  });
+  const res = await apiFetch(apiUrl("/api/v1/courses/tutor/conversations"));
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "List failed");
   return data.conversations || [];
@@ -177,10 +145,9 @@ export async function fetchTutorConversations() {
 
 export async function fetchTutorMessages(conversationId, limit = 80) {
   const q = limit ? `?limit=${encodeURIComponent(limit)}` : "";
-  const res = await apiFetch(apiUrl(`/api/v1/courses/tutor/conversations/${encodeURIComponent(conversationId)}/messages${q}`), {
-    headers: authHeaders(),
-    credentials: "include",
-  });
+  const res = await apiFetch(
+    apiUrl(`/api/v1/courses/tutor/conversations/${encodeURIComponent(conversationId)}/messages${q}`)
+  );
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Messages failed");
   return data;
@@ -189,8 +156,6 @@ export async function fetchTutorMessages(conversationId, limit = 80) {
 export async function deleteTutorConversation(conversationId) {
   const res = await apiFetch(apiUrl(`/api/v1/courses/tutor/conversations/${encodeURIComponent(conversationId)}`), {
     method: "DELETE",
-    headers: authHeaders(),
-    credentials: "include",
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -199,10 +164,7 @@ export async function deleteTutorConversation(conversationId) {
 }
 
 export async function fetchTutorMemory() {
-  const res = await apiFetch(apiUrl("/api/v1/courses/tutor/memory"), {
-    headers: authHeaders(),
-    credentials: "include",
-  });
+  const res = await apiFetch(apiUrl("/api/v1/courses/tutor/memory"));
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Memory failed");
   return data.memory;
@@ -211,8 +173,6 @@ export async function fetchTutorMemory() {
 export async function putTutorMemory(body) {
   const res = await apiFetch(apiUrl("/api/v1/courses/tutor/memory"), {
     method: "PUT",
-    headers: authHeaders(),
-    credentials: "include",
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));

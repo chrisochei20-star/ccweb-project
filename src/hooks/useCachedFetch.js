@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CCWEB_UI_LOAD_TIMEOUT_MS } from "../constants/loadTimeout";
 import { apiUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
 import { toast } from "../lib/toastBus";
-import { getSessionToken } from "../session";
 
 const cache = new Map();
 
@@ -14,10 +14,10 @@ function resolveFetchUrl(url) {
 
 /**
  * GET JSON with simple in-memory TTL cache (per tab session).
- * Uses apiUrl() so production split CDN + API deploy works; sends Bearer token when present.
+ * Uses apiUrl() so production split CDN + API deploy works; sends JSON + Bearer via apiFetch.
  */
 export function useCachedFetch(url, opts = {}) {
-  const { ttlMs = 45_000, enabled = true, toastOnError = false } = opts;
+  const { ttlMs = 45_000, enabled = true, toastOnError = false, timeoutMs = CCWEB_UI_LOAD_TIMEOUT_MS } = opts;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(Boolean(enabled && url));
   const [error, setError] = useState(null);
@@ -41,10 +41,7 @@ export function useCachedFetch(url, opts = {}) {
     setLoading(true);
     setError(null);
     try {
-      const headers = {};
-      const token = getSessionToken();
-      if (token) headers.Authorization = `Bearer ${token}`;
-      const res = await apiFetch(resolved, { credentials: "include", headers }, { networkRetries: 2 });
+      const res = await apiFetch(resolved, {}, { networkRetries: 2, timeoutMs });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || res.statusText || "Request failed");
       cache.set(key, { at: Date.now(), json });
@@ -53,14 +50,17 @@ export function useCachedFetch(url, opts = {}) {
       }
       return json;
     } catch (e) {
-      const msg = e.message || "Error";
+      const msg =
+        e?.name === "AbortError"
+          ? "Request timed out. Check your connection and try again."
+          : e.message || "Error";
       if (mounted.current) setError(msg);
       if (toastOnError && mounted.current) toast.error(msg);
       throw e;
     } finally {
       if (mounted.current) setLoading(false);
     }
-  }, [url, enabled, ttlMs, toastOnError]);
+  }, [url, enabled, ttlMs, toastOnError, timeoutMs]);
 
   useEffect(() => {
     mounted.current = true;

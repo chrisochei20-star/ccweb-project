@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiUrl } from "./config/env";
+import { apiFetch } from "./lib/apiClient";
+import { useStaleLoadingGuard } from "./hooks/useStaleLoadingGuard";
 import {
   Bar,
   CartesianGrid,
@@ -47,6 +49,7 @@ export function TokenDetailPage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const loadStalled = useStaleLoadingGuard(loading);
   const [trackMsg, setTrackMsg] = useState(null);
 
   const load = useCallback(async () => {
@@ -54,7 +57,7 @@ export function TokenDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(apiUrl(`/api/intelligence/token/${encodeURIComponent(slug)}`));
+      const res = await apiFetch(apiUrl(`/api/intelligence/token/${encodeURIComponent(slug)}`), {}, { timeoutMs: 8000 });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load token");
       setData(json);
@@ -82,7 +85,7 @@ export function TokenDetailPage() {
     setTrackMsg(null);
     try {
       if (data.tracking?.isTracked) {
-        const res = await fetch(
+        const res = await apiFetch(
           apiUrl(`/api/intelligence/tracked-tokens/${encodeURIComponent(data.tracking.key)}`),
           { method: "DELETE" }
         );
@@ -90,9 +93,8 @@ export function TokenDetailPage() {
         if (!res.ok) throw new Error(json.error || "Untrack failed");
         setTrackMsg("Removed from watchlist.");
       } else {
-        const res = await fetch(apiUrl("/api/intelligence/tracked-tokens"), {
+        const res = await apiFetch(apiUrl("/api/intelligence/tracked-tokens"), {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             symbol: data.symbol,
             chain: data.chain,
@@ -122,6 +124,18 @@ export function TokenDetailPage() {
         No token specified.{" "}
         <Link to="/early-signals" className="text-ccweb-cyan underline">
           Browse Early Signals
+        </Link>
+      </div>
+    );
+  }
+
+  if (loading && loadStalled) {
+    return (
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 px-4 text-center text-ccweb-muted">
+        <p>Loading is taking longer than expected.</p>
+        <p className="text-sm text-rose-200/90">Check your connection, then refresh or go back to Early Signals.</p>
+        <Link to="/early-signals" className="mt-2 text-ccweb-cyan underline">
+          Back to Early Signals
         </Link>
       </div>
     );

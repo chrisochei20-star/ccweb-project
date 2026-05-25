@@ -1,12 +1,11 @@
 import { apiUrl } from "../config/env";
+import { apiFetch } from "../lib/apiClient";
 
-export async function uploadProfileAvatar(file, token) {
+export async function uploadProfileAvatar(file) {
   const fd = new FormData();
   fd.append("file", file);
-  const res = await fetch(apiUrl("/api/v1/uploads/profile/avatar"), {
+  const res = await apiFetch(apiUrl("/api/v1/uploads/profile/avatar"), {
     method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    credentials: "include",
     body: fd,
   });
   const data = await res.json().catch(() => ({}));
@@ -14,13 +13,11 @@ export async function uploadProfileAvatar(file, token) {
   return data;
 }
 
-export async function uploadProfileBanner(file, token) {
+export async function uploadProfileBanner(file) {
   const fd = new FormData();
   fd.append("file", file);
-  const res = await fetch(apiUrl("/api/v1/uploads/profile/banner"), {
+  const res = await apiFetch(apiUrl("/api/v1/uploads/profile/banner"), {
     method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    credentials: "include",
     body: fd,
   });
   const data = await res.json().catch(() => ({}));
@@ -31,7 +28,7 @@ export async function uploadProfileBanner(file, token) {
 export async function uploadCourseThumbnail(courseId, file, adminKey) {
   const fd = new FormData();
   fd.append("file", file);
-  const res = await fetch(apiUrl(`/api/v1/courses/admin/courses/${encodeURIComponent(courseId)}/thumbnail`), {
+  const res = await apiFetch(apiUrl(`/api/v1/courses/admin/courses/${encodeURIComponent(courseId)}/thumbnail`), {
     method: "POST",
     headers: {
       "X-CCWEB-Admin": adminKey || "",

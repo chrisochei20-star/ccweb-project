@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 import { getApiBaseUrl } from "../config/env";
-import { getSessionToken } from "../session";
+import { getApiBearerToken } from "./apiClient";
 
 /**
  * Socket.IO client for DM realtime (same path as server: /socket.io).
@@ -10,7 +10,11 @@ export function createChatSocket() {
   const opts = {
     path: "/socket.io",
     transports: ["websocket", "polling"],
-    auth: { token: getSessionToken() },
+    auth: (cb) => {
+      getApiBearerToken()
+        .then((token) => cb({ token: token || undefined }))
+        .catch(() => cb({ token: undefined }));
+    },
     reconnection: true,
     reconnectionDelay: 800,
     reconnectionAttempts: 12,

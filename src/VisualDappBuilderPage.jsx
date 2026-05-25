@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiUrl } from "./config/env";
+import { apiFetch } from "./lib/apiClient";
 
 const CHAINS = [
   { id: "ethereum", label: "Ethereum", wallet: "metamask" },
@@ -222,15 +223,26 @@ export function VisualDappBuilderPage() {
   const currentNetwork = useMemo(() => allowedNetworks.find((n) => n.id === chainId) || allowedNetworks[0], [allowedNetworks, chainId]);
 
   useEffect(() => {
-    fetch(apiUrl("/api/dapp/templates"))
-      .then((r) => r.json())
-      .then((d) => setTemplates(d.templates || []));
-    fetch(apiUrl("/api/dapp/networks"))
-      .then((r) => r.json())
-      .then((d) => setNetworks(d.networks || []));
-    fetch(apiUrl("/api/dapp/prices"))
-      .then((r) => r.json())
-      .then((d) => setPrices(d.prices || {}));
+    let cancelled = false;
+    (async () => {
+      try {
+        const [t, n, p] = await Promise.all([
+          apiFetch(apiUrl("/api/dapp/templates"), {}, { timeoutMs: 8000 }).then((r) => r.json()),
+          apiFetch(apiUrl("/api/dapp/networks"), {}, { timeoutMs: 8000 }).then((r) => r.json()),
+          apiFetch(apiUrl("/api/dapp/prices"), {}, { timeoutMs: 8000 }).then((r) => r.json()),
+        ]);
+        if (!cancelled) {
+          setTemplates(t.templates || []);
+          setNetworks(n.networks || []);
+          setPrices(p.prices || {});
+        }
+      } catch {
+        if (!cancelled) setError("Could not load builder data. Check your connection and try refreshing.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -356,9 +368,8 @@ export function VisualDappBuilderPage() {
     const idempotencyKey = `visual-${walletAddress}-${serverTemplate.id}-${chainId}-${Date.now()}`;
 
     try {
-      const resp = await fetch(apiUrl("/api/dapp/deploy"), {
+      const resp = await apiFetch(apiUrl("/api/dapp/deploy"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           templateId: serverTemplate.id,
           network: chainId,

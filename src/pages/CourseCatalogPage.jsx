@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchCourseCatalog, fetchCourseCategories, fetchRecommendedCourses } from "../api/coursesApi";
 import { assetsUrl } from "../config/env";
+import { useStaleLoadingGuard } from "../hooks/useStaleLoadingGuard";
 
 export function CourseCatalogPage({ compact = false }) {
   const [categories, setCategories] = useState([]);
@@ -11,6 +12,7 @@ export function CourseCatalogPage({ compact = false }) {
   const [filter, setFilter] = useState("");
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
+  const initialLoadStalled = useStaleLoadingGuard(loading && !courses.length && !err);
   const [err, setErr] = useState(null);
 
   useEffect(() => {
@@ -53,6 +55,15 @@ export function CourseCatalogPage({ compact = false }) {
       clearTimeout(t);
     };
   }, [filter, q]);
+
+  if (initialLoadStalled) {
+    return (
+      <div className="flex min-h-[30vh] flex-col items-center justify-center gap-2 px-4 text-center text-ccweb-muted">
+        <p className="text-rose-200/90">The catalog is taking too long to load.</p>
+        <p className="text-sm">Check your network or API URL, then refresh.</p>
+      </div>
+    );
+  }
 
   if (loading && !courses.length && !err) {
     return (

@@ -1,7 +1,7 @@
 // @ts-check
 const { defineConfig, devices } = require("@playwright/test");
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:5173";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || process.env.VITE_DEV_SPA_ORIGIN || "http://127.0.0.1:5173";
 const productionE2E = process.env.PRODUCTION_E2E === "1" || process.env.PRODUCTION_E2E === "true";
 const e2eApiPort = process.env.PLAYWRIGHT_API_PORT || "3055";
 

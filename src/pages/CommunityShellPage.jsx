@@ -11,6 +11,7 @@ import {
 } from "../api/communityApi";
 import { SocialPostCard } from "../components/community/SocialPostCard";
 import { Skeleton } from "../components/ui/Skeleton";
+import { useStaleLoadingGuard } from "../hooks/useStaleLoadingGuard";
 import { toast } from "../lib/toastBus";
 import { getSessionToken } from "../session";
 
@@ -23,6 +24,7 @@ export function CommunityShellPage() {
   const [feedMode, setFeedMode] = useState("latest");
   const [chats, setChats] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
+  const postsLoadStalled = useStaleLoadingGuard(loadingPosts);
   const [loadingChats, setLoadingChats] = useState(false);
   const [postTitle, setPostTitle] = useState("");
   const [postBody, setPostBody] = useState("");
@@ -316,7 +318,15 @@ export function CommunityShellPage() {
               </div>
             </div>
 
-            {loadingPosts && (
+            {loadingPosts && postsLoadStalled && (
+              <p className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-center text-sm text-rose-100">
+                The feed is taking too long to load.{" "}
+                <button type="button" className="font-medium text-ccweb-cyan underline" onClick={() => loadPosts()}>
+                  Retry
+                </button>
+              </p>
+            )}
+            {loadingPosts && !postsLoadStalled && (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
                   <div key={i} className="ccweb-glass rounded-2xl p-4">

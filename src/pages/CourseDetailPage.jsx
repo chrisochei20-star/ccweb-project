@@ -8,12 +8,14 @@ import {
   postBookmark,
 } from "../api/coursesApi";
 import { assetsUrl } from "../config/env";
+import { useStaleLoadingGuard } from "../hooks/useStaleLoadingGuard";
 
 export function CourseDetailPage() {
   const { slug } = useParams();
   const { user } = useOutletContext() || {};
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const loadStalled = useStaleLoadingGuard(loading);
   const [err, setErr] = useState(null);
   const [bookmarked, setBookmarked] = useState(false);
 
@@ -65,6 +67,17 @@ export function CourseDetailPage() {
     } catch (e) {
       setErr(e.message);
     }
+  }
+
+  if (loading && loadStalled) {
+    return (
+      <div className="mx-auto flex max-w-lg flex-col items-center justify-center gap-2 px-4 py-10 text-center text-ccweb-muted">
+        <p className="text-rose-200/90">This course is taking too long to load.</p>
+        <Link to="/courses" className="ccweb-gradient-btn text-sm">
+          Back to catalog
+        </Link>
+      </div>
+    );
   }
 
   if (loading) {

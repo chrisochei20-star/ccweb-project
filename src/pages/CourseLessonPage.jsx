@@ -11,6 +11,7 @@ import {
   streamTutor,
 } from "../api/coursesApi";
 import { getSessionToken } from "../session";
+import { useStaleLoadingGuard } from "../hooks/useStaleLoadingGuard";
 
 export function CourseLessonPage() {
   const { slug, lessonId } = useParams();
@@ -24,6 +25,7 @@ export function CourseLessonPage() {
   const [answers, setAnswers] = useState({});
   const [quizResult, setQuizResult] = useState(null);
   const [loading, setLoading] = useState(true);
+  const loadStalled = useStaleLoadingGuard(loading);
   const [err, setErr] = useState(null);
   const [tutorMsg, setTutorMsg] = useState("");
   const [tutorBusy, setTutorBusy] = useState(false);
@@ -144,6 +146,17 @@ export function CourseLessonPage() {
     } finally {
       setTutorBusy(false);
     }
+  }
+
+  if (loading && loadStalled) {
+    return (
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 px-4 text-center text-ccweb-muted">
+        <p className="text-rose-200/90">This lesson is taking too long to load.</p>
+        <Link to="/courses" className="text-ccweb-cyan underline">
+          Back to courses
+        </Link>
+      </div>
+    );
   }
 
   if (loading) {

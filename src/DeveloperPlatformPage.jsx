@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiUrl } from "./config/env";
+import { apiFetch } from "./lib/apiClient";
 
 const LS_KEY = "ccweb_dev_api_key";
 
@@ -23,11 +24,11 @@ export function DeveloperPlatformPage() {
     setErr(null);
     try {
       const [k, p, t, l, m] = await Promise.all([
-        fetch(apiUrl("/api/developer/keys")).then((r) => r.json()),
-        fetch(apiUrl("/api/developer/projects")).then((r) => r.json()),
-        fetch(apiUrl("/api/developer/billing/tiers")).then((r) => r.json()),
-        fetch(apiUrl("/api/developer/logs")).then((r) => r.json()),
-        fetch(apiUrl("/api/developer/marketplace")).then((r) => r.json()),
+        apiFetch(apiUrl("/api/developer/keys")).then((r) => r.json()),
+        apiFetch(apiUrl("/api/developer/projects")).then((r) => r.json()),
+        apiFetch(apiUrl("/api/developer/billing/tiers")).then((r) => r.json()),
+        apiFetch(apiUrl("/api/developer/logs")).then((r) => r.json()),
+        apiFetch(apiUrl("/api/developer/marketplace")).then((r) => r.json()),
       ]);
       setKeys(k.keys || []);
       setProjects(p.projects || []);
@@ -51,9 +52,8 @@ export function DeveloperPlatformPage() {
     setErr(null);
     setCreatedSecret(null);
     try {
-      const res = await fetch(apiUrl("/api/developer/keys"), {
+      const res = await apiFetch(apiUrl("/api/developer/keys"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newKeyName, roles: ["developer", "viewer", "admin"] }),
       });
       const data = await res.json();
@@ -75,7 +75,7 @@ export function DeveloperPlatformPage() {
       return;
     }
     try {
-      const res = await fetch(apiUrl("/v1/sessions"), { headers: { CCWEB_API_KEY: apiKey.trim() } });
+      const res = await apiFetch(apiUrl("/v1/sessions"), { headers: { CCWEB_API_KEY: apiKey.trim() } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || res.statusText);
       setSessions(data);
@@ -94,7 +94,7 @@ export function DeveloperPlatformPage() {
       return;
     }
     try {
-      const res = await fetch(apiUrl("/v1/analytics"), { headers: { CCWEB_API_KEY: apiKey.trim() } });
+      const res = await apiFetch(apiUrl("/v1/analytics"), { headers: { CCWEB_API_KEY: apiKey.trim() } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || res.statusText);
       setUsage(data);
@@ -109,9 +109,8 @@ export function DeveloperPlatformPage() {
     setErr(null);
     if (!webhookUrl.trim()) return;
     try {
-      const res = await fetch(apiUrl("/api/developer/webhooks"), {
+      const res = await apiFetch(apiUrl("/api/developer/webhooks"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: webhookUrl.trim() }),
       });
       const data = await res.json();
@@ -127,9 +126,8 @@ export function DeveloperPlatformPage() {
   async function addListing() {
     setErr(null);
     try {
-      await fetch(apiUrl("/api/developer/marketplace"), {
+      await apiFetch(apiUrl("/api/developer/marketplace"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "agent", title: "Sample automation", priceUsd: 29 }),
       });
       loadConsole();

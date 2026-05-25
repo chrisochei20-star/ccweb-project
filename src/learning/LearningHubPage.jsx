@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { createStreamRoom, fetchLearningProfile, fetchLearningSessions, listStreamRooms } from "../api/learningApi";
+import { useStaleLoadingGuard } from "../hooks/useStaleLoadingGuard";
 
 export function LearningHubPage({ compact = false }) {
   const { user, authHydrated } = useOutletContext() || {};
@@ -10,6 +11,7 @@ export function LearningHubPage({ compact = false }) {
   const [dbSessions, setDbSessions] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const loadStalled = useStaleLoadingGuard(loading);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("CCWEB AI Live Lab");
@@ -155,7 +157,8 @@ export function LearningHubPage({ compact = false }) {
               </div>
             </div>
           )}
-          {loading && <p className="muted">Loading…</p>}
+          {loading && loadStalled && <p className="error-text">Still loading after several seconds — check your connection and tap Refresh below.</p>}
+          {loading && !loadStalled && <p className="muted">Loading…</p>}
           {error && <p className="error-text">{error}</p>}
         </article>
 

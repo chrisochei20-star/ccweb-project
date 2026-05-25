@@ -1,6 +1,6 @@
 /**
  * Fail fast in production when critical secrets are missing.
- * Stripe is optional: beta/testing deployments can omit STRIPE_* ; payment routes return 503 until configured.
+ * Flutterwave is optional: beta/testing deployments can omit FLUTTERWAVE_SECRET_KEY ; card checkout returns 503 until configured.
  * OpenAI / Etherscan are optional: AI uses mock output; chain features degrade until keys are set.
  *
  * Optional: CCWEB_BOOT_WARN_ONLY=1 — warn instead of exit for PUBLIC_APP_URL / CCWEB_ALLOWED_ORIGINS
@@ -9,7 +9,7 @@
  */
 
 const { logger } = require("./logging/logger");
-const { logStripeStartupWarningIfNeeded } = require("./payments/stripeConfig");
+const { logFlutterwaveStartupWarningIfNeeded } = require("./payments/flutterwaveConfig");
 
 function validateOrExit() {
   if (process.env.NODE_ENV !== "production") return;
@@ -18,10 +18,10 @@ function validateOrExit() {
       msg: "production_gate_skipped",
       detail: "CCWEB_SKIP_PRODUCTION_GATE=1 — not recommended for public production.",
     });
-    logStripeStartupWarningIfNeeded();
+    logFlutterwaveStartupWarningIfNeeded();
     return;
   }
-  logStripeStartupWarningIfNeeded();
+  logFlutterwaveStartupWarningIfNeeded();
   const warnOnly = process.env.CCWEB_BOOT_WARN_ONLY === "1";
   const errs = [];
   const warns = [];

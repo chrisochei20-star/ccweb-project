@@ -46,9 +46,7 @@ services:
         # Set in Render Dashboard, e.g. https://ccweb-project-hoiy.vercel.app (comma-separated; use * only for open beta)
       - key: AUTH_JWT_SECRET
         sync: false
-      - key: STRIPE_SECRET_KEY
-        sync: false
-      - key: STRIPE_WEBHOOK_SECRET
+      - key: FLUTTERWAVE_SECRET_KEY
         sync: false
       - key: OPENAI_API_KEY
         sync: false

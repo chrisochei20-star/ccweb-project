@@ -162,7 +162,7 @@ async function stripeRevenueTrend(days = 14) {
 }
 
 /**
- * Roll-up for admin dashboard: Stripe captures + metering + learning ledger splits.
+ * Roll-up for admin dashboard: Flutterwave captures + metering + learning ledger splits.
  */
 async function adminRevenueOverview({ meteringDays = 90, trendDays = 14 } = {}) {
   if (!usePostgres()) return null;
@@ -199,7 +199,7 @@ async function adminRevenueOverview({ meteringDays = 90, trendDays = 14 } = {}) 
   );
 
   return {
-    stripe: {
+    payments: {
       capturedGrossUsd: Number(pt[0]?.gross || 0),
       transactionCount: pt[0]?.cnt || 0,
       escrowUsd: Number(escrow[0]?.g || 0),

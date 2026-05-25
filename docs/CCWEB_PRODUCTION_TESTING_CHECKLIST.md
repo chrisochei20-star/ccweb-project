@@ -51,8 +51,7 @@ Use **after** each production deploy (e.g. Railway API + SPA). Confirm **`VITE_A
 
 ## PAYMENTS
 
-- [ ] Flutterwave payment flow opens
-- [ ] Stripe beta/payment flow works (if enabled)
+- [ ] Flutterwave payment flow opens and verify completes for a test tx_ref
 
 ## MOBILE TEST
 

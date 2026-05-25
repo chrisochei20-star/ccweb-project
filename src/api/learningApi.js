@@ -47,8 +47,13 @@ export async function fetchLearningProfile(userId) {
   return data;
 }
 
-export async function startLearningCheckout(payload) {
-  const { data } = await http.post("/api/payments/stripe/checkout/learning", payload);
+export async function prepareLearningFlutterwave(payload) {
+  const { data } = await http.post("/api/v1/learning/payments/flutterwave/prepare", payload);
+  return data;
+}
+
+export async function verifyFlutterwavePayment(txRef) {
+  const { data } = await http.post("/api/v1/payments/flutterwave/verify", { tx_ref: txRef });
   return data;
 }
 

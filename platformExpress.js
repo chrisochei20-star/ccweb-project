@@ -16,7 +16,11 @@ const dashboardPg = require("./db/persistenceDashboard");
 const pgGrowth = require("./db/persistenceGrowth");
 const growthEngine = require("./db/persistenceGrowthEngine");
 const monPg = require("./db/persistenceMonetization");
-const { expressStripeEscrowCheckout } = require("./payments/stripeCheckout");
+const {
+  expressFlutterwaveEscrowPrepare,
+  expressFlutterwaveVerify,
+  handleFlutterwaveLearningPrepare,
+} = require("./payments/flutterwavePayments");
 const aiExecute = require("./services/aiExecute");
 const monetizationEngine = require("./services/monetizationEngine");
 const betaPg = require("./db/persistenceBeta");
@@ -27,10 +31,7 @@ const { saveUploadedImage } = require("./services/imageStorage");
 const { isCloudinaryConfigured } = require("./services/cloudinaryUpload");
 const { imageMulter, createUploadsRouter, MAX_BYTES } = require("./uploadsExpress");
 const { publicAppBaseUrl, trimOrigin } = require("./services/deploymentOrigins");
-const {
-  stripeCheckoutOperational,
-  stripeWebhookOperational,
-} = require("./payments/stripeConfig");
+const { flutterwaveCheckoutOperational } = require("./payments/flutterwaveConfig");
 const {
   broadcastChatMessage,
   broadcastInboxRefresh,
@@ -62,8 +63,7 @@ function createPlatformApp(deps) {
         transports: ["websocket", "polling"],
       },
       payments: {
-        stripeCheckoutEnabled: stripeCheckoutOperational(),
-        stripeWebhooksEnabled: stripeWebhookOperational(),
+        flutterwaveCheckoutEnabled: flutterwaveCheckoutOperational(),
       },
       uploads: {
         cloudinary: isCloudinaryConfigured(),
@@ -881,7 +881,16 @@ function createPlatformApp(deps) {
         ...req.body,
         buyerId: req.body?.buyerId || req.ccwebUserId,
       };
-      await expressStripeEscrowCheckout(req, res);
+      await expressFlutterwaveEscrowPrepare(req, res);
+      if (!res.headersSent) next();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  paymentsRouter.post("/flutterwave/verify", authJwtMiddleware, async (req, res, next) => {
+    try {
+      await expressFlutterwaveVerify(req, res);
       if (!res.headersSent) next();
     } catch (e) {
       next(e);
@@ -930,6 +939,26 @@ function createPlatformApp(deps) {
   });
 
   v1.use("/payments", paymentsRouter);
+
+  const learningPaymentsRouter = express.Router();
+
+  async function expressBodyFromReq(req) {
+    return req.body && typeof req.body === "object" ? req.body : {};
+  }
+
+  learningPaymentsRouter.post("/flutterwave/prepare", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const sendJson = (r, statusCode, payload) => {
+        r.status(statusCode).json(payload);
+      };
+      await handleFlutterwaveLearningPrepare(req, res, expressBodyFromReq, sendJson, req.ccwebUserId);
+      if (!res.headersSent) next();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  v1.use("/learning/payments", apiRateShort, learningPaymentsRouter);
 
   const analyticsRouter = express.Router();
 

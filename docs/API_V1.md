@@ -94,9 +94,16 @@ POST /api/v1/agents/run
 
 | Method | Path |
 |--------|------|
-| POST | `/api/v1/payments/create` | Stripe Checkout — body same as growth escrow: `listingId`, optional `buyerName`, `successUrl`, `cancelUrl`; buyer defaults to JWT user |
+| POST | `/api/v1/payments/create` | Flutterwave prepare — body: `listingId`, optional `buyerName`; buyer defaults to JWT user; returns `txRef`, `amountUsd`, `orderId`, `narration` for the client modal |
+| POST | `/api/v1/payments/flutterwave/verify` | `{ "tx_ref" }` — JWT required; verifies with Flutterwave and funds escrow when valid |
 | POST | `/api/v1/payments/release` | `{ "orderId", "action": "confirm" \| "deliver" }` |
 | GET | `/api/v1/payments/history` | User’s orders (buyer + seller) |
+
+### Learning checkout (Flutterwave)
+
+| Method | Path | Notes |
+|--------|------|------|
+| POST | `/api/v1/learning/payments/flutterwave/prepare` | JWT — `kind`: `session_access` (`streamRoomId`, `hours`), `credits` (`amountUsd` optional), or `subscription` (`tier`); returns `txRef`, `amountUsd`, `narration` |
 
 ---
 
@@ -113,7 +120,7 @@ POST /api/v1/agents/run
 
 - **Helmet + CORS** on the platform app (`applyExpressSecurity`).
 - **Sliding rate limit** on `/api/v1` (30k-class cap per IP per minute; tune in `platformExpress.js`).
-- **PCI:** card data only on Stripe Checkout; never log raw card numbers.
+- **PCI:** card data stays on Flutterwave’s hosted checkout; never log raw card numbers.
 
 ---
 See `platformExpress.js` for the full implementation.

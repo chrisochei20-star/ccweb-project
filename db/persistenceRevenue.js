@@ -1,5 +1,5 @@
 /**
- * Revenue aggregates from platform_transactions (Stripe-captured rows and similar).
+ * Revenue aggregates from platform_transactions (payment captures and similar).
  */
 
 const { query } = require("./pool");
@@ -68,7 +68,7 @@ async function sumAllCaptured() {
 }
 
 /**
- * Idempotent insert for Stripe checkout captures (unique reference_id per session).
+ * Idempotent insert for legacy Stripe checkout captures (unique reference_id per session).
  */
 async function recordStripeCheckoutCapture({
   kind,
@@ -91,4 +91,71 @@ async function recordStripeCheckoutCapture({
   return { ok: true };
 }
 
-module.exports = { usePostgres, sumCapturedForProject, sumAllCaptured, recordStripeCheckoutCapture };
+async function insertPendingFlutterwave({ referenceId, amountUsd, metadata }) {
+  if (!usePostgres()) return { skipped: true };
+  await query(
+    `INSERT INTO platform_transactions (kind, reference_id, provider, amount_usd, currency, status, metadata)
+     VALUES ('flutterwave_pending', $1, 'flutterwave', $2, 'USD', 'pending', $3::jsonb)`,
+    [String(referenceId), Number(amountUsd).toFixed(2), JSON.stringify(metadata || {})]
+  );
+  return { ok: true };
+}
+
+async function deletePendingFlutterwave(referenceId) {
+  if (!usePostgres()) return;
+  await query(
+    `DELETE FROM platform_transactions WHERE reference_id = $1 AND provider = 'flutterwave' AND status = 'pending'`,
+    [String(referenceId)]
+  );
+}
+
+/**
+ * Idempotent insert for Flutterwave-verified captures (reference_id = Flutterwave transaction id).
+ */
+async function recordFlutterwaveCapture({ kind, referenceId, amountUsd, metadata = {} }) {
+  if (!usePostgres()) return { skipped: true };
+  const ref = String(referenceId || "").trim();
+  if (!ref || amountUsd == null || Number(amountUsd) <= 0) return { skipped: true };
+  const exists = await query(
+    `SELECT 1 FROM platform_transactions WHERE reference_id = $1 AND provider = 'flutterwave' AND status = 'captured' LIMIT 1`,
+    [ref]
+  );
+  if (exists.rows.length) return { skipped: true, duplicate: true };
+  await query(
+    `INSERT INTO platform_transactions (kind, reference_id, provider, amount_usd, currency, status, metadata)
+     VALUES ($1, $2, 'flutterwave', $3, 'USD', 'captured', $4::jsonb)`,
+    [kind, ref, Number(amountUsd).toFixed(2), JSON.stringify(metadata)]
+  );
+  return { ok: true };
+}
+
+async function isFlutterwaveTxnCaptured(flwTransactionId) {
+  if (!usePostgres()) return false;
+  const { rows } = await query(
+    `SELECT 1 FROM platform_transactions WHERE provider = 'flutterwave' AND status = 'captured' AND reference_id = $1 LIMIT 1`,
+    [String(flwTransactionId)]
+  );
+  return rows.length > 0;
+}
+
+async function findPendingFlutterwaveCharge(txRef) {
+  if (!usePostgres()) return null;
+  const { rows } = await query(
+    `SELECT * FROM platform_transactions
+     WHERE reference_id = $1 AND provider = 'flutterwave' AND status = 'pending' LIMIT 1`,
+    [String(txRef)]
+  );
+  return rows[0] || null;
+}
+
+module.exports = {
+  usePostgres,
+  sumCapturedForProject,
+  sumAllCaptured,
+  recordStripeCheckoutCapture,
+  insertPendingFlutterwave,
+  deletePendingFlutterwave,
+  recordFlutterwaveCapture,
+  isFlutterwaveTxnCaptured,
+  findPendingFlutterwaveCharge,
+};

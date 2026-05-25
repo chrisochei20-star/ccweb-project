@@ -23,8 +23,6 @@ const { validateOrExit } = require("./productionGate");
 const { logger } = require("./logging/logger");
 const { checkApiRateLimit } = require("./security/apiRateLimit");
 const { createSocialApp } = require("./social/socialRouter");
-const { handleStripeWebhook } = require("./payments/stripeWebhook");
-const { handleStripeCheckoutEscrow } = require("./payments/stripeCheckout");
 const { createPlatformApp } = require("./platformExpress");
 const { sendRawHealth } = require("./server/http/controllers/health.controller");
 const { writeRawOptions, setRawCorsHeaders, parseAllowedOrigins } = require("./security/expressHardDefaults");
@@ -619,7 +617,7 @@ async function handleLearningAccessQuote(requestUrl, res) {
       estimatedTotalUsd: gross,
       estimatedPlatformUsd: platform,
       estimatedCreatorUsd: +(gross - platform).toFixed(2),
-      note: "Set DATABASE_URL for Stripe paywall and revenue ledger.",
+      note: "Set DATABASE_URL for Flutterwave paywall and revenue ledger.",
     });
     return;
   }
@@ -4327,10 +4325,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (
-    (pathname.startsWith("/api") || pathname.startsWith("/v1")) &&
-    pathname !== "/api/payments/stripe/webhook"
-  ) {
+  if ((pathname.startsWith("/api") || pathname.startsWith("/v1"))) {
     // CORS preflight must not consume API rate limit — browsers may send many OPTIONS first.
     if ((req.method || "GET") !== "OPTIONS") {
       const rl = checkApiRateLimit(req);
@@ -4340,21 +4335,6 @@ const server = http.createServer(async (req, res) => {
         return;
       }
     }
-  }
-
-  if (pathname === "/api/payments/stripe/webhook" && req.method === "POST") {
-    await handleStripeWebhook(req, res);
-    return;
-  }
-
-  if (pathname === "/api/payments/stripe/checkout/escrow" && req.method === "POST") {
-    await handleStripeCheckoutEscrow(req, res, readJsonBody, sendJson);
-    return;
-  }
-
-  if (pathname === "/api/payments/stripe/checkout/learning" && req.method === "POST") {
-    await handleLearningStripeCheckout(req, res, readJsonBody, sendJson);
-    return;
   }
 
   if (pathname === "/api/learning/access/quote" && req.method === "GET") {

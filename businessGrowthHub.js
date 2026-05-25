@@ -212,7 +212,7 @@ function createOrder({ listingId, buyerId, buyerName }) {
     sellerPendingUsd: +(gross - platformFee).toFixed(2),
     status: "escrow_funded",
     createdAt: new Date().toISOString(),
-    audit: [{ at: new Date().toISOString(), event: "order_created", note: "Development-mode order without Stripe; treat as funded for UI testing only." }],
+    audit: [{ at: new Date().toISOString(), event: "order_created", note: "Development-mode order without card capture; treat as funded for UI testing only." }],
   };
   orders.set(id, row);
   return row;
@@ -264,7 +264,7 @@ function overview() {
     platformFeePercent: PLATFORM_FEE_PCT,
     leadFeeUsd: LEAD_FEE_USD,
     disclaimer:
-      "In-memory ledger for local development only. Configure PostgreSQL + Stripe for real escrow (see payments API).",
+      "In-memory ledger for local development only. Configure PostgreSQL + Flutterwave for real escrow (see payments API).",
     organicPolicy:
       "No unsolicited bulk messaging. Use double opt-in where required. Agent outputs are suggestions — human approval before publish.",
     listingsCount: listings.size,

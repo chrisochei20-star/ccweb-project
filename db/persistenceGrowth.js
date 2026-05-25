@@ -101,7 +101,7 @@ async function overview() {
     platformFeePercent: PLATFORM_FEE_PCT,
     leadFeeUsd: LEAD_FEE_USD,
     disclaimer:
-      "PostgreSQL ledger. Escrow settlement uses Stripe in production when configured; otherwise funded state is recorded after checkout session completes.",
+      "PostgreSQL ledger. Escrow settlement uses Flutterwave when FLUTTERWAVE_SECRET_KEY is configured; funded state is recorded after payment verification.",
     organicPolicy:
       "No unsolicited bulk messaging. Use double opt-in where required. Agent outputs are suggestions — human approval before publish.",
     listingsCount: lc.rows[0].c,
@@ -157,10 +157,10 @@ async function createOrder({ listingId, buyerId, buyerName, stripeCheckoutSessio
   const audit = [
     {
       at: new Date().toISOString(),
-      event: paidUpfront ? "stripe_checkout_completed" : "order_created",
+      event: paidUpfront ? "payment_completed_at_create" : "order_created",
       note: paidUpfront
-        ? "Escrow funded via Stripe (session attached at creation)."
-        : "Order created; awaiting Stripe checkout completion.",
+        ? "Escrow funded at order creation (payment refs attached upfront)."
+        : "Order created; awaiting payment completion.",
     },
   ];
   const status = paidUpfront ? "escrow_funded" : "pending_payment";
@@ -378,6 +378,22 @@ async function listCampaigns() {
   }));
 }
 
+async function findPendingOrderByBuyerAndTxRef(buyerId, txRef) {
+  await seedIfEmpty();
+  const { rows } = await query(
+    `SELECT * FROM growth_orders WHERE stripe_checkout_session_id = $1 AND buyer_id = $2 AND status = 'pending_payment' LIMIT 1`,
+    [String(txRef), buyerId]
+  );
+  return rows[0] ? mapOrderRow(rows[0]) : null;
+}
+
+async function setOrderPaymentTxRef(orderId, txRef) {
+  await query(`UPDATE growth_orders SET stripe_checkout_session_id = $2 WHERE id = $1 AND status = 'pending_payment'`, [
+    orderId,
+    String(txRef),
+  ]);
+}
+
 async function attachStripeToOrder(orderId, sessionId, paymentIntentId) {
   const o = await getOrder(orderId);
   if (!o) return { error: "Order not found." };
@@ -385,10 +401,10 @@ async function attachStripeToOrder(orderId, sessionId, paymentIntentId) {
     ...o.audit,
     {
       at: new Date().toISOString(),
-      event: "stripe_attached",
+      event: "payment_verified",
       sessionId,
       paymentIntentId,
-      note: "Stripe session / payment intent linked; marking escrow funded.",
+      note: "Payment reference linked; marking escrow funded.",
     },
   ];
   await query(
@@ -427,4 +443,6 @@ module.exports = {
   getCampaign,
   listCampaigns,
   attachStripeToOrder,
+  setOrderPaymentTxRef,
+  findPendingOrderByBuyerAndTxRef,
 };

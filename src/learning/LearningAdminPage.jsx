@@ -61,14 +61,14 @@ export function LearningAdminPage() {
       {data?.monetization && (
         <div className="learning-grid" style={{ marginTop: "1.25rem", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
           <article className="panel learning-glass">
-            <h4>Stripe captured (all-time)</h4>
+            <h4>Flutterwave captured (all-time)</h4>
             <p className="learning-timer" style={{ fontSize: "1.35rem", margin: 0 }}>
-              ${Number(data.monetization.stripe?.capturedGrossUsd ?? 0).toFixed(2)}
+              ${Number((data.monetization.payments ?? data.monetization.stripe)?.capturedGrossUsd ?? 0).toFixed(2)}
             </p>
             <p className="muted" style={{ margin: "0.35rem 0 0", fontSize: "0.85rem" }}>
-              {data.monetization.stripe?.transactionCount ?? 0} transactions · escrow $
-              {Number(data.monetization.stripe?.escrowUsd ?? 0).toFixed(2)} · learning checkout $
-              {Number(data.monetization.stripe?.learningCheckoutUsd ?? 0).toFixed(2)}
+              {(data.monetization.payments ?? data.monetization.stripe)?.transactionCount ?? 0} transactions · escrow $
+              {Number((data.monetization.payments ?? data.monetization.stripe)?.escrowUsd ?? 0).toFixed(2)} · learning checkout $
+              {Number((data.monetization.payments ?? data.monetization.stripe)?.learningCheckoutUsd ?? 0).toFixed(2)}
             </p>
           </article>
           <article className="panel learning-glass">
@@ -97,7 +97,7 @@ export function LearningAdminPage() {
 
       {data?.monetization?.topPayingUsers?.length > 0 && (
         <article className="panel learning-glass" style={{ marginTop: "1.25rem" }}>
-          <h3>Top payers (Stripe, userId in metadata)</h3>
+          <h3>Top payers (userId in metadata)</h3>
           <ul className="list">
             {data.monetization.topPayingUsers.map((r) => (
               <li key={r.userId}>

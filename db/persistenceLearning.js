@@ -1,5 +1,5 @@
 /**
- * PostgreSQL persistence for monetized AI streaming / tutor (Stripe-backed).
+ * PostgreSQL persistence for monetized AI streaming / tutor (Flutterwave-backed when configured).
  * No-op when DATABASE_URL unset — callers should keep in-memory streaming only.
  */
 
@@ -388,6 +388,15 @@ async function getLearningSessionDetail(streamRoomId) {
   return { session: sess, ledger: ledger };
 }
 
+async function findPendingAccessByUserAndTxRef(userId, txRef) {
+  if (!usePostgres()) return null;
+  const { rows } = await query(
+    `SELECT * FROM learning_access WHERE stripe_checkout_session_id = $1 AND user_id = $2 AND status = 'pending_payment' LIMIT 1`,
+    [String(txRef), userId]
+  );
+  return rows[0] || null;
+}
+
 module.exports = {
   usePostgres,
   money,
@@ -417,4 +426,5 @@ module.exports = {
   listRecentLedger,
   getLearningSessionDetail,
   listLearningSessions,
+  findPendingAccessByUserAndTxRef,
 };

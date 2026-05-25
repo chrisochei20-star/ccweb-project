@@ -1,5 +1,5 @@
 /**
- * Canonical public app URL for Stripe redirects, referral links, and OAuth.
+ * Canonical public app URL for payment return flows, referral links, and OAuth.
  * In production, PUBLIC_APP_URL is required and must be https.
  */
 

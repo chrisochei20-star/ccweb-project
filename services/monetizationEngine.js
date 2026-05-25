@@ -153,7 +153,7 @@ async function enforcePaywall(userId, usageKind) {
       code: "CREDITS_OR_SUBSCRIPTION",
       title: "Upgrade or add credits",
       detail: `You've reached the ${tier} monthly limit for this feature. Buy credits or upgrade to Pro/Premium for higher allowances.`,
-      checkoutHint: "POST /api/payments/stripe/checkout/learning with kind credits or subscription",
+      checkoutHint: "POST /api/v1/learning/payments/flutterwave/prepare with kind credits or subscription (then complete Flutterwave checkout and POST /api/v1/payments/flutterwave/verify)",
     },
   };
 }

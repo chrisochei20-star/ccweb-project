@@ -71,11 +71,7 @@ async function main() {
   } else {
     console.log("[verify] OK GET /api/v1/config → environment:", c.json.environment);
     if (c.json.payments) {
-      console.log(
-        "       payments:",
-        "stripeCheckout=" + c.json.payments.stripeCheckoutEnabled,
-        "stripeWebhooks=" + c.json.payments.stripeWebhooksEnabled
-      );
+      console.log("       payments:", "flutterwaveCheckout=" + c.json.payments.flutterwaveCheckoutEnabled);
     }
   }
 

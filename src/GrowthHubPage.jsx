@@ -1,7 +1,18 @@
 import { Link, useOutletContext } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { closePaymentModal, useFlutterwave } from "flutterwave-react-v3";
 import { http } from "./api/http";
 import { apiUrl } from "./config/env";
+
+const IDLE_FW_CONFIG = {
+  public_key: "FLWPUBK_TEST-00000000000000000000000000000000-X",
+  tx_ref: "ccweb_idle",
+  amount: 1,
+  currency: "USD",
+  payment_options: "card",
+  customer: { email: "idle@ccweb.local", phone_number: "08000000000", name: "Idle" },
+  customizations: { title: "CCWEB", description: "Idle" },
+};
 
 async function j(path, opts = {}) {
   const res = await fetch(apiUrl(`/api/growth${path}`), {
@@ -30,7 +41,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
   const [err, setErr] = useState(null);
   const [msg, setMsg] = useState(null);
   const [checkoutLoading, setCheckoutLoading] = useState(null);
-
+  const [fwEscrowPayload, setFwEscrowPayload] = useState(null);
   const [newListing, setNewListing] = useState({
     title: "",
     type: "service",
@@ -45,6 +56,30 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
     industries: ["consulting"],
   });
   const [leadForm, setLeadForm] = useState({ industry: "consulting", region: "EU" });
+
+  const fwPublicKey = (import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY || "").trim();
+
+  const fwConfig = useMemo(() => {
+    if (!fwEscrowPayload || !fwPublicKey) return IDLE_FW_CONFIG;
+    return {
+      public_key: fwPublicKey,
+      tx_ref: fwEscrowPayload.txRef,
+      amount: fwEscrowPayload.amountUsd,
+      currency: "USD",
+      payment_options: "card",
+      customer: {
+        email: user?.email || "buyer@ccweb.local",
+        phone_number: (user?.phone || "").toString().trim() || "08000000000",
+        name: user?.displayName || "Customer",
+      },
+      customizations: {
+        title: "CCWEB Escrow",
+        description: fwEscrowPayload.narration || "Marketplace escrow",
+      },
+    };
+  }, [fwEscrowPayload, fwPublicKey, user?.email, user?.displayName, user?.phone]);
+
+  const openFlutterwave = useFlutterwave(fwConfig);
 
   const loadOrders = useCallback(async () => {
     if (!user) {
@@ -107,27 +142,59 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
     }
   }
 
-  async function payWithStripe(listingId) {
+  useEffect(() => {
+    if (!fwEscrowPayload) return undefined;
+    let cancelled = false;
+    const payload = fwEscrowPayload;
+    openFlutterwave({
+      callback: async () => {
+        if (cancelled) return;
+        closePaymentModal();
+        try {
+          await http.post("/api/v1/payments/flutterwave/verify", { tx_ref: payload.txRef });
+          setMsg("Payment verified — escrow funded.");
+          setFwEscrowPayload(null);
+          await loadAll();
+        } catch (e) {
+          setErr(e.response?.data?.error || e.message || "Verification failed");
+          setFwEscrowPayload(null);
+        }
+      },
+      onClose: () => {
+        if (!cancelled) setFwEscrowPayload(null);
+      },
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fwEscrowPayload, openFlutterwave, loadAll]);
+
+  async function startEscrowCheckout(listingId) {
     setErr(null);
     setMsg(null);
     if (!user) {
       setErr("Sign in to purchase.");
       return;
     }
+    if (!fwPublicKey) {
+      setErr("Payments are not configured (missing VITE_FLUTTERWAVE_PUBLIC_KEY).");
+      return;
+    }
     setCheckoutLoading(listingId);
     try {
-      const origin = window.location.origin;
       const { data } = await http.post("/api/v1/payments/create", {
         listingId,
         buyerName: user.displayName || "Customer",
-        successUrl: `${origin}/escrow?paid=1`,
-        cancelUrl: `${origin}/marketplace?cancelled=1`,
       });
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
+      if (data.txRef && data.amountUsd != null) {
+        setFwEscrowPayload({
+          txRef: data.txRef,
+          amountUsd: Number(data.amountUsd),
+          narration: data.narration || "Marketplace escrow",
+        });
         return;
       }
-      setErr(data.error || "Checkout URL not returned.");
+      setErr(data.error || "Checkout could not be started.");
     } catch (e) {
       setErr(e.response?.data?.error || e.message || "Checkout failed");
     } finally {
@@ -195,7 +262,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
         <p className="text-xs font-semibold uppercase tracking-widest text-ccweb-cyan">Build · Business Automation</p>
         <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">Global Marketing Agent &amp; Growth Hub</h1>
         <p className="mt-2 max-w-3xl text-sm text-ccweb-muted">
-          Organic-first workspace: listings, Stripe-backed escrow when PostgreSQL and Stripe are configured, campaigns, and lead scoring.
+          Organic-first workspace: listings, Flutterwave-backed escrow when PostgreSQL and payment keys are configured, campaigns, and lead scoring.
           Follow each network&apos;s rules — agent outputs need human approval before publish.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -219,7 +286,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
           <Link to="/login" className="font-medium text-ccweb-cyan underline">
             Sign in
           </Link>{" "}
-          to publish listings, purchase with Stripe escrow, and manage your orders.
+          to publish listings, purchase with card escrow (Flutterwave), and manage your orders.
         </p>
       )}
 
@@ -267,17 +334,18 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
                       type="button"
                       disabled={!user || checkoutLoading === l.id || l.sellerId === user?.id}
                       className="rounded-lg bg-ccweb-green/90 px-3 py-1 text-xs font-semibold text-[#061329] disabled:opacity-40"
-                      onClick={() => payWithStripe(l.id)}
+                      onClick={() => startEscrowCheckout(l.id)}
                       title={l.sellerId === user?.id ? "You cannot buy your own listing" : ""}
                     >
-                      {checkoutLoading === l.id ? "Redirecting…" : "Pay with card (Stripe)"}
+                      {checkoutLoading === l.id ? "Opening checkout…" : "Pay with card"}
                     </button>
                   </div>
                 </li>
               ))}
             </ul>
             <p className="mt-4 text-xs text-ccweb-muted">
-              Requires <code className="text-ccweb-cyan">DATABASE_URL</code>, <code className="text-ccweb-cyan">STRIPE_SECRET_KEY</code>, and a signed-in buyer.
+              Requires <code className="text-ccweb-cyan">DATABASE_URL</code>, <code className="text-ccweb-cyan">FLUTTERWAVE_SECRET_KEY</code> on the API,{" "}
+              <code className="text-ccweb-cyan">VITE_FLUTTERWAVE_PUBLIC_KEY</code> on the app, and a signed-in buyer.
             </p>
           </section>
           <section className="rounded-2xl border border-ccweb-border bg-ccweb-card p-5 backdrop-blur-xl">
@@ -330,7 +398,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
           <h2 className="text-lg font-semibold text-white">Escrow</h2>
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-ccweb-muted">
             <li>
-              Buyer pays via Stripe → order moves to <code className="text-ccweb-cyan">escrow_funded</code> when checkout completes
+              Buyer pays via Flutterwave → order moves to <code className="text-ccweb-cyan">escrow_funded</code> when payment is verified
             </li>
             <li>Seller delivers → Mark delivered</li>
             <li>Buyer confirms → Release payment (platform fee retained)</li>
@@ -346,7 +414,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    {o.status === "pending_payment" && <span className="text-xs text-amber-200">Awaiting Stripe payment</span>}
+                    {o.status === "pending_payment" && <span className="text-xs text-amber-200">Awaiting payment</span>}
                     {o.status === "escrow_funded" && user?.id === o.sellerId && (
                       <button
                         type="button"

@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "../components/shell/ThemeToggle";
 import { NotificationBell } from "../components/notifications/NotificationCenter";
-import { fetchMe, getSessionToken, getStoredUser, logoutApi } from "../session";
+import { fetchMe, getLocalSessionUser, getSessionToken, getStoredUser, logoutApi } from "../session";
 import { captureInviteFromSearch, postBetaClientEvent } from "../lib/betaTelemetry";
 
 const tabs = [
@@ -32,6 +32,12 @@ export function MobileLayout() {
   }, [location.pathname, location.search]);
   useEffect(() => {
     let cancelled = false;
+    const token = getSessionToken();
+    const cached = getLocalSessionUser();
+    if (token && cached) {
+      setUser(cached);
+      setAuthHydrated(true);
+    }
     (async () => {
       try {
         const u = await fetchMe();

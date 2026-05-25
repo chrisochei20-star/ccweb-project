@@ -2,6 +2,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ShareActions } from "../components/ShareCard";
 import { apiUrl } from "../config/env";
+import { getSessionToken } from "../session";
 
 export function FindPage({ initialTab = "scanner" }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -18,6 +19,7 @@ export function FindPage({ initialTab = "scanner" }) {
   const [scanAddress, setScanAddress] = useState("");
   const [scanResult, setScanResult] = useState(null);
   const [scanning, setScanning] = useState(false);
+  const [scanMessage, setScanMessage] = useState(null);
   const [signals, setSignals] = useState([]);
   const [smartMoney, setSmartMoney] = useState(null);
   const [discover, setDiscover] = useState(null);
@@ -37,21 +39,64 @@ export function FindPage({ initialTab = "scanner" }) {
     setSearchParams(next === "scanner" ? {} : { tab: next });
   }
 
+  const SCAN_TIMEOUT_MS = 15_000;
+  const SCAN_EMPTY_HINT =
+    "No data found for this token. Check the symbol and try again. If you only entered a symbol, add the contract address (0x…) — live scans need an on-chain address.";
+
   async function doScan() {
     if (!scanSymbol.trim() && !scanAddress.trim()) return;
     setScanning(true);
     setScanResult(null);
+    setScanMessage(null);
+    const ac = new AbortController();
+    const timeoutId = setTimeout(() => ac.abort(), SCAN_TIMEOUT_MS);
     try {
       const params = new URLSearchParams();
       if (scanSymbol.trim()) params.set("token", scanSymbol.trim().toUpperCase());
       if (scanAddress.trim()) params.set("address", scanAddress.trim());
-      const res = await fetch(apiUrl(`/api/scan-token?${params.toString()}`));
-      const data = await res.json();
+      const auth = (getSessionToken() || "").trim();
+      const headers = {};
+      if (auth) headers.Authorization = `Bearer ${auth}`;
+      const res = await fetch(apiUrl(`/api/scan-token?${params.toString()}`), { signal: ac.signal, headers });
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
+      if (!res.ok) {
+        const apiErr =
+          (typeof data.error === "string" && data.error) ||
+          (typeof data.message === "string" && data.message) ||
+          (res.status === 402 ? "Scan allowance exhausted for this account." : null);
+        setScanMessage(apiErr || SCAN_EMPTY_HINT);
+        return;
+      }
+      if (data && typeof data.error === "string" && data.error) {
+        setScanMessage(data.error);
+        return;
+      }
+      const hasPayload = Boolean(
+        (data.token != null && String(data.token).trim()) ||
+          (data.name != null && String(data.name).trim()) ||
+          (data.contractAddress != null && String(data.contractAddress).trim()) ||
+          (data.modules && typeof data.modules === "object")
+      );
+      if (!hasPayload) {
+        setScanMessage(SCAN_EMPTY_HINT);
+        return;
+      }
       setScanResult(data);
-    } catch {
-      /* ignore */
+    } catch (e) {
+      if (e?.name === "AbortError") {
+        setScanMessage("This scan is taking too long and was stopped. Check the symbol or address and try again.");
+      } else {
+        setScanMessage(SCAN_EMPTY_HINT);
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      setScanning(false);
     }
-    setScanning(false);
   }
 
   async function loadSignals() {
@@ -210,6 +255,17 @@ export function FindPage({ initialTab = "scanner" }) {
             <p className="find-legal-note">
               Scores are model outputs, not audits. High opportunity scores can still coincide with scams.
             </p>
+            {scanning && (
+              <div className="find-scan-status" role="status" aria-live="polite">
+                <span className="find-scan-spinner-el" aria-hidden />
+                <span>Running scan…</span>
+              </div>
+            )}
+            {scanMessage && !scanning && (
+              <p className="find-scan-message" role="alert">
+                {scanMessage}
+              </p>
+            )}
           </div>
 
           {scanResult && (

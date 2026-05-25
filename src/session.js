@@ -2,6 +2,9 @@ import { SESSION_TOKEN_KEY } from "./authStorageKeys";
 import { getApiBaseUrl } from "./config/env";
 import { apiFetch } from "./lib/apiClient";
 
+/** Max wait for /me + refresh during shell hydration (avoids infinite spinner). */
+const SESSION_HYDRATION_TIMEOUT_MS = 8000;
+
 const TOKEN_KEY = SESSION_TOKEN_KEY;
 const USER_KEY = "ccweb_user";
 const REFRESH_KEY = "ccweb_refresh_token";
@@ -76,10 +79,11 @@ async function tryRefreshSession() {
 }
 
 /**
- * Hydrate current user from API. Preserves refresh token when /me returns only { user }.
- * On 401, attempts refresh once (cookie or body refresh) before clearing session.
+ * Hydrate current user from API (like validating a remote session).
+ * Uses local token + `/api/auth/me` with Bearer; on 401, refresh once then retry.
+ * Prefer cached user on slow networks: entire flow is bounded by {@link SESSION_HYDRATION_TIMEOUT_MS}.
  */
-export async function fetchMe() {
+async function fetchMeFromNetwork() {
   const trace = import.meta.env.VITE_CCWEB_AUTH_TRACE === "1";
   let token = getSessionToken();
   if (trace) {
@@ -149,6 +153,40 @@ export async function fetchMe() {
     console.info("[ccweb-auth-trace] fetchMe_ok", { hasUser: Boolean(data.user) });
   }
   return data.user;
+}
+
+/**
+ * Local session snapshot (token + cached user) without waiting on the network — analogous to reading a stored session first.
+ */
+export function getLocalSessionUser() {
+  const token = getSessionToken();
+  if (!token) return null;
+  return getStoredUser();
+}
+
+export async function fetchMe() {
+  let timeoutId;
+  try {
+    return await Promise.race([
+      fetchMeFromNetwork(),
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(Object.assign(new Error("session_hydration_timeout"), { code: "SESSION_HYDRATION_TIMEOUT" })),
+          SESSION_HYDRATION_TIMEOUT_MS
+        );
+      }),
+    ]);
+  } catch (e) {
+    if (e && e.code === "SESSION_HYDRATION_TIMEOUT") {
+      const token = getSessionToken();
+      const cached = getStoredUser();
+      if (token && cached) return cached;
+      return null;
+    }
+    throw e;
+  } finally {
+    if (timeoutId != null) clearTimeout(timeoutId);
+  }
 }
 
 export async function logoutApi() {

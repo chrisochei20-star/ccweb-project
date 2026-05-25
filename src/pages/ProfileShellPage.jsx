@@ -23,6 +23,18 @@ export function ProfileShellPage() {
 
   const [betaSlug, setBetaSlug] = useState("");
   const [mediaBusy, setMediaBusy] = useState({ avatar: false, banner: false });
+  const [gateTimedOut, setGateTimedOut] = useState(false);
+
+  useEffect(() => {
+    const waitingHydrate = !authHydrated;
+    const waitingUserWithToken = Boolean(authHydrated && !user && getSessionToken());
+    if (!waitingHydrate && !waitingUserWithToken) {
+      setGateTimedOut(false);
+      return undefined;
+    }
+    const id = window.setTimeout(() => setGateTimedOut(true), 8000);
+    return () => window.clearTimeout(id);
+  }, [authHydrated, user]);
 
   useEffect(() => {
     if (user) {
@@ -153,8 +165,12 @@ export function ProfileShellPage() {
   if (!authHydrated) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 px-4 text-ccweb-muted" role="status">
-        <Loader2 className="h-7 w-7 shrink-0 animate-spin" aria-hidden />
-        <span className="text-sm">Loading profile…</span>
+        {!gateTimedOut ? <Loader2 className="h-7 w-7 shrink-0 animate-spin" aria-hidden /> : null}
+        <span className="text-sm text-center max-w-sm">
+          {gateTimedOut
+            ? "We could not verify your session in time. Check your connection or try signing in again."
+            : "Loading profile…"}
+        </span>
       </div>
     );
   }
@@ -163,8 +179,12 @@ export function ProfileShellPage() {
     if (getSessionToken()) {
       return (
         <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 px-4 text-ccweb-muted" role="status">
-          <Loader2 className="h-7 w-7 shrink-0 animate-spin" aria-hidden />
-          <span className="text-sm">Syncing account…</span>
+          {!gateTimedOut ? <Loader2 className="h-7 w-7 shrink-0 animate-spin" aria-hidden /> : null}
+          <span className="text-sm text-center max-w-sm">
+            {gateTimedOut
+              ? "We could not load your account in time. Check your connection or try signing in again."
+              : "Syncing account…"}
+          </span>
         </div>
       );
     }

@@ -2316,13 +2316,31 @@ function getBearerToken(req) {
   return m ? m[1].trim() : null;
 }
 
+/** Cookie names only (no values) for production-safe tracing. */
+function cookieNamesFromHeader(cookieHeader) {
+  const raw = String(cookieHeader || "").trim();
+  if (!raw) return [];
+  const names = [];
+  for (const part of raw.split(";")) {
+    const name = part.split("=")[0].trim();
+    if (name) names.push(name);
+  }
+  return [...new Set(names)];
+}
+
 /**
  * Split-deploy diagnostics (enable on Railway with CCWEB_DIAGNOSTIC_ROUTES=1).
  * @returns {boolean} true if the request was fully handled.
  */
 function handleDiagnosticApiRequest(req, res, pathname) {
   if (process.env.CCWEB_DIAGNOSTIC_ROUTES !== "1") return false;
-  if (pathname !== "/api/debug/cors" && pathname !== "/api/debug/auth" && pathname !== "/api/debug/session") {
+  const diagnosticPaths = new Set([
+    "/api/debug/cors",
+    "/api/debug/auth",
+    "/api/debug/session",
+    "/api/debug/runtime",
+  ]);
+  if (!diagnosticPaths.has(pathname)) {
     return false;
   }
   if (req.method === "OPTIONS") {
@@ -2338,6 +2356,40 @@ function handleDiagnosticApiRequest(req, res, pathname) {
   const parsed = parseAllowedOrigins();
   const originAllowed =
     parsed.mode === "all" || !origin || (parsed.mode === "list" && parsed.origins.includes(origin));
+
+  if (pathname === "/api/debug/runtime") {
+    setRawCorsHeaders(req, res, {
+      methods: "GET, OPTIONS",
+      headers: "Accept, Content-Type, Authorization, Cookie, Origin, X-Requested-With",
+    });
+    const host = String(req.headers.host || "");
+    const xfHost = String(req.headers["x-forwarded-host"] || "");
+    const xfProto = String(req.headers["x-forwarded-proto"] || "");
+    sendJson(
+      res,
+      200,
+      {
+        ok: true,
+        path: "/api/debug/runtime",
+        nodeEnv: process.env.NODE_ENV || null,
+        publicAppUrl: trimOrigin(process.env.PUBLIC_APP_URL || "") || null,
+        ccwebApiPublicUrl: trimOrigin(process.env.CCWEB_API_PUBLIC_URL || "") || null,
+        corsMode: parsed.mode,
+        allowedOrigins: parsed.mode === "list" ? parsed.origins : null,
+        allowedOriginsCount: parsed.mode === "list" ? parsed.origins.length : null,
+        requestOrigin: origin || null,
+        originAllowed,
+        requestHost: host || null,
+        xForwardedHost: xfHost || null,
+        xForwardedProto: xfProto || null,
+        viteApiBaseUrlOnServer: null,
+        clientBundleHint:
+          "VITE_API_BASE_URL is embedded at Vercel build time. Rebuild with VITE_CCWEB_API_DEBUG=1 to log import.meta.env.VITE_API_BASE_URL and getApiBaseUrl() in the browser console.",
+      },
+      req
+    );
+    return true;
+  }
 
   if (pathname === "/api/debug/cors") {
     setRawCorsHeaders(req, res, {
@@ -4425,6 +4477,17 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.method === "GET" || req.method === "POST") {
+      if (process.env.CCWEB_AUTH_TRACE === "1") {
+        logger.info({
+          msg: "auth_gateway_hit",
+          method: req.method,
+          pathname,
+          url: req.url || "",
+          origin: req.headers.origin || null,
+          authorizationPresent: Boolean(getBearerToken(req)),
+          cookieNames: cookieNamesFromHeader(req.headers.cookie).slice(0, 24),
+        });
+      }
       delegateAuth(req, res);
       return;
     }

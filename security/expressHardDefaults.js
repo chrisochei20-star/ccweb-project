@@ -86,6 +86,22 @@ function setRawCorsHeaders(req, res, opts = {}) {
   const origin = String(req.headers.origin || "").trim();
   const parsed = parseAllowedOrigins();
   const path = String(req.url || "").split("?")[0];
+  const allowedList = parsed.mode === "list" ? parsed.origins : [];
+
+  function logCorsSetRawTrace() {
+    if (process.env.CCWEB_AUTH_TRACE !== "1") return;
+    const onList = parsed.mode === "list" && Boolean(origin && allowedList.includes(origin));
+    logger.info({
+      msg: "cors_set_raw",
+      path,
+      method: req.method,
+      requestOrigin: origin || null,
+      corsMode: parsed.mode,
+      originOnAllowlist: parsed.mode === "all" ? null : Boolean(onList),
+      accessControlAllowOrigin: res.getHeader("Access-Control-Allow-Origin") || null,
+      accessControlAllowCredentials: res.getHeader("Access-Control-Allow-Credentials") || null,
+    });
+  }
 
   res.setHeader("Access-Control-Allow-Methods", methods);
   res.setHeader("Access-Control-Allow-Headers", headers);
@@ -99,28 +115,30 @@ function setRawCorsHeaders(req, res, opts = {}) {
     } else {
       res.setHeader("Access-Control-Allow-Origin", "*");
     }
+    logCorsSetRawTrace();
     return;
   }
 
-  const allowed = parsed.origins;
-  if (origin && allowed.includes(origin)) {
+  if (origin && allowedList.includes(origin)) {
     vary(res, "Origin");
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
+    logCorsSetRawTrace();
     return;
   }
-  if (origin && !allowed.includes(origin)) {
+  if (origin && !allowedList.includes(origin)) {
     logger.warn({
       msg: "cors_origin_rejected",
       origin,
       path,
       method: req.method,
-      allowlistSize: allowed.length,
+      allowlistSize: allowedList.length,
     });
   }
   if (!origin) {
     res.setHeader("Access-Control-Allow-Origin", "*");
   }
+  logCorsSetRawTrace();
 }
 
 /**

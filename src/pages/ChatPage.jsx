@@ -10,6 +10,8 @@ import { getSessionToken } from "../session";
 
 const QUICK_EMOJIS = ["😀", "🙂", "😂", "🔥", "❤️", "👍", "🎉", "⚡", "📈", "🚀", "💎", "✨", "🙏", "👀", "💬"];
 
+const CHAT_LOAD_TIMEOUT_MS = 8000;
+
 function authHeaders() {
   const t = getSessionToken();
   const h = {};
@@ -30,6 +32,7 @@ export function ChatPage() {
   const [peerTyping, setPeerTyping] = useState(false);
   const [newDmId, setNewDmId] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
+  const [gateTimedOut, setGateTimedOut] = useState(false);
   const typingTimer = useRef(null);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -77,13 +80,42 @@ export function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (!user?.id) return;
+    const waitingHydrate = !authHydrated;
+    const waitingUserWithToken = Boolean(authHydrated && !user && getSessionToken());
+    if (!waitingHydrate && !waitingUserWithToken) {
+      setGateTimedOut(false);
+      return undefined;
+    }
+    const id = window.setTimeout(() => setGateTimedOut(true), CHAT_LOAD_TIMEOUT_MS);
+    return () => window.clearTimeout(id);
+  }, [authHydrated, user]);
+
+  useEffect(() => {
+    if (!authHydrated) return;
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
+    const token = getSessionToken();
+    if (!token) {
+      setLoading(false);
+      setErr("No access token in session. Sign in again.");
+      return;
+    }
     let cancelled = false;
     (async () => {
       setLoading(true);
       setErr(null);
       try {
-        await loadConversations();
+        await Promise.race([
+          loadConversations(),
+          new Promise((_, reject) => {
+            setTimeout(
+              () => reject(new Error("Loading chats timed out. Check your connection and try again.")),
+              CHAT_LOAD_TIMEOUT_MS
+            );
+          }),
+        ]);
       } catch (e) {
         if (!cancelled) setErr(e.message || String(e));
       } finally {
@@ -93,7 +125,7 @@ export function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, loadConversations]);
+  }, [authHydrated, user?.id, loadConversations]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -176,8 +208,24 @@ export function ChatPage() {
     if (!socket || !activeId) return;
     socket.emit("join:chat", activeId, () => {});
     setPeerTyping(false);
-    loadMessages(activeId).catch((e) => setErr(e.message));
+    let cancelled = false;
+    (async () => {
+      try {
+        await Promise.race([
+          loadMessages(activeId),
+          new Promise((_, reject) => {
+            setTimeout(
+              () => reject(new Error("Loading messages timed out. Check your connection and try again.")),
+              CHAT_LOAD_TIMEOUT_MS
+            );
+          }),
+        ]);
+      } catch (e) {
+        if (!cancelled) setErr(e.message || String(e));
+      }
+    })();
     return () => {
+      cancelled = true;
       socket.emit("leave:chat", activeId);
     };
   }, [activeId, loadMessages]);
@@ -294,8 +342,12 @@ export function ChatPage() {
   if (!authHydrated) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 px-4 text-ccweb-muted" role="status">
-        <Loader2 className="h-6 w-6 shrink-0 animate-spin" aria-hidden />
-        <span className="text-sm">Loading messages…</span>
+        {!gateTimedOut ? <Loader2 className="h-6 w-6 shrink-0 animate-spin" aria-hidden /> : null}
+        <span className="text-sm text-center max-w-sm">
+          {gateTimedOut
+            ? "We could not verify your session in time. Check your connection or try signing in again."
+            : "Loading messages…"}
+        </span>
       </div>
     );
   }
@@ -304,8 +356,12 @@ export function ChatPage() {
     if (getSessionToken()) {
       return (
         <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 px-4 text-ccweb-muted" role="status">
-          <Loader2 className="h-6 w-6 shrink-0 animate-spin" aria-hidden />
-          <span className="text-sm">Syncing account…</span>
+          {!gateTimedOut ? <Loader2 className="h-6 w-6 shrink-0 animate-spin" aria-hidden /> : null}
+          <span className="text-sm text-center max-w-sm">
+            {gateTimedOut
+              ? "We could not load your account in time. Check your connection or try signing in again."
+              : "Syncing account…"}
+          </span>
         </div>
       );
     }
@@ -318,9 +374,9 @@ export function ChatPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center gap-2 text-ccweb-muted">
-        <Loader2 className="h-5 w-5 animate-spin" />
-        Loading chats…
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 px-4 text-ccweb-muted">
+        {!err ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden /> : null}
+        <span className={`text-sm text-center max-w-sm ${err ? "text-rose-200" : ""}`}>{err || "Loading chats…"}</span>
       </div>
     );
   }

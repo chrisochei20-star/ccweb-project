@@ -178,6 +178,22 @@ export function logCcwebApiRuntimeDebug() {
     // eslint-disable-next-line no-console -- gated split-deploy diagnostics
     console.info("[ccweb-api-debug] Socket.IO client host:", wsHost || "(empty)");
     if (trace && typeof window !== "undefined") {
+      // eslint-disable-next-line no-console -- gated split-deploy diagnostics
+      console.info("[ccweb-auth-trace] SPA origin (window.location):", window.location?.origin || "(empty)");
+      // eslint-disable-next-line no-console -- gated split-deploy diagnostics
+      console.info(
+        "[ccweb-auth-trace] apiFetch uses credentials:include for same-site cookies + cross-origin credentialed requests"
+      );
+      try {
+        const dc = document.cookie ? document.cookie.split(";").filter(Boolean).length : 0;
+        // eslint-disable-next-line no-console -- gated split-deploy diagnostics
+        console.info(
+          "[ccweb-auth-trace] document.cookie segment count (HttpOnly API cookies are NOT visible here):",
+          dc
+        );
+      } catch {
+        /* ignore */
+      }
       let hasToken = false;
       try {
         hasToken = Boolean(window.sessionStorage?.getItem(SESSION_TOKEN_KEY));

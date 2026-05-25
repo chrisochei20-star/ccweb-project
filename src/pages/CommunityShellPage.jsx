@@ -115,21 +115,43 @@ export function CommunityShellPage() {
 
   async function submitPost(e) {
     e.preventDefault();
-    const token = getSessionToken();
+    const token = (getSessionToken() || "").trim();
     if (!token) {
-      toast.error("Sign in to post.");
+      const m = "Sign in to post.";
+      setErr(m);
+      toast.error(m);
       return;
     }
-    if (!postTitle.trim() || !postBody.trim()) return;
+    if (!user?.id) {
+      const m = "Your session is not ready yet. Try again in a moment or sign in again.";
+      setErr(m);
+      toast.error(m);
+      return;
+    }
+    const title = postTitle.trim();
+    const bodyText = postBody.trim();
+    if (!title || !bodyText) {
+      const m = "Add a headline and body before posting.";
+      setErr(m);
+      toast.error(m);
+      return;
+    }
     setErr(null);
     try {
-      await createCommunityPost({
-        title: postTitle.trim(),
-        content: postBody.trim(),
+      const created = await createCommunityPost({
+        title,
+        content: bodyText,
         tags: [],
       });
       setPostTitle("");
       setPostBody("");
+      if (created?.id) {
+        setPosts((prev) => {
+          if (prev.some((p) => p.id === created.id)) return prev;
+          const row = { ...created, commentCount: created.commentCount ?? 0 };
+          return [row, ...prev];
+        });
+      }
       await loadPosts();
       toast.success("Posted to the feed.");
     } catch (e) {

@@ -45,14 +45,18 @@ export async function fetchPostReactions(postId) {
 }
 
 export async function createCommunityPost(body) {
+  const token = (getSessionToken() || "").trim();
   const res = await apiFetch(apiUrl("/api/community/posts"), {
     method: "POST",
     credentials: "include",
-    headers: authHeaders(),
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Could not post");
+  if (!res.ok) throw new Error(data.error || data.message || "Could not post");
   return data;
 }
 

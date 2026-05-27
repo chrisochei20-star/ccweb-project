@@ -23,6 +23,7 @@
   position: sticky;
   top: 0;
   z-index: 40;
+  padding-top: var(--ccweb-safe-top, env(safe-area-inset-top, 0));
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   background: linear-gradient(180deg, rgba(3, 7, 18, 0.82) 0%, rgba(3, 7, 18, 0.55) 100%);
@@ -170,8 +171,9 @@
 }
 
 .ccweb-nav-item {
-  flex: 1 0 min(4.1rem, 14vw);
+  flex: 1 0 min(3.5rem, 18vw);
   min-width: 0;
+  min-height: max(2.75rem, var(--ccweb-touch-min, 44px));
   display: flex;
   flex-direction: column;
   align-items: center;

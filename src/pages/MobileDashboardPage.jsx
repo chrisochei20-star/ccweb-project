@@ -180,10 +180,11 @@ export function MobileDashboardPage() {
   const greet = timeGreeting();
 
   const quickLinks = [
-    { to: "/learn", title: "Start learning", sub: "Courses, AI tutor & live labs", accent: "from-ccweb-cyan/30 to-ccweb-violet/20", icon: Sparkles },
-    { to: "/find", title: "Market intelligence", sub: "Scanner, signals & wallets", accent: "from-ccweb-green/25 to-ccweb-cyan/15", icon: Zap },
-    { to: "/dapp-builder", title: "Build a DApp", sub: "Visual builder & templates", accent: "from-ccweb-violet/30 to-ccweb-cyan/15", icon: Bot },
-    { to: "/ai-agents", title: "AI agents", sub: "Automations & API runs", accent: "from-ccweb-cyan/25 to-ccweb-green/15", icon: Bot },
+    { to: "/community", title: "Community feed", sub: "Posts, reactions & channels", accent: "from-ccweb-cyan/30 to-ccweb-violet/20", icon: Users },
+    { to: "/learn", title: "Learn", sub: "Courses, AI tutor & live labs", accent: "from-ccweb-violet/25 to-ccweb-cyan/15", icon: Sparkles },
+    { to: "/find", title: "Search & intel", sub: "Scanner, signals & wallets", accent: "from-ccweb-green/25 to-ccweb-cyan/15", icon: Zap },
+    { to: "/earn", title: "Earn", sub: "Rewards & referrals", accent: "from-ccweb-green/20 to-ccweb-violet/15", icon: Gift },
+    { to: "/build", title: "Build", sub: "DApps, agents & APIs", accent: "from-ccweb-violet/30 to-ccweb-cyan/15", icon: Bot },
   ];
 
   return (
@@ -193,7 +194,7 @@ export function MobileDashboardPage() {
         <div className="pointer-events-none absolute -bottom-20 left-1/3 h-40 w-40 rounded-full bg-ccweb-green/10 blur-3xl" />
         <div className="relative">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="ccweb-kicker">Command center</span>
+            <span className="ccweb-kicker">Home</span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300/95">
               <span className="ccweb-live-dot" />
               Live
@@ -217,9 +218,9 @@ export function MobileDashboardPage() {
               </>
             )}
           </h1>
-          <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-ccweb-muted md:text-base">
-            Premium intelligence, courses, and automation — one fluid surface inspired by Linear, Discord, and modern
-            on-chain apps.
+          <p className="mt-3 max-w-xl text-sm leading-relaxed text-ccweb-muted sm:text-[15px] md:text-base">
+            Your social hub: feed, messages, and alerts — with learn, earn, and build tools one tap away in{" "}
+            <span className="text-ccweb-cyan/90">More</span>.
           </p>
           {!authHydrated && getSessionToken() && (
             <p className="mt-3 flex items-center gap-2 text-sm text-ccweb-muted">
@@ -239,6 +240,22 @@ export function MobileDashboardPage() {
           )}
         </div>
       </header>
+
+      <section className="ccweb-glass ccweb-card-premium rounded-2xl border border-ccweb-cyan/15 p-4 sm:rounded-3xl sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="ccweb-kicker text-[10px]">Feed-first</p>
+            <h2 className="mt-1 text-base font-bold tracking-tight text-white sm:text-lg">Community</h2>
+            <p className="mt-1 text-xs leading-snug text-ccweb-muted sm:text-sm">Catch up on the timeline and live channels.</p>
+          </div>
+          <Link
+            to="/community"
+            className="ccweb-gradient-btn inline-flex min-h-[var(--ccweb-touch-min,44px)] shrink-0 items-center gap-2 px-4 py-2.5 text-sm font-semibold"
+          >
+            Open <ArrowRight className="h-4 w-4" aria-hidden />
+          </Link>
+        </div>
+      </section>
 
       {user && (
         <section className="ccweb-glass ccweb-card-premium rounded-3xl p-6 md:p-7">
@@ -609,13 +626,13 @@ export function MobileDashboardPage() {
       )}
 
       <section>
-        <h2 className="mb-4 text-[11px] font-bold uppercase tracking-[0.2em] text-ccweb-muted">Quick actions</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ccweb-muted">Explore apps</h2>
+        <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:pb-0">
           {quickLinks.map(({ to, title, sub, accent, icon: Icon }) => (
             <Link
               key={to}
               to={to}
-              className={`group ccweb-glass ccweb-card-premium relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br ${accent} p-5`}
+              className={`group ccweb-glass ccweb-card-premium relative min-w-[min(288px,86vw)] shrink-0 snap-start overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br ${accent} p-4 sm:min-w-0 sm:p-5`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>

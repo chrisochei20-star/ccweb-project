@@ -375,7 +375,7 @@ export function CommunityShellPage() {
       {tab === "feed" && (
         <>
           {authHydrated && user ? (
-            <div className="sticky bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-30 -mx-3 border-t border-white/10 bg-[#050810]/95 px-3 pb-3 pt-3 shadow-[0_-8px_30px_rgba(0,0,0,0.45)] backdrop-blur-md supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))] md:static md:z-0 md:mx-0 md:border-t-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none">
+            <div className="sticky bottom-0 z-30 -mx-3 border-t border-white/10 bg-[#050810]/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_30px_rgba(0,0,0,0.45)] backdrop-blur-md md:static md:z-0 md:mx-0 md:border-t-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none">
               <form
                 onSubmit={submitPost}
                 className="ccweb-card-premium space-y-3 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-transparent p-5 md:border-white/10"

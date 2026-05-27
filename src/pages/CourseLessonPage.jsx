@@ -262,7 +262,15 @@ export function CourseLessonPage() {
             Checking session…
           </p>
         )}
-        {authHydrated && !user && <p className="mt-2 text-sm text-amber-200">Sign in to use the tutor.</p>}
+        {authHydrated && !user && getSessionToken() && (
+          <p className="mt-2 flex items-center gap-2 text-sm text-ccweb-muted">
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+            Syncing account…
+          </p>
+        )}
+        {authHydrated && !user && !getSessionToken() && (
+          <p className="mt-2 text-sm text-amber-200">Sign in to use the tutor.</p>
+        )}
         {user && (
           <>
             <div className="mt-4 max-h-64 space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-black/30 p-3 text-sm">

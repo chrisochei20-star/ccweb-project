@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { createStreamRoom, fetchLearningProfile, fetchLearningSessions, listStreamRooms } from "../api/learningApi";
 import { useStaleLoadingGuard } from "../hooks/useStaleLoadingGuard";
+import { getSessionToken } from "../session";
 
 export function LearningHubPage({ compact = false }) {
   const { user, authHydrated } = useOutletContext() || {};
@@ -48,6 +49,7 @@ export function LearningHubPage({ compact = false }) {
   async function handleCreate() {
     if (!authHydrated) return;
     if (!user?.id) {
+      if (getSessionToken()) return;
       navigate("/login");
       return;
     }
@@ -119,7 +121,13 @@ export function LearningHubPage({ compact = false }) {
               Checking session…
             </p>
           )}
-          {authHydrated && !user && (
+          {authHydrated && !user && getSessionToken() && (
+            <p className="muted flex items-center gap-2">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+              Syncing account…
+            </p>
+          )}
+          {authHydrated && !user && !getSessionToken() && (
             <p className="muted">
               <Link to="/login">Sign in</Link> to sync credits, XP, and subscriptions from the server.
             </p>

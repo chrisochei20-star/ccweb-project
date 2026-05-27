@@ -1,9 +1,11 @@
 import { Link, useOutletContext } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { closePaymentModal, useFlutterwave } from "flutterwave-react-v3";
 import { http } from "./api/http";
 import { apiUrl } from "./config/env";
 import { apiFetch } from "./lib/apiClient";
+import { getSessionToken } from "./session";
 
 const IDLE_FW_CONFIG = {
   public_key: "FLWPUBK_TEST-00000000000000000000000000000000-X",
@@ -223,7 +225,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
 
   async function createLead() {
     if (!user) {
-      setErr("Sign in to generate leads.");
+      setErr(getSessionToken() ? "Account is still syncing. Try again in a moment." : "Sign in to generate leads.");
       return;
     }
     await http.post("/api/growth/leads", {
@@ -235,7 +237,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
 
   async function createCampaign() {
     if (!user) {
-      setErr("Sign in to create campaigns.");
+      setErr(getSessionToken() ? "Account is still syncing. Try again in a moment." : "Sign in to create campaigns.");
       return;
     }
     setErr(null);
@@ -278,7 +280,14 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
         </div>
       </header>
 
-      {!user && (
+      {!user && getSessionToken() && (
+        <p className="flex items-center gap-2 rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-sm text-ccweb-muted">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+          Syncing account for payments and listings…
+        </p>
+      )}
+
+      {!user && !getSessionToken() && (
         <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
           <Link to="/login" className="font-medium text-ccweb-cyan underline">
             Sign in

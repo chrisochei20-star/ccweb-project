@@ -16,9 +16,27 @@
 }
 
 @layer base {
+  :root {
+    --ccweb-touch-min: 44px;
+    --ccweb-safe-top: env(safe-area-inset-top, 0px);
+    --ccweb-safe-bottom: env(safe-area-inset-bottom, 0px);
+    --ccweb-safe-left: env(safe-area-inset-left, 0px);
+    --ccweb-safe-right: env(safe-area-inset-right, 0px);
+  }
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+  button,
+  a,
+  [role="button"] {
+    touch-action: manipulation;
   }
   ::selection {
     background: rgba(34, 211, 238, 0.28);

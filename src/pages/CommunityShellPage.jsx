@@ -12,6 +12,7 @@ import {
 import { SocialPostCard } from "../components/community/SocialPostCard";
 import { Skeleton } from "../components/ui/Skeleton";
 import { useStaleLoadingGuard } from "../hooks/useStaleLoadingGuard";
+import { getSharedRealtimeSocket } from "../lib/chatSocket";
 import { toast } from "../lib/toastBus";
 import { getSessionToken } from "../session";
 
@@ -37,6 +38,15 @@ export function CommunityShellPage() {
   const [err, setErr] = useState(null);
   const [visibleCount, setVisibleCount] = useState(12);
   const sentinelRef = useRef(null);
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+  const channelRef = useRef(channel);
+  channelRef.current = channel;
+  const expandedPostRef = useRef(expandedPost);
+  expandedPostRef.current = expandedPost;
+  const [postingBusy, setPostingBusy] = useState(false);
+  const [commentSubmittingId, setCommentSubmittingId] = useState(null);
+  const [chatSending, setChatSending] = useState(false);
 
   const loadPosts = useCallback(async () => {
     setLoadingPosts(true);
@@ -68,6 +78,11 @@ export function CommunityShellPage() {
       setLoadingChats(false);
     }
   }, [channel]);
+
+  const loadPostsRef = useRef(loadPosts);
+  loadPostsRef.current = loadPosts;
+  const loadChatsRef = useRef(loadChats);
+  loadChatsRef.current = loadChats;
 
   useEffect(() => {
     loadPosts();
@@ -115,6 +130,42 @@ export function CommunityShellPage() {
     return () => io.disconnect();
   }, [tab, loadingPosts, posts.length]);
 
+  useEffect(() => {
+    if (!authHydrated || !user?.id) return undefined;
+    const socket = getSharedRealtimeSocket();
+    if (!socket) return undefined;
+    let debounceT = 0;
+    const debouncedReloadFeed = () => {
+      window.clearTimeout(debounceT);
+      debounceT = window.setTimeout(() => {
+        loadPostsRef.current();
+      }, 380);
+    };
+    const onCommunity = (payload) => {
+      const k = payload?.kind;
+      if (k === "post" || k === "reaction") {
+        debouncedReloadFeed();
+      }
+      if (k === "comment") {
+        debouncedReloadFeed();
+        const pid = payload.postId;
+        if (pid && pid === expandedPostRef.current) {
+          void fetchPostComments(pid).then((list) => {
+            setCommentsByPost((p) => ({ ...p, [pid]: list }));
+          });
+        }
+      }
+      if (k === "chat" && tabRef.current === "chat" && payload.channel === channelRef.current) {
+        void loadChatsRef.current();
+      }
+    };
+    socket.on("community:update", onCommunity);
+    return () => {
+      socket.off("community:update", onCommunity);
+      window.clearTimeout(debounceT);
+    };
+  }, [authHydrated, user?.id]);
+
   async function submitPost(e) {
     e.preventDefault();
     const token = (getSessionToken() || "").trim();
@@ -139,6 +190,7 @@ export function CommunityShellPage() {
       return;
     }
     setErr(null);
+    setPostingBusy(true);
     try {
       const created = await createCommunityPost({
         title,
@@ -148,18 +200,25 @@ export function CommunityShellPage() {
       setPostTitle("");
       setPostBody("");
       if (created?.id) {
-        setPosts((prev) => {
-          if (prev.some((p) => p.id === created.id)) return prev;
-          const row = { ...created, commentCount: created.commentCount ?? 0 };
-          return [row, ...prev];
-        });
+        if (feedMode === "latest") {
+          setPosts((prev) => {
+            if (prev.some((p) => p.id === created.id)) return prev;
+            const row = { ...created, commentCount: created.commentCount ?? 0 };
+            return [row, ...prev];
+          });
+        } else {
+          await loadPosts();
+        }
+      } else {
+        await loadPosts();
       }
-      await loadPosts();
       toast.success("Posted to the feed.");
     } catch (e) {
       const m = e.message || "Post failed";
       setErr(m);
       toast.error(m);
+    } finally {
+      setPostingBusy(false);
     }
   }
 
@@ -176,17 +235,53 @@ export function CommunityShellPage() {
     const text = (commentDraft[postId] || "").trim();
     if (!text) return;
     setErr(null);
+    const tempId = `tmp_comment_${Date.now()}`;
+    const optimistic = {
+      id: tempId,
+      postId,
+      authorUserId: user?.id,
+      authorDisplayName: user?.displayName || user?.email || "You",
+      body: text,
+      createdAt: new Date().toISOString(),
+    };
+    setCommentSubmittingId(postId);
+    setCommentsByPost((prev) => ({
+      ...prev,
+      [postId]: [...(prev[postId] || []), optimistic],
+    }));
+    setPosts((prev) =>
+      prev.map((p) => (p.id === postId ? { ...p, commentCount: (p.commentCount || 0) + 1 } : p))
+    );
+    setCommentDraft((prev) => ({ ...prev, [postId]: "" }));
     try {
-      await createPostComment(postId, {
+      const row = await createPostComment(postId, {
         body: text,
       });
-      setCommentDraft((prev) => ({ ...prev, [postId]: "" }));
-      const list = await fetchPostComments(postId);
-      setCommentsByPost((prev) => ({ ...prev, [postId]: list }));
+      const created = row && typeof row === "object" && row.id ? row : null;
+      if (created) {
+        setCommentsByPost((prev) => {
+          const cur = (prev[postId] || []).filter((c) => c.id !== tempId);
+          if (cur.some((c) => c.id === created.id)) return { ...prev, [postId]: cur };
+          return { ...prev, [postId]: [...cur, created] };
+        });
+      } else {
+        const list = await fetchPostComments(postId);
+        setCommentsByPost((prev) => ({ ...prev, [postId]: list }));
+      }
     } catch (e) {
+      setCommentsByPost((prev) => ({
+        ...prev,
+        [postId]: (prev[postId] || []).filter((c) => c.id !== tempId),
+      }));
+      setPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, commentCount: Math.max(0, (p.commentCount || 0) - 1) } : p))
+      );
+      setCommentDraft((prev) => ({ ...prev, [postId]: text }));
       const m = e.message || "Comment failed";
       setErr(m);
       toast.error(m);
+    } finally {
+      setCommentSubmittingId(null);
     }
   }
 
@@ -197,19 +292,39 @@ export function CommunityShellPage() {
       toast.error("Sign in to chat.");
       return;
     }
-    if (!chatMsg.trim()) return;
+    const trimmed = chatMsg.trim();
+    if (!trimmed) return;
     setErr(null);
+    const tempId = `tmp_chat_${Date.now()}`;
+    const optimistic = {
+      id: tempId,
+      channel,
+      authorUserId: user?.id,
+      authorDisplayName: user?.displayName || user?.email || "You",
+      message: trimmed,
+      createdAt: new Date().toISOString(),
+    };
+    setChatMsg("");
+    setChats((prev) => [optimistic, ...prev]);
+    setChatSending(true);
     try {
-      await createCommunityChat({
+      const chat = await createCommunityChat({
         channel,
-        message: chatMsg.trim(),
+        message: trimmed,
       });
-      setChatMsg("");
-      await loadChats();
+      if (chat?.id) {
+        setChats((prev) => prev.map((c) => (c.id === tempId ? chat : c)));
+      } else {
+        await loadChats();
+      }
     } catch (e) {
+      setChats((prev) => prev.filter((c) => c.id !== tempId));
+      setChatMsg(trimmed);
       const m = e.message || "Send failed";
       setErr(m);
       toast.error(m);
+    } finally {
+      setChatSending(false);
     }
   }
 
@@ -260,25 +375,41 @@ export function CommunityShellPage() {
       {tab === "feed" && (
         <>
           {authHydrated && user ? (
-            <form
-              onSubmit={submitPost}
-              className="ccweb-card-premium space-y-3 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-transparent p-5"
-            >
-              <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                <Sparkles className="h-4 w-4 text-ccweb-cyan" />
-                Compose
-              </div>
-              <input className="ccweb-input" placeholder="Headline" value={postTitle} onChange={(e) => setPostTitle(e.target.value)} />
-              <textarea
-                className="ccweb-input min-h-[110px] resize-y"
-                placeholder="What are you shipping, learning, or seeing on-chain?"
-                value={postBody}
-                onChange={(e) => setPostBody(e.target.value)}
-              />
-              <button type="submit" className="ccweb-gradient-btn text-sm">
-                Post to feed
-              </button>
-            </form>
+            <div className="sticky bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-30 -mx-3 border-t border-white/10 bg-[#050810]/95 px-3 pb-3 pt-3 shadow-[0_-8px_30px_rgba(0,0,0,0.45)] backdrop-blur-md supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))] md:static md:z-0 md:mx-0 md:border-t-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none">
+              <form
+                onSubmit={submitPost}
+                className="ccweb-card-premium space-y-3 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-transparent p-5 md:border-white/10"
+              >
+                <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                  <Sparkles className="h-4 w-4 text-ccweb-cyan" aria-hidden />
+                  Compose
+                </div>
+                <input
+                  className="ccweb-input min-h-[44px]"
+                  placeholder="Headline"
+                  value={postTitle}
+                  onChange={(e) => setPostTitle(e.target.value)}
+                  disabled={postingBusy}
+                />
+                <textarea
+                  className="ccweb-input min-h-[110px] resize-y"
+                  placeholder="What are you shipping, learning, or seeing on-chain?"
+                  value={postBody}
+                  onChange={(e) => setPostBody(e.target.value)}
+                  disabled={postingBusy}
+                />
+                <button type="submit" className="ccweb-gradient-btn inline-flex min-h-[44px] items-center justify-center gap-2 text-sm disabled:opacity-50" disabled={postingBusy}>
+                  {postingBusy ? (
+                    <>
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                      Posting…
+                    </>
+                  ) : (
+                    "Post to feed"
+                  )}
+                </button>
+              </form>
+            </div>
           ) : !authHydrated ? (
             <div className="ccweb-glass flex items-center justify-center gap-2 rounded-2xl p-5 text-sm text-ccweb-muted">
               <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
@@ -358,6 +489,7 @@ export function CommunityShellPage() {
                     expanded={expandedPost === p.id}
                     comments={commentsByPost[p.id]}
                     commentsLoading={commentsLoadingId === p.id}
+                    commentSubmitting={commentSubmittingId === p.id}
                     commentDraft={commentDraft[p.id]}
                     onToggleThread={toggleThread}
                     onCommentDraft={(id, v) => setCommentDraft((prev) => ({ ...prev, [id]: v }))}
@@ -415,13 +547,14 @@ export function CommunityShellPage() {
           {authHydrated && user ? (
             <form onSubmit={sendChat} className="flex gap-2 border-t border-white/10 bg-black/40 p-3">
               <input
-                className="ccweb-input flex-1 text-sm"
+                className="ccweb-input min-h-[44px] flex-1 text-sm"
                 placeholder={`Message #${channel}`}
                 value={chatMsg}
                 onChange={(e) => setChatMsg(e.target.value)}
+                disabled={chatSending}
               />
-              <button type="submit" className="ccweb-gradient-btn shrink-0 text-sm">
-                Send
+              <button type="submit" className="ccweb-gradient-btn inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 text-sm disabled:opacity-50" disabled={chatSending}>
+                {chatSending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Send"}
               </button>
             </form>
           ) : !authHydrated ? (

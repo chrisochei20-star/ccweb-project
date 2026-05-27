@@ -166,6 +166,12 @@ function broadcastNotificationUpdate(userId, payload = {}) {
   ioInstance.to(`user:${userId}`).emit("notifications:update", payload);
 }
 
+/** Broadcast community feed / rooms / reaction changes to all connected clients (authenticated namespace). */
+function broadcastCommunityUpdate(payload = {}) {
+  if (!ioInstance) return;
+  ioInstance.emit("community:update", payload);
+}
+
 function onlineStatusForUserIds(userIds) {
   const out = {};
   for (const id of userIds) {
@@ -187,6 +193,7 @@ module.exports = {
   broadcastChatMessage,
   broadcastInboxRefresh,
   broadcastNotificationUpdate,
+  broadcastCommunityUpdate,
   onlineStatusForUserIds,
   closeChatSocket,
 };

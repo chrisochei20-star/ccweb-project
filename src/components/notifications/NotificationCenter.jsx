@@ -15,7 +15,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import { fetchNotificationSummary, fetchNotifications, markNotificationsRead } from "../../api/notificationsApi";
-import { createChatSocket } from "../../lib/chatSocket";
+import { getSharedRealtimeSocket } from "../../lib/chatSocket";
 import { toast } from "../../lib/toastBus";
 import { getSessionToken } from "../../session";
 import { AuthSessionChecking } from "../auth/AuthSessionChecking";
@@ -115,7 +115,7 @@ export function NotificationCenterPage() {
   }, [load, authHydrated]);
 
   useEffect(() => {
-    const socket = createChatSocket();
+    const socket = getSharedRealtimeSocket();
     if (!socket) return undefined;
     const onUp = () => load(null, false);
     socket.on("notifications:update", onUp);
@@ -322,7 +322,7 @@ export function NotificationBell({ user, authHydrated = true }) {
 
   useEffect(() => {
     if (!authHydrated || !user) return undefined;
-    const socket = createChatSocket();
+    const socket = getSharedRealtimeSocket();
     if (!socket) return undefined;
     const onUp = () => refresh();
     socket.on("notifications:update", onUp);

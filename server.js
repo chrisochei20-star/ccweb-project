@@ -27,7 +27,12 @@ const { createPlatformApp } = require("./platformExpress");
 const { sendRawHealth } = require("./server/http/controllers/health.controller");
 const { writeRawOptions, setRawCorsHeaders, parseAllowedOrigins } = require("./security/expressHardDefaults");
 const { trimOrigin } = require("./services/deploymentOrigins");
-const { attachChatSocket, closeChatSocket, broadcastNotificationUpdate } = require("./server/realtime/chatSocket");
+const {
+  attachChatSocket,
+  closeChatSocket,
+  broadcastNotificationUpdate,
+  broadcastCommunityUpdate,
+} = require("./server/realtime/chatSocket");
 const monetizationEngine = require("./services/monetizationEngine");
 const monPg = require("./db/persistenceMonetization");
 const persistenceNotifications = require("./db/persistenceNotifications");
@@ -1279,6 +1284,9 @@ async function handleCreateCommunityPost(req, res) {
       });
       growthEngine.recordEvent(author.id, "community_post", { postId: post.id }).catch(() => {});
       if (learningPg.usePostgres()) learningPg.addXpDelta(author.id, 25).catch(() => {});
+      try {
+        broadcastCommunityUpdate({ kind: "post" });
+      } catch (_) {}
       sendJson(res, 201, post, req);
     } catch (e) {
       sendJson(res, 500, { error: e.message }, req);
@@ -1310,6 +1318,10 @@ async function handleCreateCommunityPost(req, res) {
     actorDisplayName: author.displayName,
     postId: id,
   });
+
+  try {
+    broadcastCommunityUpdate({ kind: "post" });
+  } catch (_) {}
 
   sendJson(res, 201, post, req);
 }
@@ -1408,6 +1420,9 @@ async function handleCreatePostComment(req, res, postId) {
         actorDisplayName: author.displayName,
         postId,
       });
+      try {
+        broadcastCommunityUpdate({ kind: "comment", postId });
+      } catch (_) {}
       sendJson(res, 201, row, req);
     } catch (e) {
       sendJson(res, 500, { error: e.message }, req);
@@ -1438,6 +1453,9 @@ async function handleCreatePostComment(req, res, postId) {
     actorDisplayName: author.displayName,
     postId,
   });
+  try {
+    broadcastCommunityUpdate({ kind: "comment", postId });
+  } catch (_) {}
   sendJson(res, 201, row, req);
 }
 
@@ -1492,6 +1510,9 @@ async function handleCreateCommunityChat(req, res) {
         broadcast: true,
         metadata: { chatId: chat.id, channel, authorUserId: author.id },
       });
+      try {
+        broadcastCommunityUpdate({ kind: "chat", channel });
+      } catch (_) {}
       sendJson(res, 201, chat, req);
     } catch (e) {
       sendJson(res, 500, { error: e.message }, req);
@@ -1517,6 +1538,10 @@ async function handleCreateCommunityChat(req, res) {
     broadcast: true,
     metadata: { chatId: id, channel, authorUserId: author.id },
   });
+
+  try {
+    broadcastCommunityUpdate({ kind: "chat", channel });
+  } catch (_) {}
 
   sendJson(res, 201, chat, req);
 }
@@ -1571,15 +1596,16 @@ async function handleCreateCommunityReaction(req, res) {
 
   if (useCommunityPg()) {
     try {
-      const record = await communityPg.createReaction({
+      const result = await communityPg.createReaction({
         authorUserId: actor.id,
         authorDisplayName: actor.displayName,
         targetType: targetTypeRaw,
         targetId,
         reaction,
       });
+      const { created, ...record } = result;
       const ownerId = await resolveCommunityReactionOwnerId(targetTypeRaw, targetId);
-      if (ownerId && ownerId !== actor.id) {
+      if (created && ownerId && ownerId !== actor.id) {
         createNotification({
           type: "community_reaction_received",
           title: "New reaction on your CCWEB content",
@@ -1588,12 +1614,32 @@ async function handleCreateCommunityReaction(req, res) {
           metadata: { reactionId: record.id, targetType: targetTypeRaw, targetId, fromUserId: actor.id, reaction },
         });
       }
-      growthEngine.recordEvent(actor.id, "community_reaction", { targetType: targetTypeRaw, targetId }).catch(() => {});
-      if (learningPg.usePostgres()) learningPg.addXpDelta(actor.id, 5).catch(() => {});
-      sendJson(res, 201, record, req);
+      if (created) {
+        growthEngine.recordEvent(actor.id, "community_reaction", { targetType: targetTypeRaw, targetId }).catch(() => {});
+        if (learningPg.usePostgres()) learningPg.addXpDelta(actor.id, 5).catch(() => {});
+      }
+      try {
+        broadcastCommunityUpdate({ kind: "reaction", targetType: targetTypeRaw, targetId });
+      } catch (_) {}
+      sendJson(res, created ? 201 : 200, record, req);
     } catch (e) {
       sendJson(res, 500, { error: e.message }, req);
     }
+    return;
+  }
+
+  const dup = Array.from(communityReactions.values()).find(
+    (r) =>
+      r.authorUserId === actor.id &&
+      r.targetType === targetTypeRaw &&
+      r.targetId === targetId &&
+      r.reaction === reaction
+  );
+  if (dup) {
+    try {
+      broadcastCommunityUpdate({ kind: "reaction", targetType: targetTypeRaw, targetId });
+    } catch (_) {}
+    sendJson(res, 200, dup, req);
     return;
   }
 
@@ -1619,6 +1665,13 @@ async function handleCreateCommunityReaction(req, res) {
       metadata: { reactionId: id, targetType: targetTypeRaw, targetId, fromUserId: actor.id, reaction },
     });
   }
+
+  growthEngine.recordEvent(actor.id, "community_reaction", { targetType: targetTypeRaw, targetId }).catch(() => {});
+  if (learningPg.usePostgres()) learningPg.addXpDelta(actor.id, 5).catch(() => {});
+
+  try {
+    broadcastCommunityUpdate({ kind: "reaction", targetType: targetTypeRaw, targetId });
+  } catch (_) {}
 
   sendJson(res, 201, record, req);
 }

@@ -4,7 +4,7 @@ import { useOutletContext } from "react-router-dom";
 import { apiUrl, assetsUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
 import { compressImageFile } from "../lib/imageCompress";
-import { createChatSocket } from "../lib/chatSocket";
+import { getSharedRealtimeSocket } from "../lib/chatSocket";
 import { toast } from "../lib/toastBus";
 import { getSessionToken } from "../session";
 
@@ -114,15 +114,16 @@ export function ChatPage() {
   }, [messages, activeId]);
 
   useEffect(() => {
-    if (!user?.id) return;
-    const socket = createChatSocket();
+    if (!user?.id) return undefined;
+    const socket = getSharedRealtimeSocket();
+    if (!socket) return undefined;
     socketRef.current = socket;
 
-    socket.on("connect", () => {
+    const onConnect = () => {
       loadConversations().catch(() => {});
-    });
+    };
 
-    socket.on("message:new", (msg) => {
+    const onMessage = (msg) => {
       const cur = activeChatRef.current;
       if (!msg?.chatId) return;
       setMessages((prev) => {
@@ -160,30 +161,41 @@ export function ChatPage() {
         next[ix] = row;
         return next.sort((a, b) => new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0));
       });
-    });
+    };
 
-    socket.on("inbox:refresh", () => {
+    const onInbox = () => {
       loadConversations().catch(() => {});
-    });
+    };
 
-    socket.on("presence:update", ({ userId: uid, online }) => {
+    const onPresence = ({ userId: uid, online }) => {
       if (!uid) return;
       setPresence((p) => ({ ...p, [uid]: !!online }));
-    });
+    };
 
-    socket.on("typing", ({ chatId, userId: uid, typing: t }) => {
+    const onTyping = ({ chatId, userId: uid, typing: t }) => {
       if (chatId !== activeChatRef.current || uid === user?.id) return;
       setPeerTyping(!!t);
-    });
+    };
 
-    socket.connect();
+    socket.on("connect", onConnect);
+    socket.on("message:new", onMessage);
+    socket.on("inbox:refresh", onInbox);
+    socket.on("presence:update", onPresence);
+    socket.on("typing", onTyping);
+
+    if (socket.connected) {
+      onConnect();
+    }
 
     return () => {
-      socket.removeAllListeners();
-      socket.disconnect();
+      socket.off("connect", onConnect);
+      socket.off("message:new", onMessage);
+      socket.off("inbox:refresh", onInbox);
+      socket.off("presence:update", onPresence);
+      socket.off("typing", onTyping);
       socketRef.current = null;
     };
-  }, [user?.id, loadConversations]);
+  }, [user?.id, loadConversations, user]);
 
   useEffect(() => {
     const socket = socketRef.current;

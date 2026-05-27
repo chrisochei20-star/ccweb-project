@@ -1,7 +1,7 @@
 import { KeyRound, Loader2, LogOut, Shield, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
-import { uploadProfileAvatar, uploadProfileBanner } from "../api/uploadsApi";
+import { uploadProfileAvatar, uploadProfileBanner, formatUploadError } from "../api/uploadsApi";
 import { assetsUrl, apiUrl } from "../config/env";
 import { ImageDropZone } from "../components/uploads/ImageDropZone";
 import { apiFetch } from "../lib/apiClient";
@@ -23,6 +23,7 @@ export function ProfileShellPage() {
 
   const [betaSlug, setBetaSlug] = useState("");
   const [mediaBusy, setMediaBusy] = useState({ avatar: false, banner: false });
+  const [mediaProgress, setMediaProgress] = useState({ avatar: null, banner: null });
   const [gateTimedOut, setGateTimedOut] = useState(false);
 
   useEffect(() => {
@@ -250,21 +251,30 @@ export function ProfileShellPage() {
             label="Banner"
             hint="Wide image · drag & drop or tap"
             busy={mediaBusy.banner}
+            progress={mediaProgress.banner}
             aspectClass="aspect-[21/9] max-h-40"
+            compressOptions={{ maxWidth: 2200, maxHeight: 820, quality: 0.88 }}
             previewUrl={user.bannerUrl ? assetsUrl(user.bannerUrl) : null}
             onFile={async (file) => {
               setErr(null);
               setMsg(null);
               const token = getSessionToken();
               setMediaBusy((m) => ({ ...m, banner: true }));
+              setMediaProgress((p) => ({ ...p, banner: 0 }));
               try {
-                const data = await uploadProfileBanner(file);
+                const data = await uploadProfileBanner(file, {
+                  onProgress: (pct) => setMediaProgress((p) => ({ ...p, banner: pct })),
+                });
                 setUser(data.user);
                 setSession(token, data.user);
                 setMsg("Banner updated.");
+                toast.success("Banner updated.");
               } catch (e) {
-                setErr(e.message);
+                const m = formatUploadError(e);
+                setErr(m);
+                toast.error(m);
               } finally {
+                setMediaProgress((p) => ({ ...p, banner: null }));
                 setMediaBusy((m) => ({ ...m, banner: false }));
               }
             }}
@@ -274,23 +284,33 @@ export function ProfileShellPage() {
           <div className="max-w-[160px]">
             <ImageDropZone
               label="Avatar"
-              hint="Square · compressed before upload"
+              hint="Square · optimized before upload (GIF kept as-is)"
               busy={mediaBusy.avatar}
+              progress={mediaProgress.avatar}
+              capture="user"
               aspectClass="aspect-square max-w-[160px]"
+              compressOptions={{ maxWidth: 1024, maxHeight: 1024, quality: 0.88 }}
               previewUrl={user.avatarUrl ? assetsUrl(user.avatarUrl) : null}
               onFile={async (file) => {
                 setErr(null);
                 setMsg(null);
                 const token = getSessionToken();
                 setMediaBusy((m) => ({ ...m, avatar: true }));
+                setMediaProgress((p) => ({ ...p, avatar: 0 }));
                 try {
-                  const data = await uploadProfileAvatar(file);
+                  const data = await uploadProfileAvatar(file, {
+                    onProgress: (pct) => setMediaProgress((p) => ({ ...p, avatar: pct })),
+                  });
                   setUser(data.user);
                   setSession(token, data.user);
                   setMsg("Profile photo updated.");
+                  toast.success("Profile photo updated.");
                 } catch (e) {
-                  setErr(e.message);
+                  const m = formatUploadError(e);
+                  setErr(m);
+                  toast.error(m);
                 } finally {
+                  setMediaProgress((p) => ({ ...p, avatar: null }));
                   setMediaBusy((m) => ({ ...m, avatar: false }));
                 }
               }}

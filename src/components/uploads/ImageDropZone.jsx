@@ -5,6 +5,7 @@ import { compressImageFile } from "../../lib/imageCompress";
 
 /**
  * Drag-and-drop + tap-to-select image upload (mobile-friendly).
+ * @param {{ label?: string; hint?: string; disabled?: boolean; busy?: boolean; compress?: boolean; compressOptions?: object; capture?: "user" | "environment"; progress?: number | null; onFile: (file: File) => void | Promise<void>; aspectClass?: string; previewUrl?: string | null; children?: import("react").ReactNode }} props
  */
 export function ImageDropZone({
   label,
@@ -12,6 +13,9 @@ export function ImageDropZone({
   disabled,
   busy,
   compress = true,
+  compressOptions,
+  capture,
+  progress = null,
   onFile,
   aspectClass = "aspect-[21/9]",
   previewUrl,
@@ -28,9 +32,10 @@ export function ImageDropZone({
       setLocalBusy(true);
       try {
         let out = file;
-        if (compress) {
+        const skipCompress = !compress || file.type === "image/gif";
+        if (!skipCompress) {
           try {
-            out = await compressImageFile(file);
+            out = await compressImageFile(file, compressOptions || {});
           } catch {
             out = file;
           }
@@ -40,10 +45,12 @@ export function ImageDropZone({
         setLocalBusy(false);
       }
     },
-    [compress, onFile]
+    [compress, compressOptions, onFile]
   );
 
   const busyUi = busy || localBusy;
+  const showDeterminateProgress = typeof progress === "number" && progress >= 0 && progress < 100;
+  const showIndeterminateProgress = progress === -1;
 
   return (
     <div className="space-y-2">
@@ -67,7 +74,7 @@ export function ImageDropZone({
           handleFiles(e.dataTransfer?.files);
         }}
         className={cn(
-          "group relative w-full overflow-hidden rounded-2xl border border-dashed border-white/20 bg-black/25 text-left transition",
+          "group relative w-full min-h-[var(--ccweb-touch-min,44px)] overflow-hidden rounded-2xl border border-dashed border-white/20 bg-black/25 text-left transition",
           aspectClass,
           dragOver && "border-ccweb-cyan/60 bg-ccweb-cyan/10",
           (disabled || busyUi) && "cursor-not-allowed opacity-60",
@@ -81,13 +88,14 @@ export function ImageDropZone({
           accept="image/jpeg,image/png,image/webp,image/gif"
           className="hidden"
           disabled={disabled || busyUi}
+          capture={capture}
           onChange={(e) => {
             handleFiles(e.target.files);
             e.target.value = "";
           }}
         />
         {previewUrl ? (
-          <img src={previewUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img src={previewUrl} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
         ) : null}
         <div
           className={cn(
@@ -96,13 +104,25 @@ export function ImageDropZone({
           )}
         >
           {busyUi ? (
-            <Loader2 className="h-8 w-8 animate-spin text-ccweb-cyan" />
+            <Loader2 className="h-8 w-8 animate-spin text-ccweb-cyan" aria-hidden />
           ) : (
-            <ImagePlus className="h-8 w-8 text-ccweb-cyan/90" />
+            <ImagePlus className="h-8 w-8 text-ccweb-cyan/90" aria-hidden />
           )}
           <span className="text-xs font-medium text-white">{children || "Tap or drop an image"}</span>
           {hint ? <span className="text-[11px] text-ccweb-muted">{hint}</span> : null}
         </div>
+        {(showDeterminateProgress || showIndeterminateProgress) && (
+          <div className="absolute inset-x-0 bottom-0 z-10 h-1.5 bg-black/60">
+            {showDeterminateProgress ? (
+              <div
+                className="h-full bg-gradient-to-r from-ccweb-cyan to-ccweb-violet transition-[width] duration-150 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            ) : (
+              <div className="h-full w-1/3 animate-pulse bg-gradient-to-r from-ccweb-cyan/80 to-ccweb-violet/80" />
+            )}
+          </div>
+        )}
       </button>
     </div>
   );

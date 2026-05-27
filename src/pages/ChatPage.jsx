@@ -4,6 +4,7 @@ import { useOutletContext } from "react-router-dom";
 import { apiUrl, assetsUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
 import { compressImageFile } from "../lib/imageCompress";
+import { uploadChatImage, formatUploadError } from "../api/uploadsApi";
 import { getSharedRealtimeSocket } from "../lib/chatSocket";
 import { toast } from "../lib/toastBus";
 import { getSessionToken } from "../session";
@@ -27,6 +28,7 @@ export function ChatPage() {
   const [showEmoji, setShowEmoji] = useState(false);
   const [gateTimedOut, setGateTimedOut] = useState(false);
   const [keyboardInset, setKeyboardInset] = useState(0);
+  const [chatUploadProgress, setChatUploadProgress] = useState(null);
   const typingTimer = useRef(null);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -292,30 +294,27 @@ export function ChatPage() {
 
   async function uploadImage(file) {
     if (!activeId || !file) return;
+    const isGif = file.type === "image/gif";
     let prepared = file;
-    try {
-      prepared = await compressImageFile(file, { maxWidth: 2048, maxHeight: 2048 });
-    } catch {
-      prepared = file;
+    if (!isGif) {
+      try {
+        prepared = await compressImageFile(file, { maxWidth: 2048, maxHeight: 2048 });
+      } catch {
+        prepared = file;
+      }
     }
-    const fd = new FormData();
-    fd.append("file", prepared);
+    setChatUploadProgress(0);
     try {
-      const res = await apiFetch(
-        apiUrl(`/api/v1/chat/${encodeURIComponent(activeId)}/upload`),
-        {
-          method: "POST",
-          body: fd,
-        },
-        { networkRetries: 1 }
-      );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Upload failed.");
+      const data = await uploadChatImage(activeId, prepared, {
+        onProgress: (pct) => setChatUploadProgress(pct),
+      });
       if (data.message) setMessages((prev) => [...prev, data.message]);
     } catch (e) {
-      const m = e.message || "Upload failed.";
+      const m = formatUploadError(e);
       setErr(m);
       toast.error(m);
+    } finally {
+      setChatUploadProgress(null);
     }
   }
 
@@ -572,6 +571,22 @@ export function ChatPage() {
               </div>
             )}
 
+            {chatUploadProgress != null && (
+              <div className="border-t border-white/10 px-3 pt-2">
+                <div className="h-1 overflow-hidden rounded-full bg-white/10">
+                  {chatUploadProgress < 0 ? (
+                    <div className="h-full w-1/3 animate-pulse bg-gradient-to-r from-ccweb-cyan/80 to-ccweb-violet/80" />
+                  ) : (
+                    <div
+                      className="h-full bg-gradient-to-r from-ccweb-cyan to-ccweb-violet transition-[width] duration-150"
+                      style={{ width: `${Math.min(100, chatUploadProgress)}%` }}
+                    />
+                  )}
+                </div>
+                <p className="mt-1 text-[10px] text-ccweb-muted">Uploading image…</p>
+              </div>
+            )}
+
             <form
               onSubmit={sendText}
               className="border-t border-white/10 p-3"
@@ -582,12 +597,15 @@ export function ChatPage() {
               }
             >
               <div className="flex items-end gap-2">
-                <label className="cursor-pointer rounded-xl border border-white/15 p-2 text-ccweb-muted hover:bg-white/5">
+                <label
+                  className={`cursor-pointer rounded-xl border border-white/15 p-2 text-ccweb-muted hover:bg-white/5 ${chatUploadProgress != null ? "pointer-events-none opacity-50" : ""}`}
+                >
                   <ImagePlus className="h-5 w-5" />
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/gif"
                     className="hidden"
+                    disabled={chatUploadProgress != null}
                     onChange={(e) => {
                       const f = e.target.files?.[0];
                       e.target.value = "";

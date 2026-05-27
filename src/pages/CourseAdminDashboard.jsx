@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { uploadCourseThumbnail } from "../api/uploadsApi";
+import { uploadCourseThumbnail, formatUploadError } from "../api/uploadsApi";
 import { apiUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
 import { ImageDropZone } from "../components/uploads/ImageDropZone";
@@ -28,6 +28,7 @@ export function CourseAdminDashboard() {
 
   const [thumbCourseId, setThumbCourseId] = useState("");
   const [thumbBusy, setThumbBusy] = useState(false);
+  const [thumbProgress, setThumbProgress] = useState(null);
 
   const [quizLessonId, setQuizLessonId] = useState("");
   const [quizJson, setQuizJson] = useState(
@@ -228,6 +229,7 @@ export function CourseAdminDashboard() {
             aspectClass="aspect-video max-h-48"
             disabled={!thumbCourseId.trim()}
             busy={thumbBusy}
+            progress={thumbProgress}
             hint="Admin key above is sent as X-CCWEB-Admin"
             onFile={async (file) => {
               const id = thumbCourseId.trim();
@@ -236,15 +238,19 @@ export function CourseAdminDashboard() {
                 return;
               }
               setThumbBusy(true);
+              setThumbProgress(-1);
               setErr(null);
               setMsg(null);
               try {
-                const out = await uploadCourseThumbnail(id, file, key);
+                const out = await uploadCourseThumbnail(id, file, key, {
+                  onProgress: (pct) => setThumbProgress(pct),
+                });
                 setMsg(`Thumbnail saved: ${out.thumbnailUrl?.slice(0, 48)}…`);
               } catch (e) {
-                setErr(e.message);
+                setErr(formatUploadError(e));
               } finally {
                 setThumbBusy(false);
+                setThumbProgress(null);
               }
             }}
           >

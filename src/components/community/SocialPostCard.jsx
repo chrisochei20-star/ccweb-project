@@ -22,6 +22,7 @@ export function SocialPostCard({
   expanded,
   comments,
   commentsLoading,
+  commentSubmitting = false,
   commentDraft,
   onToggleThread,
   onCommentDraft,
@@ -30,27 +31,45 @@ export function SocialPostCard({
   const [likeBusy, setLikeBusy] = useState(false);
   const [repostBusy, setRepostBusy] = useState(false);
   const [localReactions, setLocalReactions] = useState(null);
+  const [likeBump, setLikeBump] = useState(0);
+  const [repostBump, setRepostBump] = useState(0);
   const canInteract = Boolean(getSessionToken());
 
   const loadReactions = useCallback(async () => {
     try {
       const r = await fetchPostReactions(post.id);
       setLocalReactions(r);
+      setLikeBump(0);
+      setRepostBump(0);
     } catch {
       /* ignore */
     }
   }, [post.id]);
 
+  const likesFromList = localReactions?.filter((x) => x.reaction === "like").length;
   const likeCount =
-    localReactions != null
-      ? localReactions.filter((x) => x.reaction === "like").length
-      : post.reactionCount != null
-        ? post.reactionCount
-        : null;
+    likesFromList != null ? likesFromList : (post.reactionCount != null ? post.reactionCount : 0) + likeBump;
 
   async function handleLike() {
     if (!getSessionToken()) return;
     setLikeBusy(true);
+    const hadList = localReactions != null;
+    if (!hadList) setLikeBump((b) => b + 1);
+    const prevReactions = localReactions;
+    if (hadList && user?.id) {
+      setLocalReactions((r) => [
+        ...(r || []),
+        {
+          id: `opt_${Date.now()}`,
+          authorUserId: user.id,
+          authorDisplayName: user.displayName || "You",
+          targetType: "post",
+          targetId: post.id,
+          reaction: "like",
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+    }
     try {
       await createPostReaction({
         postId: post.id,
@@ -58,6 +77,8 @@ export function SocialPostCard({
       });
       await loadReactions();
     } catch (e) {
+      if (!hadList) setLikeBump((b) => Math.max(0, b - 1));
+      else setLocalReactions(prevReactions);
       toast.error(e.message || "Could not like");
     } finally {
       setLikeBusy(false);
@@ -67,6 +88,23 @@ export function SocialPostCard({
   async function handleRepost() {
     if (!getSessionToken()) return;
     setRepostBusy(true);
+    const hadList = localReactions != null;
+    if (!hadList) setRepostBump((b) => b + 1);
+    const prevReactions = localReactions;
+    if (hadList && user?.id) {
+      setLocalReactions((r) => [
+        ...(r || []),
+        {
+          id: `opt_${Date.now()}`,
+          authorUserId: user.id,
+          authorDisplayName: user.displayName || "You",
+          targetType: "post",
+          targetId: post.id,
+          reaction: "repost",
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+    }
     try {
       await createPostReaction({
         postId: post.id,
@@ -74,13 +112,17 @@ export function SocialPostCard({
       });
       await loadReactions();
     } catch (e) {
+      if (!hadList) setRepostBump((b) => Math.max(0, b - 1));
+      else setLocalReactions(prevReactions);
       toast.error(e.message || "Could not repost");
     } finally {
       setRepostBusy(false);
     }
   }
 
-  const repostCount = localReactions?.filter((x) => x.reaction === "repost").length ?? null;
+  const repostsFromList = localReactions?.filter((x) => x.reaction === "repost").length;
+  const repostCount =
+    repostsFromList != null ? repostsFromList : repostBump > 0 ? repostBump : null;
 
   return (
     <article className="ccweb-social-post group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-br from-white/[0.06] to-transparent p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition hover:border-ccweb-cyan/25 hover:shadow-[0_12px_40px_-18px_rgba(34,211,238,0.35)]">
@@ -150,13 +192,19 @@ export function SocialPostCard({
               {canInteract ? (
                 <div className="mt-3 flex gap-2">
                   <input
-                    className="ccweb-input flex-1 text-sm"
+                    className="ccweb-input min-h-[44px] flex-1 text-sm"
                     placeholder="Post your reply…"
                     value={commentDraft || ""}
                     onChange={(e) => onCommentDraft(post.id, e.target.value)}
+                    disabled={commentSubmitting}
                   />
-                  <button type="button" className="ccweb-outline-btn shrink-0 text-sm" onClick={() => onSubmitComment(post.id)}>
-                    Reply
+                  <button
+                    type="button"
+                    className="ccweb-outline-btn inline-flex min-h-[44px] shrink-0 items-center justify-center px-3 text-sm disabled:opacity-50"
+                    onClick={() => onSubmitComment(post.id)}
+                    disabled={commentSubmitting}
+                  >
+                    {commentSubmitting ? "…" : "Reply"}
                   </button>
                 </div>
               ) : (

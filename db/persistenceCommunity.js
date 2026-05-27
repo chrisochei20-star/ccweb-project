@@ -190,15 +190,7 @@ async function listReactions(targetType, targetId) {
   }));
 }
 
-async function createReaction(body) {
-  const id = newId("react");
-  await query(
-    `INSERT INTO community_reactions (id, author_user_id, author_display_name, target_type, target_id, reaction)
-     VALUES ($1,$2,$3,$4,$5,$6)`,
-    [id, body.authorUserId, body.authorDisplayName, body.targetType, body.targetId, body.reaction || "like"]
-  );
-  const { rows } = await query("SELECT * FROM community_reactions WHERE id = $1", [id]);
-  const r = rows[0];
+function mapReactionRow(r) {
   return {
     id: r.id,
     authorUserId: r.author_user_id,
@@ -208,6 +200,27 @@ async function createReaction(body) {
     reaction: r.reaction,
     createdAt: new Date(r.created_at).toISOString(),
   };
+}
+
+async function createReaction(body) {
+  const reaction = body.reaction || "like";
+  const { rows: existing } = await query(
+    `SELECT * FROM community_reactions
+     WHERE author_user_id = $1 AND target_type = $2 AND target_id = $3 AND reaction = $4
+     LIMIT 1`,
+    [body.authorUserId, body.targetType, body.targetId, reaction]
+  );
+  if (existing[0]) {
+    return { created: false, ...mapReactionRow(existing[0]) };
+  }
+  const id = newId("react");
+  await query(
+    `INSERT INTO community_reactions (id, author_user_id, author_display_name, target_type, target_id, reaction)
+     VALUES ($1,$2,$3,$4,$5,$6)`,
+    [id, body.authorUserId, body.authorDisplayName, body.targetType, body.targetId, reaction]
+  );
+  const { rows } = await query("SELECT * FROM community_reactions WHERE id = $1", [id]);
+  return { created: true, ...mapReactionRow(rows[0]) };
 }
 
 async function listBugs() {

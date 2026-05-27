@@ -13,7 +13,7 @@ const QUICK_EMOJIS = ["😀", "🙂", "😂", "🔥", "❤️", "👍", "🎉", 
 const CHAT_LOAD_TIMEOUT_MS = 8000;
 
 export function ChatPage() {
-  const { user, authHydrated } = useOutletContext() || {};
+  const { user, authHydrated, refreshSession } = useOutletContext() || {};
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState([]);
@@ -26,6 +26,7 @@ export function ChatPage() {
   const [newDmId, setNewDmId] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const [gateTimedOut, setGateTimedOut] = useState(false);
+  const [keyboardInset, setKeyboardInset] = useState(0);
   const typingTimer = useRef(null);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -71,6 +72,22 @@ export function ChatPage() {
     const id = window.setTimeout(() => setGateTimedOut(true), CHAT_LOAD_TIMEOUT_MS);
     return () => window.clearTimeout(id);
   }, [authHydrated, user]);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv || typeof vv.addEventListener !== "function") return undefined;
+    const update = () => {
+      const obscured = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setKeyboardInset(Math.min(200, Math.round(obscured)));
+    };
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    update();
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, []);
 
   useEffect(() => {
     if (!authHydrated) return;
@@ -329,13 +346,18 @@ export function ChatPage() {
 
   if (!authHydrated) {
     return (
-      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 px-4 text-ccweb-muted" role="status">
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 px-4 text-ccweb-muted" role="status">
         {!gateTimedOut ? <Loader2 className="h-6 w-6 shrink-0 animate-spin" aria-hidden /> : null}
         <span className="text-sm text-center max-w-sm">
           {gateTimedOut
             ? "We could not verify your session in time. Check your connection or try signing in again."
             : "Loading messages…"}
         </span>
+        {gateTimedOut && getSessionToken() && typeof refreshSession === "function" && (
+          <button type="button" className="ccweb-outline-btn min-h-[44px] px-4 text-sm" onClick={() => refreshSession()}>
+            Retry session
+          </button>
+        )}
       </div>
     );
   }
@@ -343,13 +365,18 @@ export function ChatPage() {
   if (!user) {
     if (getSessionToken()) {
       return (
-        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 px-4 text-ccweb-muted" role="status">
+        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 px-4 text-ccweb-muted" role="status">
           {!gateTimedOut ? <Loader2 className="h-6 w-6 shrink-0 animate-spin" aria-hidden /> : null}
           <span className="text-sm text-center max-w-sm">
             {gateTimedOut
               ? "We could not load your account in time. Check your connection or try signing in again."
               : "Syncing account…"}
           </span>
+          {gateTimedOut && typeof refreshSession === "function" && (
+            <button type="button" className="ccweb-outline-btn min-h-[44px] px-4 text-sm" onClick={() => refreshSession()}>
+              Retry session
+            </button>
+          )}
         </div>
       );
     }
@@ -545,7 +572,15 @@ export function ChatPage() {
               </div>
             )}
 
-            <form onSubmit={sendText} className="border-t border-white/10 p-3">
+            <form
+              onSubmit={sendText}
+              className="border-t border-white/10 p-3"
+              style={
+                keyboardInset > 0
+                  ? { paddingBottom: `calc(0.75rem + env(safe-area-inset-bottom, 0px) + ${keyboardInset}px)` }
+                  : undefined
+              }
+            >
               <div className="flex items-end gap-2">
                 <label className="cursor-pointer rounded-xl border border-white/15 p-2 text-ccweb-muted hover:bg-white/5">
                   <ImagePlus className="h-5 w-5" />

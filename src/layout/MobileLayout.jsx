@@ -1,6 +1,6 @@
 import { Bell, Home, Loader2, MessageSquare, Search, User } from "lucide-react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ThemeToggle } from "../components/shell/ThemeToggle";
 import { NotificationBell } from "../components/notifications/NotificationCenter";
 import { MoreMenuSheet, MoreMenuTrigger } from "../components/shell/MoreMenuSheet";
@@ -8,6 +8,7 @@ import { CCWEB_UI_LOAD_TIMEOUT_MS } from "../constants/loadTimeout";
 import { isSearchNavActive } from "../lib/navPaths";
 import { fetchMe, getLocalSessionUser, getSessionToken, getStoredUser, logoutApi } from "../session";
 import { captureInviteFromSearch, postBetaClientEvent } from "../lib/betaTelemetry";
+import { useNotificationsStore } from "../store/notificationsStore";
 
 const bottomTabs = [
   { id: "home", to: "/", label: "Home", shortLabel: "Home", icon: Home, end: true, match: (p) => p === "/" },
@@ -104,8 +105,18 @@ export function MobileLayout() {
   async function handleLogout() {
     await logoutApi();
     setUser(null);
+    useNotificationsStore.getState().reset();
     navigate("/login");
   }
+
+  const refreshSession = useCallback(async () => {
+    try {
+      const u = await fetchMe();
+      setUser(u ?? getStoredUser());
+    } finally {
+      setAuthHydrated(true);
+    }
+  }, []);
 
   const path = location.pathname;
 
@@ -151,6 +162,11 @@ export function MobileLayout() {
                     <span className="hidden sm:inline">Session…</span>
                   </>
                 )}
+              </span>
+            ) : getSessionToken() ? (
+              <span className="flex max-w-[9rem] items-center gap-1.5 truncate text-xs text-ccweb-muted" title="Finishing sign-in">
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />
+                <span className="hidden sm:inline">Account…</span>
               </span>
             ) : (
               <>
@@ -205,7 +221,7 @@ export function MobileLayout() {
       </nav>
 
       <main className="ccweb-main-pad mx-auto max-w-3xl md:max-w-5xl">
-        <Outlet context={{ user, setUser, authHydrated }} />
+        <Outlet context={{ user, setUser, authHydrated, refreshSession }} />
       </main>
 
       <div className="ccweb-floating-shell lg:hidden" aria-hidden={false}>

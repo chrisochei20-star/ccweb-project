@@ -64,7 +64,14 @@ export function EarnShellPage() {
         </div>
       )}
 
-      {authHydrated && !user && (
+      {authHydrated && !user && getSessionToken() && (
+        <div className="ccweb-glass flex items-center gap-2 rounded-2xl p-5 text-sm text-ccweb-muted">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+          Syncing account…
+        </div>
+      )}
+
+      {authHydrated && !user && !getSessionToken() && (
         <div className="ccweb-glass rounded-2xl p-5">
           <p className="text-sm text-ccweb-muted">Sign in to load your credits, XP, invite link, and marketplace orders.</p>
           <Link to="/login" className="mt-3 inline-block ccweb-gradient-btn text-sm">

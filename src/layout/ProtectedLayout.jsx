@@ -7,7 +7,7 @@ import { getSessionToken } from "../session";
 /** Requires a JWT in session storage — pair with API Bearer auth. Waits for MobileLayout auth hydration. */
 export function ProtectedLayout() {
   const location = useLocation();
-  const { authHydrated } = useOutletContext() || {};
+  const { authHydrated, refreshSession } = useOutletContext() || {};
   const token = getSessionToken();
   const [hydrateTimedOut, setHydrateTimedOut] = useState(false);
 
@@ -22,9 +22,19 @@ export function ProtectedLayout() {
 
   if (!authHydrated && hydrateTimedOut) {
     return (
-      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 px-4 text-center text-ccweb-muted" role="alert">
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 px-4 text-center text-ccweb-muted" role="alert">
         <p className="text-sm text-rose-200/90">We could not finish checking your session in time.</p>
-        <p className="text-xs">Try refreshing the page or signing in again.</p>
+        {token ? (
+          <button
+            type="button"
+            className="ccweb-outline-btn min-h-[44px] px-4 text-sm"
+            onClick={() => refreshSession?.()}
+          >
+            Retry session check
+          </button>
+        ) : (
+          <p className="text-xs">Try refreshing the page or signing in again.</p>
+        )}
       </div>
     );
   }

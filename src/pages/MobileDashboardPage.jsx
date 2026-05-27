@@ -228,7 +228,13 @@ export function MobileDashboardPage() {
               Checking session…
             </p>
           )}
-          {authHydrated && !user && (
+          {authHydrated && !user && getSessionToken() && (
+            <p className="mt-3 flex items-center gap-2 text-sm text-ccweb-muted">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+              Syncing account…
+            </p>
+          )}
+          {authHydrated && !user && !getSessionToken() && (
             <div className="mt-6 flex flex-wrap gap-3">
               <Link to="/login" className="ccweb-gradient-btn inline-flex items-center gap-2 text-sm">
                 Sign in <ArrowRight className="h-4 w-4" />

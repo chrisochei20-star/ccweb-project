@@ -14,8 +14,9 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
-import { fetchNotificationSummary, fetchNotifications, markNotificationsRead } from "../../api/notificationsApi";
+import { fetchNotifications, markNotificationsRead } from "../../api/notificationsApi";
 import { getSharedRealtimeSocket } from "../../lib/chatSocket";
+import { pullNotificationSummaryIntoStore, useNotificationsStore } from "../../store/notificationsStore";
 import { toast } from "../../lib/toastBus";
 import { getSessionToken } from "../../session";
 import { AuthSessionChecking } from "../auth/AuthSessionChecking";
@@ -71,7 +72,7 @@ function kindIcon(kind) {
 }
 
 export function NotificationCenterPage() {
-  const { authHydrated } = useOutletContext() || {};
+  const { authHydrated, user } = useOutletContext() || {};
   const [items, setItems] = useState([]);
   const [grouped, setGrouped] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
@@ -104,6 +105,11 @@ export function NotificationCenterPage() {
       } finally {
         setLoading(false);
         setLoadingMore(false);
+        try {
+          await pullNotificationSummaryIntoStore();
+        } catch {
+          /* ignore */
+        }
       }
     },
     [showGrouped]
@@ -129,6 +135,7 @@ export function NotificationCenterPage() {
     try {
       await markNotificationsRead({ markAll: true });
       await load(null, false);
+      await pullNotificationSummaryIntoStore();
     } catch (e) {
       const m = e.message || "Could not mark read";
       setErr(m);
@@ -140,6 +147,7 @@ export function NotificationCenterPage() {
     try {
       await markNotificationsRead({ ids: [id] });
       setItems((prev) => prev.map((x) => (x.id === id ? { ...x, read: true, readAt: new Date().toISOString() } : x)));
+      await pullNotificationSummaryIntoStore();
     } catch (e) {
       toast.error(e.message || "Could not update");
     }
@@ -156,7 +164,16 @@ export function NotificationCenterPage() {
           to see notifications.
         </div>
       )}
-      {authHydrated && (
+      {authHydrated && !user && getSessionToken() && <AuthSessionChecking message="Syncing account…" />}
+      {authHydrated && !user && !getSessionToken() && (
+        <div className="ccweb-card-premium rounded-2xl border border-white/10 p-8 text-center text-sm text-ccweb-muted">
+          <Link to="/login" className="ccweb-gradient-btn inline-block">
+            Sign in
+          </Link>{" "}
+          to see notifications.
+        </div>
+      )}
+      {authHydrated && user && (
       <>
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -289,7 +306,7 @@ export function NotificationCenterPage() {
 
 export function NotificationBell({ user, authHydrated = true }) {
   const [open, setOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
+  const unread = useNotificationsStore((s) => s.unreadCount ?? 0);
   const [preview, setPreview] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
@@ -297,34 +314,36 @@ export function NotificationBell({ user, authHydrated = true }) {
   const refresh = useCallback(async () => {
     if (!authHydrated) return;
     if (!user) {
-      setUnread(0);
+      useNotificationsStore.getState().setUnread(0);
       setPreview([]);
       return;
     }
     setLoading(true);
     setErr(null);
     try {
-      const s = await fetchNotificationSummary();
-      setUnread(s.unreadCount || 0);
+      await pullNotificationSummaryIntoStore();
       const data = await fetchNotifications({ limit: 8 });
       setPreview(data.items || []);
     } catch (e) {
       setErr(e.message || "");
-      setUnread(0);
+      useNotificationsStore.getState().setUnread(0);
     } finally {
       setLoading(false);
     }
   }, [user, authHydrated]);
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
 
   useEffect(() => {
     if (!authHydrated || !user) return undefined;
     const socket = getSharedRealtimeSocket();
     if (!socket) return undefined;
-    const onUp = () => refresh();
+    const onUp = () => {
+      useNotificationsStore.getState().notifySocketTick();
+      void refresh();
+    };
     socket.on("notifications:update", onUp);
     return () => {
       socket.off("notifications:update", onUp);

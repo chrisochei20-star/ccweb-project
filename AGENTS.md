@@ -32,6 +32,10 @@ Playwright E2E starts its own API on **`PORT=3055`** (override with **`PLAYWRIGH
 ### Mobile & production QA
 Release checklist (auth, shell nav, chat, uploads, Flutterwave, AI, mobile): [docs/CCWEB_PRODUCTION_MOBILE_QA.md](./docs/CCWEB_PRODUCTION_MOBILE_QA.md).
 
+### Phase 3 stabilization (auth shell, notifications store, client diagnostics)
+- Functional pass + **remaining manual checks**: [docs/PHASE3_PRODUCTION_QA.md](./docs/PHASE3_PRODUCTION_QA.md).
+- Optional client HTTP diagnostics: set **`VITE_CCWEB_CLIENT_DIAG=1`** on the Vite build to emit one-line JSON **`[ccweb-client]`** logs for non-OK API responses (path + status only).
+
 ### E2E / live preview recording (real browser capture)
 - `npm run record:preview` — Playwright starts API + Vite, drives the UI, and saves video under `test-results/`. Run `./scripts/finish-preview-video.sh ./ccweb-preview.mp4` for H.264 1080p.
 - GitHub Actions: workflow **Record CCWEB live preview** (`.github/workflows/record-preview.yml`) uploads `ccweb-preview.mp4` + a 10s GIF as an artifact.

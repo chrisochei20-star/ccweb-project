@@ -9,7 +9,7 @@ import { toast } from "../lib/toastBus";
 import { getSessionToken, logoutApi, setSession } from "../session";
 
 export function ProfileShellPage() {
-  const { user, setUser, authHydrated } = useOutletContext() || {};
+  const { user, setUser, authHydrated, refreshSession } = useOutletContext() || {};
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState("");
   const [pushEnabled, setPushEnabled] = useState(true);
@@ -164,13 +164,18 @@ export function ProfileShellPage() {
 
   if (!authHydrated) {
     return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 px-4 text-ccweb-muted" role="status">
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 px-4 text-ccweb-muted" role="status">
         {!gateTimedOut ? <Loader2 className="h-7 w-7 shrink-0 animate-spin" aria-hidden /> : null}
         <span className="text-sm text-center max-w-sm">
           {gateTimedOut
             ? "We could not verify your session in time. Check your connection or try signing in again."
             : "Loading profile…"}
         </span>
+        {gateTimedOut && getSessionToken() && typeof refreshSession === "function" && (
+          <button type="button" className="ccweb-outline-btn min-h-[44px] px-4 text-sm" onClick={() => refreshSession()}>
+            Retry session
+          </button>
+        )}
       </div>
     );
   }
@@ -178,13 +183,18 @@ export function ProfileShellPage() {
   if (!user) {
     if (getSessionToken()) {
       return (
-        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 px-4 text-ccweb-muted" role="status">
+        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 px-4 text-ccweb-muted" role="status">
           {!gateTimedOut ? <Loader2 className="h-7 w-7 shrink-0 animate-spin" aria-hidden /> : null}
           <span className="text-sm text-center max-w-sm">
             {gateTimedOut
               ? "We could not load your account in time. Check your connection or try signing in again."
               : "Syncing account…"}
           </span>
+          {gateTimedOut && typeof refreshSession === "function" && (
+            <button type="button" className="ccweb-outline-btn min-h-[44px] px-4 text-sm" onClick={() => refreshSession()}>
+              Retry session
+            </button>
+          )}
         </div>
       );
     }

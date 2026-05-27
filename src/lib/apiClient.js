@@ -2,6 +2,7 @@
 
 import { SESSION_TOKEN_KEY } from "../authStorageKeys";
 import { getSupabaseAccessToken } from "./supabaseClient";
+import { logClientStructured } from "./productionDiag";
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -140,6 +141,17 @@ export async function apiFetch(input, init = {}, options = {}) {
       try {
         const finalInit = await mergeInitWithApiDefaults(input, timedInit);
         const res = await fetch(input, finalInit);
+        if (!res.ok) {
+          const urlStr =
+            typeof input === "string" ? input : input instanceof Request ? input.url : input?.url || "";
+          let path = urlStr;
+          try {
+            path = new URL(urlStr, "https://ccweb.invalid").pathname;
+          } catch {
+            /* keep */
+          }
+          logClientStructured("http_non_ok", { path, status: res.status, statusText: res.statusText });
+        }
         if (!res.ok && ccwebApiDiagEnabled()) {
           const urlStr =
             typeof input === "string" ? input : input instanceof Request ? input.url : input?.url || "";

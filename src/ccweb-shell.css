@@ -4,6 +4,7 @@
 
 .ccweb-app-root {
   min-height: 100vh;
+  overflow-x: clip;
   background:
     radial-gradient(ellipse 100% 80% at 50% -30%, rgba(34, 211, 238, 0.18), transparent 55%),
     radial-gradient(ellipse 70% 50% at 100% 0%, rgba(167, 139, 250, 0.15), transparent 45%),

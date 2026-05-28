@@ -1,10 +1,12 @@
-import { ArrowLeft, Circle, ImagePlus, Loader2, Send, Smile } from "lucide-react";
+import { ArrowLeft, Circle, ImagePlus, Loader2, RefreshCw, Send, Smile, WifiOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiUrl, assetsUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
 import { compressImageFile } from "../lib/imageCompress";
 import { uploadChatImage, formatUploadError } from "../api/uploadsApi";
-import { getSharedRealtimeSocket } from "../lib/chatSocket";
+import { dedupeById } from "../lib/feedMerge";
+import { getSharedRealtimeSocket, getRealtimeConnectionState } from "../lib/realtimeSocket";
+import { useConnectionState, useRealtimeSubscription, useSocketReconnect } from "../hooks/useRealtimeSubscription";
 import { toast } from "../lib/toastBus";
 import { getSessionToken } from "../session";
 import { CCWEB_UI_LOAD_TIMEOUT_MS } from "../constants/loadTimeout";
@@ -31,9 +33,12 @@ export function ChatPage() {
   const [gateTimedOut, setGateTimedOut] = useState(false);
   const [keyboardInset, setKeyboardInset] = useState(0);
   const [chatUploadProgress, setChatUploadProgress] = useState(null);
+  const [connectionState, setConnectionState] = useState(() => getRealtimeConnectionState());
   const typingTimer = useRef(null);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const nearBottomRef = useRef(true);
   const activeChatRef = useRef(null);
   activeChatRef.current = activeId;
 
@@ -57,7 +62,7 @@ export function ChatPage() {
     const res = await apiFetch(apiUrl(`/api/v1/chat/${encodeURIComponent(chatId)}/messages?limit=80`));
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "Could not load messages.");
-    setMessages(data.messages || []);
+    setMessages(dedupeById(data.messages || []));
     await apiFetch(apiUrl(`/api/v1/chat/${encodeURIComponent(chatId)}/read`), {
       method: "POST",
     });
@@ -132,27 +137,16 @@ export function ChatPage() {
     };
   }, [authHydrated, user?.id, loadConversations]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, activeId]);
+  useConnectionState(setConnectionState);
 
-  useEffect(() => {
-    if (!user?.id) return undefined;
-    const socket = getSharedRealtimeSocket();
-    if (!socket) return undefined;
-    socketRef.current = socket;
-
-    const onConnect = () => {
-      loadConversations().catch(() => {});
-    };
-
-    const onMessage = (msg) => {
+  const handleSocketMessage = useCallback(
+    (msg) => {
       const cur = activeChatRef.current;
       if (!msg?.chatId) return;
       setMessages((prev) => {
         if (msg.chatId !== cur) return prev;
         if (prev.some((m) => m.id === msg.id)) return prev;
-        return [...prev, msg];
+        return dedupeById([...prev.filter((m) => !String(m.id).startsWith("tmp_")), msg]);
       });
       setConversations((prev) => {
         const ix = prev.findIndex((c) => c.chatId === msg.chatId);
@@ -184,41 +178,63 @@ export function ChatPage() {
         next[ix] = row;
         return next.sort((a, b) => new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0));
       });
-    };
+    },
+    [user?.id]
+  );
 
-    const onInbox = () => {
+  useRealtimeSubscription("message:new", handleSocketMessage, Boolean(user?.id), "chat-page-message-new");
+  useRealtimeSubscription(
+    "inbox:refresh",
+    () => {
       loadConversations().catch(() => {});
-    };
-
-    const onPresence = ({ userId: uid, online }) => {
+    },
+    Boolean(user?.id),
+    "chat-page-inbox"
+  );
+  useRealtimeSubscription(
+    "presence:update",
+    ({ userId: uid, online }) => {
       if (!uid) return;
       setPresence((p) => ({ ...p, [uid]: !!online }));
-    };
-
-    const onTyping = ({ chatId, userId: uid, typing: t }) => {
+    },
+    Boolean(user?.id),
+    "chat-page-presence"
+  );
+  useRealtimeSubscription(
+    "typing",
+    ({ chatId, userId: uid, typing: t }) => {
       if (chatId !== activeChatRef.current || uid === user?.id) return;
       setPeerTyping(!!t);
-    };
+    },
+    Boolean(user?.id),
+    "chat-page-typing"
+  );
 
-    socket.on("connect", onConnect);
-    socket.on("message:new", onMessage);
-    socket.on("inbox:refresh", onInbox);
-    socket.on("presence:update", onPresence);
-    socket.on("typing", onTyping);
-
-    if (socket.connected) {
-      onConnect();
+  useSocketReconnect(() => {
+    loadConversations().catch(() => {});
+    const chatId = activeChatRef.current;
+    if (chatId) {
+      loadMessages(chatId).catch(() => {});
+      const socket = getSharedRealtimeSocket();
+      if (socket) socket.emit("join:chat", chatId, () => {});
     }
+  }, Boolean(user?.id));
 
-    return () => {
-      socket.off("connect", onConnect);
-      socket.off("message:new", onMessage);
-      socket.off("inbox:refresh", onInbox);
-      socket.off("presence:update", onPresence);
-      socket.off("typing", onTyping);
-      socketRef.current = null;
-    };
-  }, [user?.id, loadConversations, user]);
+  useEffect(() => {
+    if (!user?.id) return;
+    socketRef.current = getSharedRealtimeSocket();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!nearBottomRef.current) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, activeId]);
+
+  function onMessagesScroll() {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  }
 
   useEffect(() => {
     const socket = socketRef.current;
@@ -266,14 +282,26 @@ export function ChatPage() {
     }, 2000);
   }
 
-  async function sendText(e) {
-    e.preventDefault();
-    const text = draft.trim();
+  async function sendText(e, retryText) {
+    if (e?.preventDefault) e.preventDefault();
+    const text = (retryText ?? draft).trim();
     if (!text || !activeId) return;
     emitTyping(false);
     setTyping(false);
     if (typingTimer.current) clearTimeout(typingTimer.current);
-    setDraft("");
+    if (!retryText) setDraft("");
+    const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const optimistic = {
+      id: tempId,
+      chatId: activeId,
+      authorUserId: user.id,
+      authorDisplayName: user.displayName || "You",
+      body: text,
+      createdAt: new Date().toISOString(),
+      _status: "pending",
+    };
+    setMessages((prev) => dedupeById([...prev, optimistic]));
+    nearBottomRef.current = true;
     try {
       const res = await apiFetch(
         apiUrl(`/api/v1/chat/${encodeURIComponent(activeId)}/messages`),
@@ -281,15 +309,16 @@ export function ChatPage() {
           method: "POST",
           body: JSON.stringify({ body: text }),
         },
-        { networkRetries: 1 }
+        { networkRetries: 2 }
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Send failed.");
       if (data.message) {
-        setMessages((prev) => (prev.some((m) => m.id === data.message.id) ? prev : [...prev, data.message]));
+        setMessages((prev) => dedupeById(prev.map((m) => (m.id === tempId ? data.message : m))));
       }
     } catch (e) {
-      setDraft(text);
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, _status: "failed" } : m)));
+      if (!retryText) setDraft(text);
       const m = e.message || "Send failed.";
       setErr(m);
       toast.error(m);
@@ -401,6 +430,13 @@ export function ChatPage() {
 
   return (
     <div className="mx-auto flex min-h-[calc(100vh-8rem)] max-w-5xl flex-col gap-3 px-3 pb-24 pt-3 md:flex-row md:pb-8">
+      {connectionState !== "connected" && (
+        <div className="fixed left-3 right-3 top-16 z-40 flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-950/90 px-3 py-2 text-xs text-amber-100 md:mx-auto md:max-w-md">
+          <WifiOff className="h-4 w-4 shrink-0" aria-hidden />
+          {connectionState === "reconnecting" ? "Reconnecting to chat…" : "Offline — messages send when you reconnect."}
+        </div>
+      )}
+
       {err && (
         <div className="fixed left-3 right-3 top-20 z-40 rounded-xl border border-rose-500/40 bg-rose-950/90 px-3 py-2 text-sm text-rose-100 md:left-auto md:right-auto md:max-w-md">
           {err}
@@ -517,18 +553,23 @@ export function ChatPage() {
               </div>
             </header>
 
-            <div className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
+            <div ref={scrollContainerRef} onScroll={onMessagesScroll} className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-4">
               {messages.map((m) => {
                 const mine = m.authorUserId === user.id;
                 const img = m.isImage && (m.imageUrl || m.metadata?.url);
+                const failed = m._status === "failed";
+                const pending = m._status === "pending";
                 return (
                   <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                     <div
                       className={
                         "max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-lg " +
                         (mine
-                          ? "bg-gradient-to-r from-ccweb-cyan/80 to-ccweb-violet/70 text-white"
-                          : "border border-white/10 bg-white/5 text-white/95")
+                          ? failed
+                            ? "border border-rose-400/50 bg-rose-900/40 text-white"
+                            : "bg-gradient-to-r from-ccweb-cyan/80 to-ccweb-violet/70 text-white"
+                          : "border border-white/10 bg-white/5 text-white/95") +
+                        (pending ? " opacity-80" : "")
                       }
                     >
                       {!mine && (
@@ -538,18 +579,30 @@ export function ChatPage() {
                       )}
                       {img ? (
                         <a href={assetsUrl(img)} target="_blank" rel="noreferrer">
-                          <img
-                            src={assetsUrl(img)}
-                            alt=""
-                            className="max-h-56 max-w-full rounded-lg object-cover"
-                          />
+                          <img src={assetsUrl(img)} alt="" className="max-h-56 max-w-full rounded-lg object-cover" />
                         </a>
                       ) : (
                         <p className="whitespace-pre-wrap break-words">{m.body}</p>
                       )}
-                      <p className={`mt-1 text-[10px] ${mine ? "text-white/70" : "text-ccweb-muted"}`}>
-                        {m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
-                      </p>
+                      <div className={`mt-1 flex items-center gap-2 text-[10px] ${mine ? "text-white/70" : "text-ccweb-muted"}`}>
+                        <span>
+                          {m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                        </span>
+                        {pending && <span>Sending…</span>}
+                        {failed && mine && (
+                          <button
+                            type="button"
+                            className="inline-flex min-h-[44px] min-w-[44px] items-center gap-1 text-rose-200"
+                            onClick={() => {
+                              setMessages((prev) => prev.filter((x) => x.id !== m.id));
+                              void sendText(null, m.body);
+                            }}
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                            Retry
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -593,16 +646,17 @@ export function ChatPage() {
 
             <form
               onSubmit={sendText}
-              className="border-t border-white/10 p-3"
-              style={
-                keyboardInset > 0
-                  ? { paddingBottom: `calc(0.75rem + env(safe-area-inset-bottom, 0px) + ${keyboardInset}px)` }
-                  : undefined
-              }
+              className="sticky bottom-0 z-10 border-t border-white/10 bg-slate-950/95 p-3 backdrop-blur-md"
+              style={{
+                paddingBottom:
+                  keyboardInset > 0
+                    ? `calc(0.75rem + env(safe-area-inset-bottom, 0px) + ${keyboardInset}px)`
+                    : "max(0.75rem, env(safe-area-inset-bottom, 0px))",
+              }}
             >
               <div className="flex items-end gap-2">
                 <label
-                  className={`cursor-pointer rounded-xl border border-white/15 p-2 text-ccweb-muted hover:bg-white/5 ${chatUploadProgress != null ? "pointer-events-none opacity-50" : ""}`}
+                  className={`flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-xl border border-white/15 text-ccweb-muted hover:bg-white/5 ${chatUploadProgress != null ? "pointer-events-none opacity-50" : ""}`}
                 >
                   <ImagePlus className="h-5 w-5" />
                   <input
@@ -619,7 +673,7 @@ export function ChatPage() {
                 </label>
                 <button
                   type="button"
-                  className={`rounded-xl border border-white/15 p-2 ${showEmoji ? "bg-white/10 text-ccweb-cyan" : "text-ccweb-muted hover:bg-white/5"}`}
+                  className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-white/15 ${showEmoji ? "bg-white/10 text-ccweb-cyan" : "text-ccweb-muted hover:bg-white/5"}`}
                   onClick={() => setShowEmoji((s) => !s)}
                   aria-label="Emoji"
                 >
@@ -627,7 +681,7 @@ export function ChatPage() {
                 </button>
                 <textarea
                   className="ccweb-input max-h-32 min-h-[44px] flex-1 resize-none py-2.5 text-sm"
-                  placeholder="Message… (emoji supported)"
+                  placeholder="Message…"
                   rows={1}
                   value={draft}
                   onChange={(e) => onDraftChange(e.target.value)}
@@ -638,7 +692,7 @@ export function ChatPage() {
                     }
                   }}
                 />
-                <button type="submit" className="ccweb-gradient-btn shrink-0 p-3" aria-label="Send">
+                <button type="submit" className="ccweb-gradient-btn flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center p-3" aria-label="Send">
                   <Send className="h-5 w-5" />
                 </button>
               </div>

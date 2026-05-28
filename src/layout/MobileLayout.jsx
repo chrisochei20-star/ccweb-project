@@ -8,7 +8,7 @@ import { CCWEB_UI_LOAD_TIMEOUT_MS } from "../constants/loadTimeout";
 import { isSearchNavActive } from "../lib/navPaths";
 import { fetchMe, getLocalSessionUser, getSessionToken, getStoredUser, logoutApi } from "../session";
 import { captureInviteFromSearch, postBetaClientEvent } from "../lib/betaTelemetry";
-import { useNotificationsStore } from "../store/notificationsStore";
+import { initNotificationsRealtime, useNotificationsStore } from "../store/notificationsStore";
 import { useProfileStore } from "../store/profileStore";
 
 const bottomTabs = [
@@ -63,6 +63,12 @@ export function MobileLayout() {
   const [moreOpen, setMoreOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    if (!authHydrated || !user?.id) return;
+    initNotificationsRealtime().catch(() => {});
+    useNotificationsStore.getState().loadPreferences().catch(() => {});
+  }, [authHydrated, user?.id]);
 
   useEffect(() => {
     captureInviteFromSearch(location.search || "");

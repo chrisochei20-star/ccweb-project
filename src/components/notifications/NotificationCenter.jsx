@@ -12,11 +12,11 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
-import { fetchNotifications, markNotificationsRead } from "../../api/notificationsApi";
-import { getSharedRealtimeSocket } from "../../lib/chatSocket";
-import { pullNotificationSummaryIntoStore, useNotificationsStore } from "../../store/notificationsStore";
+import { useRealtimeSubscription } from "../../hooks/useRealtimeSubscription";
+import { createCrossTabChannel } from "../../lib/crossTabSync";
+import { useNotificationsStore } from "../../store/notificationsStore";
 import { toast } from "../../lib/toastBus";
 import { getSessionToken } from "../../session";
 import { AuthSessionChecking } from "../auth/AuthSessionChecking";
@@ -73,81 +73,63 @@ function kindIcon(kind) {
 
 export function NotificationCenterPage() {
   const { authHydrated, user } = useOutletContext() || {};
-  const [items, setItems] = useState([]);
-  const [grouped, setGrouped] = useState([]);
-  const [nextCursor, setNextCursor] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [err, setErr] = useState(null);
+  const items = useNotificationsStore((s) => s.items);
+  const grouped = useNotificationsStore((s) => s.grouped);
+  const nextCursor = useNotificationsStore((s) => s.nextCursor);
+  const loading = useNotificationsStore((s) => s.loading);
+  const loadingMore = useNotificationsStore((s) => s.loadingMore);
+  const err = useNotificationsStore((s) => s.error);
+  const loadPage = useNotificationsStore((s) => s.loadPage);
+  const markReadOptimistic = useNotificationsStore((s) => s.markReadOptimistic);
+  const applyCrossTabSync = useNotificationsStore((s) => s.applyCrossTabSync);
   const [showGrouped, setShowGrouped] = useState(false);
 
-  const load = useCallback(
-    async (cursor = null, append = false) => {
-      if (append) setLoadingMore(true);
-      else {
-        setLoading(true);
-        setErr(null);
-      }
-      try {
-        const data = await fetchNotifications({
-          limit: 25,
-          cursor,
-          grouped: showGrouped,
-        });
-        const next = data.items || [];
-        setItems((prev) => (append ? [...prev, ...next] : next));
-        setGrouped(data.grouped || []);
-        setNextCursor(data.nextCursor || null);
-      } catch (e) {
-        const m = e.message || "Could not load notifications";
-        setErr(m);
-        toast.error(m);
-      } finally {
-        setLoading(false);
-        setLoadingMore(false);
-        try {
-          await pullNotificationSummaryIntoStore();
-        } catch {
-          /* ignore */
-        }
-      }
+  useEffect(() => {
+    if (!authHydrated || !user) return;
+    loadPage({ grouped: showGrouped }).catch(() => {});
+  }, [authHydrated, user, showGrouped, loadPage]);
+
+  useRealtimeSubscription(
+    "notifications:update",
+    () => {
+      useNotificationsStore.getState().notifySocketTick();
+      useNotificationsStore.getState().scheduleListRefresh();
     },
-    [showGrouped]
+    Boolean(authHydrated && user?.id),
+    "notification-center-page"
+  );
+
+  useRealtimeSubscription(
+    "notifications:cross-tab",
+    (payload) => applyCrossTabSync(payload),
+    true,
+    "notification-center-cross-tab"
   );
 
   useEffect(() => {
-    if (!authHydrated) return;
-    load(null, false);
-  }, [load, authHydrated]);
-
-  useEffect(() => {
-    const socket = getSharedRealtimeSocket();
-    if (!socket) return undefined;
-    const onUp = () => load(null, false);
-    socket.on("notifications:update", onUp);
-    return () => {
-      socket.off("notifications:update", onUp);
+    const ch = createCrossTabChannel();
+    if (!ch) return undefined;
+    const onMsg = (ev) => {
+      if (ev.data?.type === "notifications:sync") {
+        applyCrossTabSync(ev.data.payload);
+      }
     };
-  }, [load]);
+    ch.addEventListener("message", onMsg);
+    return () => ch.removeEventListener("message", onMsg);
+  }, [applyCrossTabSync]);
 
   async function markAllRead() {
-    setErr(null);
     try {
-      await markNotificationsRead({ markAll: true });
-      await load(null, false);
-      await pullNotificationSummaryIntoStore();
+      await markReadOptimistic({ markAll: true });
+      await loadPage({ grouped: showGrouped });
     } catch (e) {
-      const m = e.message || "Could not mark read";
-      setErr(m);
-      toast.error(m);
+      toast.error(e.message || "Could not mark read");
     }
   }
 
   async function markOne(id) {
     try {
-      await markNotificationsRead({ ids: [id] });
-      setItems((prev) => prev.map((x) => (x.id === id ? { ...x, read: true, readAt: new Date().toISOString() } : x)));
-      await pullNotificationSummaryIntoStore();
+      await markReadOptimistic({ ids: [id] });
     } catch (e) {
       toast.error(e.message || "Could not update");
     }
@@ -292,7 +274,7 @@ export function NotificationCenterPage() {
             type="button"
             className="ccweb-outline-btn px-4 py-2 text-sm"
             disabled={loadingMore}
-            onClick={() => load(nextCursor, true)}
+            onClick={() => loadPage({ cursor: nextCursor, append: true, grouped: showGrouped })}
           >
             {loadingMore ? "Loading…" : "Load more"}
           </button>
@@ -307,48 +289,42 @@ export function NotificationCenterPage() {
 export function NotificationBell({ user, authHydrated = true }) {
   const [open, setOpen] = useState(false);
   const unread = useNotificationsStore((s) => s.unreadCount ?? 0);
-  const [preview, setPreview] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState(null);
+  const preview = useNotificationsStore((s) => s.previewItems);
+  const loading = useNotificationsStore((s) => s.loading);
+  const err = useNotificationsStore((s) => s.error);
+  const refreshPreview = useNotificationsStore((s) => s.refreshPreview);
+  const applyCrossTabSync = useNotificationsStore((s) => s.applyCrossTabSync);
 
-  const refresh = useCallback(async () => {
+  useEffect(() => {
     if (!authHydrated) return;
     if (!user) {
       useNotificationsStore.getState().setUnread(0);
-      setPreview([]);
       return;
     }
-    setLoading(true);
-    setErr(null);
-    try {
-      await pullNotificationSummaryIntoStore();
-      const data = await fetchNotifications({ limit: 8 });
-      setPreview(data.items || []);
-    } catch (e) {
-      setErr(e.message || "");
-      useNotificationsStore.getState().setUnread(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [user, authHydrated]);
+    void refreshPreview();
+  }, [user, authHydrated, refreshPreview]);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    if (!authHydrated || !user) return undefined;
-    const socket = getSharedRealtimeSocket();
-    if (!socket) return undefined;
-    const onUp = () => {
+  useRealtimeSubscription(
+    "notifications:update",
+    () => {
       useNotificationsStore.getState().notifySocketTick();
-      void refresh();
+      void refreshPreview();
+    },
+    Boolean(authHydrated && user?.id),
+    "notification-bell"
+  );
+
+  useEffect(() => {
+    const ch = createCrossTabChannel();
+    if (!ch) return undefined;
+    const onMsg = (ev) => {
+      if (ev.data?.type === "notifications:sync") {
+        applyCrossTabSync(ev.data.payload);
+      }
     };
-    socket.on("notifications:update", onUp);
-    return () => {
-      socket.off("notifications:update", onUp);
-    };
-  }, [user, refresh, authHydrated]);
+    ch.addEventListener("message", onMsg);
+    return () => ch.removeEventListener("message", onMsg);
+  }, [applyCrossTabSync]);
 
   if (!authHydrated && getSessionToken()) {
     return (

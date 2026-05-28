@@ -12,7 +12,8 @@ import {
 import { SocialPostCard } from "../components/community/SocialPostCard";
 import { Skeleton } from "../components/ui/Skeleton";
 import { useStaleLoadingGuard } from "../hooks/useStaleLoadingGuard";
-import { getSharedRealtimeSocket } from "../lib/chatSocket";
+import { dedupeById, mergeChatsById } from "../lib/feedMerge";
+import { useRealtimeSubscription } from "../hooks/useRealtimeSubscription";
 import { toast } from "../lib/toastBus";
 import { getSessionToken } from "../session";
 
@@ -53,7 +54,7 @@ export function CommunityShellPage() {
     setErr(null);
     try {
       const list = await fetchCommunityPosts(feedMode);
-      setPosts(list);
+      setPosts(dedupeById(list));
       setVisibleCount(12);
     } catch (e) {
       const m = e.message || "Failed to load";
@@ -130,41 +131,45 @@ export function CommunityShellPage() {
     return () => io.disconnect();
   }, [tab, loadingPosts, posts.length]);
 
-  useEffect(() => {
-    if (!authHydrated || !user?.id) return undefined;
-    const socket = getSharedRealtimeSocket();
-    if (!socket) return undefined;
-    let debounceT = 0;
-    const debouncedReloadFeed = () => {
-      window.clearTimeout(debounceT);
-      debounceT = window.setTimeout(() => {
-        loadPostsRef.current();
-      }, 380);
-    };
-    const onCommunity = (payload) => {
+  const communityDebounceRef = useRef(null);
+
+  const scheduleFeedReload = useCallback(() => {
+    window.clearTimeout(communityDebounceRef.current);
+    communityDebounceRef.current = window.setTimeout(() => {
+      loadPostsRef.current();
+    }, 620);
+  }, []);
+
+  useRealtimeSubscription(
+    "community:update",
+    (payload) => {
       const k = payload?.kind;
       if (k === "post" || k === "reaction") {
-        debouncedReloadFeed();
+        scheduleFeedReload();
       }
       if (k === "comment") {
-        debouncedReloadFeed();
+        scheduleFeedReload();
         const pid = payload.postId;
         if (pid && pid === expandedPostRef.current) {
           void fetchPostComments(pid).then((list) => {
-            setCommentsByPost((p) => ({ ...p, [pid]: list }));
+            setCommentsByPost((p) => ({ ...p, [pid]: dedupeById(list) }));
           });
         }
       }
       if (k === "chat" && tabRef.current === "chat" && payload.channel === channelRef.current) {
         void loadChatsRef.current();
       }
-    };
-    socket.on("community:update", onCommunity);
-    return () => {
-      socket.off("community:update", onCommunity);
-      window.clearTimeout(debounceT);
-    };
-  }, [authHydrated, user?.id]);
+    },
+    Boolean(authHydrated && user?.id),
+    "community-shell-feed"
+  );
+
+  useEffect(
+    () => () => {
+      window.clearTimeout(communityDebounceRef.current);
+    },
+    []
+  );
 
   async function submitPost(e) {
     e.preventDefault();
@@ -305,7 +310,7 @@ export function CommunityShellPage() {
       createdAt: new Date().toISOString(),
     };
     setChatMsg("");
-    setChats((prev) => [optimistic, ...prev]);
+      setChats((prev) => mergeChatsById(prev, [optimistic]));
     setChatSending(true);
     try {
       const chat = await createCommunityChat({

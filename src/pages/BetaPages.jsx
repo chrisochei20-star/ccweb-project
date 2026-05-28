@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { http } from "../api/http";
 import { captureInviteFromSearch, postBetaClientEvent, setBetaSlugContext } from "../lib/betaTelemetry";
+import { PublicProfileView } from "./PublicProfilePage";
 
 /**
- * Public beta dashboard shell — personalize via slug when backend knows user id.
+ * Public profile at /u/:slug — backed by PostgreSQL slug + profile bundle API.
  */
 export function BetaUserSlugPage() {
   const { slug } = useParams();
@@ -15,40 +15,10 @@ export function BetaUserSlugPage() {
     postBetaClientEvent({ eventType: "beta_slug_open", path: window.location.pathname, featureKey: `slug:${slug}` });
   }, [slug]);
 
-  return (
-    <section className="space-y-6 px-4 pb-24 pt-4">
-      <header>
-        <p className="text-xs uppercase tracking-wider text-ccweb-muted">Beta profile link</p>
-        <h1 className="section-title mt-1">/{slug}</h1>
-        <p className="muted mt-2 max-w-xl">
-          You opened a personal beta URL. Activity on this link is attributed for tester analytics (invite codes from invite URLs are
-          stored client-side). Sign in for your full dashboard.
-        </p>
-      </header>
-      <div className="flex flex-wrap gap-3">
-        <Link to="/signup" className="ccweb-gradient-btn px-5 py-2.5 text-sm">
-          Join beta
-        </Link>
-        <Link to="/login" className="ccweb-outline-btn px-5 py-2.5 text-sm">
-          Sign in
-        </Link>
-        <Link to="/" className="ccweb-outline-btn px-5 py-2.5 text-sm">
-          Home
-        </Link>
-      </div>
-      <article className="ccweb-glass rounded-2xl p-5">
-        <h3 className="mb-2 text-sm font-semibold text-white">Tester checklist</h3>
-        <ul className="list-inside list-disc space-y-1 text-sm text-ccweb-muted">
-          <li>Learn — AI streaming & tutor</li>
-          <li>Find — scanner & early signals</li>
-          <li>Build — agents & developer tools</li>
-          <li>Earn — revenue & growth</li>
-          <li>Community — posts & reactions</li>
-        </ul>
-      </article>
-    </section>
-  );
+  return <PublicProfileView slug={slug} />;
 }
+
+import { http } from "../api/http";
 
 export function BetaTestUserPage() {
   const { userId } = useParams();
@@ -68,7 +38,7 @@ export function BetaTestUserPage() {
           This URL identifies a specific tester for analytics. Sign in with the same account to align sessions with server-side logs.
         </p>
       </header>
-      <Link to="/" className="ccweb-outline-btn inline-block px-5 py-2.5 text-sm">
+      <Link to="/" className="ccweb-outline-btn inline-block min-h-[44px] px-5 py-2.5 text-sm leading-[44px]">
         Open app home
       </Link>
     </section>
@@ -106,7 +76,7 @@ export function BetaInvitePage() {
           {state.loading ? "Checking invite…" : state.valid ? `Welcome${state.label ? ` — ${state.label}` : ""}.` : "Invite not active on this deployment."}
         </p>
       </header>
-      <Link to="/signup" className="ccweb-gradient-btn inline-block px-5 py-2.5 text-sm">
+      <Link to="/signup" className="ccweb-gradient-btn inline-block min-h-[44px] px-5 py-2.5 text-sm leading-[44px]">
         Continue to signup
       </Link>
     </section>

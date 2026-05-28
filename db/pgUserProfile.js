@@ -16,27 +16,105 @@ function parseRoles(raw) {
   }
 }
 
+function parseSocialLinks(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try {
+    const j = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return Array.isArray(j) ? j : [];
+  } catch {
+    return [];
+  }
+}
+
+function mapProfileRow(r) {
+  if (!r) return null;
+  return {
+    user_id: r.user_id,
+    display_name: r.display_name,
+    roles: r.roles,
+    is_organic: r.is_organic,
+    push_enabled: r.push_enabled,
+    avatar_url: r.avatar_url,
+    banner_url: r.banner_url,
+    bio: r.bio,
+    location: r.location,
+    website: r.website,
+    social_links: r.social_links,
+    verified_at: r.verified_at,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  };
+}
+
 async function findByUserId(userId) {
   const { rows } = await query(
-    `SELECT user_id, display_name, roles, is_organic, push_enabled, avatar_url, banner_url, created_at, updated_at
+    `SELECT user_id, display_name, roles, is_organic, push_enabled, avatar_url, banner_url,
+            bio, location, website, social_links, verified_at, created_at, updated_at
      FROM ccweb_user_profiles WHERE user_id = $1`,
     [userId]
   );
-  return rows[0] || null;
+  return mapProfileRow(rows[0]) || null;
 }
 
-async function upsert({ userId, displayName, roles, isOrganic, pushEnabled }) {
+async function upsert({ userId, displayName, roles, isOrganic, pushEnabled, bio, location, website, socialLinks }) {
   const r = Array.isArray(roles) ? roles : ["member"];
+  const linksJson = JSON.stringify(Array.isArray(socialLinks) ? socialLinks : []);
   await query(
-    `INSERT INTO ccweb_user_profiles (user_id, display_name, roles, is_organic, push_enabled, updated_at)
-     VALUES ($1, $2, $3::jsonb, $4, $5, NOW())
+    `INSERT INTO ccweb_user_profiles (user_id, display_name, roles, is_organic, push_enabled, bio, location, website, social_links, updated_at)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9::jsonb, NOW())
      ON CONFLICT (user_id) DO UPDATE SET
        display_name = EXCLUDED.display_name,
        roles = EXCLUDED.roles,
        is_organic = EXCLUDED.is_organic,
        push_enabled = EXCLUDED.push_enabled,
+       bio = COALESCE(EXCLUDED.bio, ccweb_user_profiles.bio),
+       location = COALESCE(EXCLUDED.location, ccweb_user_profiles.location),
+       website = COALESCE(EXCLUDED.website, ccweb_user_profiles.website),
+       social_links = COALESCE(EXCLUDED.social_links, ccweb_user_profiles.social_links),
        updated_at = NOW()`,
-    [userId, displayName || "Member", JSON.stringify(r), isOrganic !== false, pushEnabled !== false]
+    [
+      userId,
+      displayName || "Member",
+      JSON.stringify(r),
+      isOrganic !== false,
+      pushEnabled !== false,
+      bio !== undefined ? bio : null,
+      location !== undefined ? location : null,
+      website !== undefined ? website : null,
+      linksJson,
+    ]
+  );
+}
+
+async function patchProfileFields(userId, patch = {}) {
+  if (!userId) return;
+  const sets = [];
+  const params = [];
+  let i = 0;
+  const fields = [
+    ["bio", patch.bio],
+    ["location", patch.location],
+    ["website", patch.website],
+  ];
+  for (const [col, val] of fields) {
+    if (val !== undefined) {
+      i += 1;
+      params.push(val === null || val === "" ? null : String(val).slice(0, col === "bio" ? 500 : 120));
+      sets.push(`${col} = $${i}`);
+    }
+  }
+  if (patch.socialLinks !== undefined) {
+    i += 1;
+    params.push(JSON.stringify(Array.isArray(patch.socialLinks) ? patch.socialLinks : []));
+    sets.push(`social_links = $${i}::jsonb`);
+  }
+  if (!sets.length) return;
+  i += 1;
+  params.push(userId);
+  await query(
+    `UPDATE ccweb_user_profiles SET ${sets.join(", ")}, updated_at = NOW() WHERE user_id = $${i}`,
+    params
   );
 }
 
@@ -66,4 +144,11 @@ async function patchProfileMedia(userId, patch = {}) {
   );
 }
 
-module.exports = { findByUserId, upsert, parseRoles, patchProfileMedia };
+module.exports = {
+  findByUserId,
+  upsert,
+  parseRoles,
+  parseSocialLinks,
+  patchProfileMedia,
+  patchProfileFields,
+};

@@ -7,6 +7,7 @@ const multer = require("multer");
 const pgUserProfile = require("./db/pgUserProfile");
 const { validateImageBuffer } = require("./services/imageMagic");
 const { saveUploadedImage } = require("./services/imageStorage");
+const { logger } = require("./logging/logger");
 
 const MAX_BYTES = Number(process.env.CCWEB_UPLOAD_MAX_BYTES || 12 * 1024 * 1024);
 
@@ -53,8 +54,21 @@ function createUploadsRouter(deps) {
       const prev = ccwebUsers.get(req.ccwebUserId);
       const merged = buildUserProfile({ userId: req.ccwebUserId, avatarUrl: saved.url }, prev || null);
       ccwebUsers.set(req.ccwebUserId, merged);
+      logger.info({
+        msg: "profile_upload_ok",
+        kind: "avatar",
+        userId: req.ccwebUserId,
+        storage: saved.storage,
+        bytes: req.file.size,
+      });
       res.json({ ok: true, url: saved.url, storage: saved.storage, user: sanitizeUser(merged) });
     } catch (e) {
+      logger.warn({
+        msg: "profile_upload_failed",
+        kind: "avatar",
+        userId: req.ccwebUserId,
+        err: e.message,
+      });
       next(e);
     }
   });
@@ -77,8 +91,21 @@ function createUploadsRouter(deps) {
       const prev = ccwebUsers.get(req.ccwebUserId);
       const merged = buildUserProfile({ userId: req.ccwebUserId, bannerUrl: saved.url }, prev || null);
       ccwebUsers.set(req.ccwebUserId, merged);
+      logger.info({
+        msg: "profile_upload_ok",
+        kind: "banner",
+        userId: req.ccwebUserId,
+        storage: saved.storage,
+        bytes: req.file.size,
+      });
       res.json({ ok: true, url: saved.url, storage: saved.storage, user: sanitizeUser(merged) });
     } catch (e) {
+      logger.warn({
+        msg: "profile_upload_failed",
+        kind: "banner",
+        userId: req.ccwebUserId,
+        err: e.message,
+      });
       next(e);
     }
   });

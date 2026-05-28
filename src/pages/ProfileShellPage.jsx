@@ -1,32 +1,65 @@
-import { KeyRound, Loader2, LogOut, Shield, Wallet } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Loader2, LogOut, Shield, Wallet } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { uploadProfileAvatar, uploadProfileBanner, formatUploadError } from "../api/uploadsApi";
-import { assetsUrl, apiUrl } from "../config/env";
-import { ImageDropZone } from "../components/uploads/ImageDropZone";
+import { updateProfile, fetchProfileFeed } from "../api/profileApi";
+import { ProfileBottomSheet } from "../components/profile/ProfileBottomSheet";
+import { ProfileFeedList } from "../components/profile/ProfileFeedList";
+import { ProfileHeader } from "../components/profile/ProfileHeader";
+import { ProfileTabs } from "../components/profile/ProfileTabs";
+import { apiUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
 import { toast } from "../lib/toastBus";
 import { getSessionToken, logoutApi, setSession } from "../session";
 import { CCWEB_UI_LOAD_TIMEOUT_MS } from "../constants/loadTimeout";
 import { useAppShellContext } from "../hooks/useAppShellContext";
 import { useAuthGateRecovery } from "../hooks/useAuthGateRecovery";
+import { useProfileStore, syncProfileFromUpload } from "../store/profileStore";
 
 export function ProfileShellPage() {
-  const { user, setUser, authHydrated, refreshSession } = useAppShellContext();
+  const { user: shellUser, setUser, authHydrated, refreshSession } = useAppShellContext();
   const navigate = useNavigate();
+  const storeUser = useProfileStore((s) => s.user);
+  const social = useProfileStore((s) => s.social);
+  const creator = useProfileStore((s) => s.creator);
+  const monetization = useProfileStore((s) => s.monetization);
+  const betaSlugFromStore = useProfileStore((s) => s.betaSlug);
+  const betaPublicUrl = useProfileStore((s) => s.betaPublicUrl);
+  const profileLoading = useProfileStore((s) => s.loading);
+  const profileOffline = useProfileStore((s) => s.offline);
+  const hydrateMe = useProfileStore((s) => s.hydrateMe);
+  const applyBundle = useProfileStore((s) => s.applyBundle);
+
+  const user = storeUser || shellUser;
+
+  const [editOpen, setEditOpen] = useState(false);
   const [displayName, setDisplayName] = useState("");
+  const [bio, setBio] = useState("");
+  const [location, setLocation] = useState("");
+  const [website, setWebsite] = useState("");
+  const [betaSlug, setBetaSlug] = useState("");
   const [pushEnabled, setPushEnabled] = useState(true);
+  const [socialLinkLabel, setSocialLinkLabel] = useState("");
+  const [socialLinkUrl, setSocialLinkUrl] = useState("");
+  const [socialLinks, setSocialLinks] = useState([]);
+  const [saveBusy, setSaveBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const [err, setErr] = useState(null);
+
+  const [activeTab, setActiveTab] = useState("posts");
+  const [feedItems, setFeedItems] = useState([]);
+  const [feedLoading, setFeedLoading] = useState(false);
+  const [feedError, setFeedError] = useState(null);
+
+  const [mediaBusy, setMediaBusy] = useState({ avatar: false, banner: false });
+  const [mediaProgress, setMediaProgress] = useState({ avatar: null, banner: null });
+  const [mediaError, setMediaError] = useState({ avatar: null, banner: null });
+
   const [totpStep, setTotpStep] = useState(null);
   const [totpSecret, setTotpSecret] = useState("");
   const [totpUrl, setTotpUrl] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [backupCodes, setBackupCodes] = useState(null);
-
-  const [betaSlug, setBetaSlug] = useState("");
-  const [mediaBusy, setMediaBusy] = useState({ avatar: false, banner: false });
-  const [mediaProgress, setMediaProgress] = useState({ avatar: null, banner: null });
   const [gateTimedOut, setGateTimedOut] = useState(false);
 
   useEffect(() => {
@@ -43,61 +76,134 @@ export function ProfileShellPage() {
   useAuthGateRecovery({ gateTimedOut, authHydrated, refreshSession });
 
   useEffect(() => {
+    if (!authHydrated || !shellUser?.id) return;
+    useProfileStore.getState().applySessionUser(shellUser);
+    hydrateMe().catch(() => {});
+  }, [authHydrated, shellUser?.id, hydrateMe]);
+
+  useEffect(() => {
     if (user) {
       setDisplayName(user.displayName || "");
+      setBio(user.bio || "");
+      setLocation(user.location || "");
+      setWebsite(user.website || "");
       setPushEnabled(user.pushEnabled !== false);
+      setSocialLinks(Array.isArray(user.socialLinks) ? user.socialLinks : []);
     }
   }, [user]);
 
   useEffect(() => {
-    const token = getSessionToken();
-    if (!token || !user?.id) return;
-    let cancelled = false;
-    apiFetch(apiUrl("/api/v1/users/me"), { headers: { Authorization: `Bearer ${token}` } }, { networkRetries: 1 })
-      .then((r) => r.json())
-      .then((d) => {
-        if (!cancelled && d.betaSlug) setBetaSlug(d.betaSlug);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
+    if (betaSlugFromStore) setBetaSlug(betaSlugFromStore);
+  }, [betaSlugFromStore]);
+
+  const loadFeed = useCallback(async () => {
+    if (!user?.id) return;
+    setFeedLoading(true);
+    setFeedError(null);
+    try {
+      const data = await fetchProfileFeed(user.id, activeTab);
+      setFeedItems(data.items || []);
+    } catch (e) {
+      setFeedError(e.message || "Could not load tab.");
+      setFeedItems([]);
+    } finally {
+      setFeedLoading(false);
+    }
+  }, [user?.id, activeTab]);
+
+  useEffect(() => {
+    if (user?.id) loadFeed();
+  }, [user?.id, activeTab, loadFeed]);
 
   async function saveProfile() {
     if (!user) return;
     setErr(null);
     setMsg(null);
+    setSaveBusy(true);
     const token = getSessionToken();
     try {
-      const res = await apiFetch(
-        apiUrl("/api/v1/users/update"),
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            displayName: displayName.trim(),
-            pushEnabled,
-            betaSlug: betaSlug.trim() || undefined,
-          }),
-        },
-        { networkRetries: 2 }
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Save failed");
-      setUser(data.user);
-      setSession(token, data.user);
-      if (data.betaSlug) setBetaSlug(data.betaSlug);
-      setMsg(data.betaPublicUrl ? `Profile saved. Share: ${data.betaPublicUrl}` : "Profile saved.");
+      const links = [...socialLinks];
+      if (socialLinkUrl.trim()) {
+        links.push({ label: socialLinkLabel.trim() || "Link", url: socialLinkUrl.trim() });
+      }
+      const bundle = await updateProfile({
+        displayName: displayName.trim(),
+        pushEnabled,
+        betaSlug: betaSlug.trim() || undefined,
+        bio: bio.trim() || null,
+        location: location.trim() || null,
+        website: website.trim() || null,
+        socialLinks: links.slice(0, 8),
+      });
+      applyBundle(bundle);
+      setUser(bundle.user);
+      setSession(token, bundle.user);
+      if (bundle.betaSlug) setBetaSlug(bundle.betaSlug);
+      setSocialLinks(bundle.user?.socialLinks || []);
+      setSocialLinkLabel("");
+      setSocialLinkUrl("");
+      setEditOpen(false);
+      setMsg(bundle.betaPublicUrl ? `Profile saved. Share: ${bundle.betaPublicUrl}` : "Profile saved.");
       toast.success("Profile saved.");
     } catch (e) {
       setErr(e.message);
       toast.error(e.message);
+    } finally {
+      setSaveBusy(false);
     }
   }
+
+  const runAvatarUpload = useCallback(
+    async (file) => {
+      setMediaError((m) => ({ ...m, avatar: null }));
+      const token = getSessionToken();
+      setMediaBusy((m) => ({ ...m, avatar: true }));
+      setMediaProgress((p) => ({ ...p, avatar: 0 }));
+      try {
+        const data = await uploadProfileAvatar(file, {
+          onProgress: (pct) => setMediaProgress((p) => ({ ...p, avatar: pct })),
+        });
+        syncProfileFromUpload(token, data);
+        setUser(data.user);
+        toast.success("Profile photo updated.");
+      } catch (e) {
+        const m = formatUploadError(e);
+        setMediaError((s) => ({ ...s, avatar: m }));
+        toast.error(m);
+        throw e;
+      } finally {
+        setMediaProgress((p) => ({ ...p, avatar: null }));
+        setMediaBusy((m) => ({ ...m, avatar: false }));
+      }
+    },
+    [setUser]
+  );
+
+  const runBannerUpload = useCallback(
+    async (file) => {
+      setMediaError((m) => ({ ...m, banner: null }));
+      const token = getSessionToken();
+      setMediaBusy((m) => ({ ...m, banner: true }));
+      setMediaProgress((p) => ({ ...p, banner: 0 }));
+      try {
+        const data = await uploadProfileBanner(file, {
+          onProgress: (pct) => setMediaProgress((p) => ({ ...p, banner: pct })),
+        });
+        syncProfileFromUpload(token, data);
+        setUser(data.user);
+        toast.success("Banner updated.");
+      } catch (e) {
+        const m = formatUploadError(e);
+        setMediaError((s) => ({ ...s, banner: m }));
+        toast.error(m);
+        throw e;
+      } finally {
+        setMediaProgress((p) => ({ ...p, banner: null }));
+        setMediaBusy((m) => ({ ...m, banner: false }));
+      }
+    },
+    [setUser]
+  );
 
   async function beginTotp() {
     setErr(null);
@@ -109,10 +215,7 @@ export function ProfileShellPage() {
         apiUrl("/api/auth/2fa/setup"),
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ step: "begin" }),
         },
         { networkRetries: 1 }
@@ -136,10 +239,7 @@ export function ProfileShellPage() {
         apiUrl("/api/auth/2fa/setup"),
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ step: "confirm", code: totpCode.trim() }),
         },
         { networkRetries: 1 }
@@ -148,13 +248,13 @@ export function ProfileShellPage() {
       if (!res.ok) throw new Error(data.error || "Invalid code");
       setBackupCodes(data.backupCodes || []);
       setTotpStep("done");
-      setMsg("Two-factor authentication enabled.");
       toast.success("Two-factor authentication enabled.");
       const meRes = await apiFetch(apiUrl("/api/auth/me"), { headers: { Authorization: `Bearer ${token}` } }, { networkRetries: 1 });
       const me = await meRes.json();
       if (me.user) {
         setUser(me.user);
         setSession(token, me.user);
+        useProfileStore.getState().applySessionUser(me.user);
       }
     } catch (e) {
       setErr(e.message);
@@ -165,6 +265,7 @@ export function ProfileShellPage() {
   async function handleLogout() {
     await logoutApi();
     setUser(null);
+    useProfileStore.getState().reset();
     navigate("/login");
   }
 
@@ -208,7 +309,7 @@ export function ProfileShellPage() {
       <div className="mx-auto max-w-lg px-3 pb-24 pt-8">
         <div className="ccweb-glass rounded-2xl p-6 text-center">
           <p className="text-ccweb-muted">Sign in to manage your profile and security.</p>
-          <Link to="/login" className="mt-4 inline-block ccweb-gradient-btn">
+          <Link to="/login" className="mt-4 inline-block ccweb-gradient-btn min-h-[44px] px-5 leading-[44px]">
             Sign in
           </Link>
         </div>
@@ -221,138 +322,41 @@ export function ProfileShellPage() {
     : null;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5 px-3 pb-24 pt-2 md:max-w-3xl">
-      <section className="ccweb-stagger relative overflow-hidden rounded-3xl border border-white/10 shadow-[0_24px_80px_-28px_rgba(0,0,0,0.55)]">
-        <div
-          className="h-36 bg-cover bg-center md:h-44"
-          style={{
-            backgroundImage: user.bannerUrl
-              ? `url(${assetsUrl(user.bannerUrl)})`
-              : "linear-gradient(120deg, rgba(34,211,238,0.45), rgba(167,139,250,0.45))",
-          }}
-        />
-        <div className="relative flex flex-col gap-1 border-t border-white/10 bg-black/50 px-5 pb-5 pt-14 backdrop-blur-lg">
-          <div className="absolute -top-12 left-5 flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border-4 border-[#070b14] bg-gradient-to-br from-ccweb-cyan/35 to-ccweb-violet/30 text-lg font-bold text-white shadow-2xl ring-1 ring-white/15">
-            {user.avatarUrl ? (
-              <img src={assetsUrl(user.avatarUrl)} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <span>{(user.displayName || "?").slice(0, 2).toUpperCase()}</span>
-            )}
-          </div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-ccweb-muted">Public profile</p>
-          <h1 className="text-2xl font-bold tracking-tight text-white md:text-3xl">{user.displayName || "Member"}</h1>
-          <p className="text-sm text-ccweb-muted">{user.email || "Wallet-linked account"}</p>
-        </div>
-      </section>
-
-      <section className="ccweb-glass rounded-2xl p-5">
-        <h2 className="font-semibold text-white">Profile appearance</h2>
-        <p className="mt-1 text-sm text-ccweb-muted">
-          Banner and avatar are stored securely (Cloudinary when configured, otherwise the API host). JPEG/PNG/WebP/GIF —
-          validated on the server.
+    <div className="mx-auto max-w-2xl space-y-4 px-3 pb-24 pt-2 md:max-w-3xl">
+      {profileOffline && (
+        <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+          You appear offline. Profile counts may be stale until you reconnect.
         </p>
-        <div className="mt-4 space-y-5">
-          <ImageDropZone
-            label="Banner"
-            hint="Wide image · drag & drop or tap"
-            busy={mediaBusy.banner}
-            progress={mediaProgress.banner}
-            aspectClass="aspect-[21/9] max-h-40"
-            compressOptions={{ maxWidth: 2200, maxHeight: 820, quality: 0.88 }}
-            previewUrl={user.bannerUrl ? assetsUrl(user.bannerUrl) : null}
-            onFile={async (file) => {
-              setErr(null);
-              setMsg(null);
-              const token = getSessionToken();
-              setMediaBusy((m) => ({ ...m, banner: true }));
-              setMediaProgress((p) => ({ ...p, banner: 0 }));
-              try {
-                const data = await uploadProfileBanner(file, {
-                  onProgress: (pct) => setMediaProgress((p) => ({ ...p, banner: pct })),
-                });
-                setUser(data.user);
-                setSession(token, data.user);
-                setMsg("Banner updated.");
-                toast.success("Banner updated.");
-              } catch (e) {
-                const m = formatUploadError(e);
-                setErr(m);
-                toast.error(m);
-              } finally {
-                setMediaProgress((p) => ({ ...p, banner: null }));
-                setMediaBusy((m) => ({ ...m, banner: false }));
-              }
-            }}
-          >
-            Upload banner
-          </ImageDropZone>
-          <div className="max-w-[160px]">
-            <ImageDropZone
-              label="Avatar"
-              hint="Square · optimized before upload (GIF kept as-is)"
-              busy={mediaBusy.avatar}
-              progress={mediaProgress.avatar}
-              capture="user"
-              aspectClass="aspect-square max-w-[160px]"
-              compressOptions={{ maxWidth: 1024, maxHeight: 1024, quality: 0.88 }}
-              previewUrl={user.avatarUrl ? assetsUrl(user.avatarUrl) : null}
-              onFile={async (file) => {
-                setErr(null);
-                setMsg(null);
-                const token = getSessionToken();
-                setMediaBusy((m) => ({ ...m, avatar: true }));
-                setMediaProgress((p) => ({ ...p, avatar: 0 }));
-                try {
-                  const data = await uploadProfileAvatar(file, {
-                    onProgress: (pct) => setMediaProgress((p) => ({ ...p, avatar: pct })),
-                  });
-                  setUser(data.user);
-                  setSession(token, data.user);
-                  setMsg("Profile photo updated.");
-                  toast.success("Profile photo updated.");
-                } catch (e) {
-                  const m = formatUploadError(e);
-                  setErr(m);
-                  toast.error(m);
-                } finally {
-                  setMediaProgress((p) => ({ ...p, avatar: null }));
-                  setMediaBusy((m) => ({ ...m, avatar: false }));
-                }
-              }}
-            >
-              Upload avatar
-            </ImageDropZone>
-          </div>
-        </div>
-      </section>
+      )}
 
-      <section className="ccweb-glass rounded-2xl p-5">
-        <h2 className="flex items-center gap-2 font-semibold text-white">
-          <KeyRound className="h-5 w-5 text-ccweb-cyan" />
-          Identity
-        </h2>
-        <label className="mt-4 block text-xs font-medium text-ccweb-muted">Display name</label>
-        <input className="ccweb-input mt-1" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-        <label className="mt-4 block text-xs font-medium text-ccweb-muted">Public beta URL slug</label>
-        <p className="mt-1 text-xs text-ccweb-muted">
-          Letters, numbers, hyphens — becomes <code className="text-ccweb-cyan">/u/your-slug</code>
-        </p>
-        <input
-          className="ccweb-input mt-1 font-mono text-sm"
-          placeholder="e.g. jamie-trader"
-          value={betaSlug}
-          onChange={(e) => setBetaSlug(e.target.value)}
-        />
-        <label className="mt-4 flex items-center gap-2 text-sm text-ccweb-muted">
-          <input type="checkbox" checked={pushEnabled} onChange={(e) => setPushEnabled(e.target.checked)} />
-          Product updates &amp; session alerts
-        </label>
-        {err && <p className="mt-3 text-sm text-rose-300">{err}</p>}
-        {msg && <p className="mt-3 text-sm text-emerald-300">{msg}</p>}
-        <button type="button" className="mt-4 ccweb-gradient-btn text-sm" onClick={saveProfile}>
-          Save profile
-        </button>
-      </section>
+      <ProfileHeader
+        user={user}
+        social={social}
+        creator={creator}
+        monetization={monetization}
+        betaPublicUrl={betaPublicUrl}
+        loading={profileLoading}
+        isSelf
+        onEdit={() => setEditOpen(true)}
+        avatarUpload={{
+          busy: mediaBusy.avatar,
+          progress: mediaProgress.avatar,
+          error: mediaError.avatar,
+          onRetry: () => setMediaError((s) => ({ ...s, avatar: null })),
+          onFile: runAvatarUpload,
+        }}
+        bannerUpload={{
+          busy: mediaBusy.banner,
+          progress: mediaProgress.banner,
+          error: mediaError.banner,
+          onRetry: () => setMediaError((s) => ({ ...s, banner: null })),
+          onFile: runBannerUpload,
+          compressOptions: { maxWidth: 2200, maxHeight: 820, quality: 0.88 },
+        }}
+      />
+
+      <ProfileTabs active={activeTab} onChange={setActiveTab} isSelf sticky />
+      <ProfileFeedList tab={activeTab} items={feedItems} loading={feedLoading} error={feedError} onRetry={loadFeed} />
 
       <section className="ccweb-glass rounded-2xl p-5">
         <h2 className="flex items-center gap-2 font-semibold text-white">
@@ -371,11 +375,9 @@ export function ProfileShellPage() {
           <Shield className="h-5 w-5 text-ccweb-violet" />
           Two-factor authentication
         </h2>
-        <p className="mt-2 text-sm text-ccweb-muted">
-          Use Google Authenticator or another TOTP app. Backup codes are shown once after confirmation.
-        </p>
+        <p className="mt-2 text-sm text-ccweb-muted">Authenticator app + one-time backup codes.</p>
         {!totpStep && (
-          <button type="button" className="mt-4 ccweb-outline-btn text-sm" onClick={beginTotp}>
+          <button type="button" className="ccweb-outline-btn mt-4 min-h-[44px] text-sm" onClick={beginTotp}>
             Set up authenticator
           </button>
         )}
@@ -386,7 +388,7 @@ export function ProfileShellPage() {
                 <img src={otpQr} alt="Authenticator QR" width={160} height={160} className="h-40 w-40" />
               </div>
             )}
-            <p className="text-xs text-ccweb-muted break-all">Secret (manual entry): {totpSecret}</p>
+            <p className="text-xs text-ccweb-muted break-all">Secret: {totpSecret}</p>
             <input
               className="ccweb-input"
               placeholder="6-digit code"
@@ -394,7 +396,7 @@ export function ProfileShellPage() {
               value={totpCode}
               onChange={(e) => setTotpCode(e.target.value)}
             />
-            <button type="button" className="ccweb-gradient-btn text-sm" onClick={confirmTotp}>
+            <button type="button" className="ccweb-gradient-btn min-h-[44px] text-sm" onClick={confirmTotp}>
               Confirm &amp; enable
             </button>
           </div>
@@ -411,14 +413,93 @@ export function ProfileShellPage() {
         )}
       </section>
 
+      {err && <p className="text-sm text-rose-300">{err}</p>}
+      {msg && <p className="text-sm text-emerald-300">{msg}</p>}
+
       <button
         type="button"
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-500/40 bg-rose-500/10 py-3 text-sm font-semibold text-rose-200"
+        className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-2xl border border-rose-500/40 bg-rose-500/10 py-3 text-sm font-semibold text-rose-200"
         onClick={handleLogout}
       >
         <LogOut className="h-4 w-4" />
         Log out
       </button>
+
+      <ProfileBottomSheet open={editOpen} title="Edit profile" onClose={() => setEditOpen(false)}>
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-ccweb-muted">Display name</label>
+            <input className="ccweb-input mt-1" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-ccweb-muted">Bio</label>
+            <textarea className="ccweb-input mt-1 min-h-[88px] resize-y" maxLength={500} value={bio} onChange={(e) => setBio(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-ccweb-muted">Location</label>
+            <input className="ccweb-input mt-1" value={location} onChange={(e) => setLocation(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-ccweb-muted">Website</label>
+            <input className="ccweb-input mt-1" placeholder="https://…" value={website} onChange={(e) => setWebsite(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-ccweb-muted">Public URL slug</label>
+            <input
+              className="ccweb-input mt-1 font-mono text-sm"
+              placeholder="jamie-trader"
+              value={betaSlug}
+              onChange={(e) => setBetaSlug(e.target.value)}
+            />
+            <p className="mt-1 text-[11px] text-ccweb-muted">Becomes /u/your-slug</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-ccweb-muted">Social link</p>
+            <div className="mt-1 flex flex-col gap-2 sm:flex-row">
+              <input
+                className="ccweb-input sm:flex-1"
+                placeholder="Label"
+                value={socialLinkLabel}
+                onChange={(e) => setSocialLinkLabel(e.target.value)}
+              />
+              <input
+                className="ccweb-input sm:flex-[2]"
+                placeholder="https://…"
+                value={socialLinkUrl}
+                onChange={(e) => setSocialLinkUrl(e.target.value)}
+              />
+            </div>
+            {socialLinks.length > 0 && (
+              <ul className="mt-2 space-y-1 text-xs text-ccweb-muted">
+                {socialLinks.map((l, i) => (
+                  <li key={`${l.url}-${i}`} className="flex justify-between gap-2">
+                    <span className="truncate">{l.label}: {l.url}</span>
+                    <button
+                      type="button"
+                      className="shrink-0 text-rose-300"
+                      onClick={() => setSocialLinks((arr) => arr.filter((_, j) => j !== i))}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <label className="flex min-h-[44px] items-center gap-2 text-sm text-ccweb-muted">
+            <input type="checkbox" checked={pushEnabled} onChange={(e) => setPushEnabled(e.target.checked)} />
+            Product updates &amp; session alerts
+          </label>
+          <button
+            type="button"
+            className="ccweb-gradient-btn w-full min-h-[44px] text-sm"
+            disabled={saveBusy}
+            onClick={saveProfile}
+          >
+            {saveBusy ? "Saving…" : "Save profile"}
+          </button>
+        </div>
+      </ProfileBottomSheet>
 
       <p className="text-center text-xs text-ccweb-muted">
         <Link to="/dashboard" className="text-ccweb-cyan hover:underline">

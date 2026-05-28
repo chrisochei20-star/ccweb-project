@@ -51,13 +51,14 @@ function readCcwebAccessToken() {
 }
 
 /**
- * Prefer Supabase session JWT when configured; otherwise CCWEB access token from sessionStorage.
+ * Prefer CCWEB sessionStorage JWT when present (split Vercel SPA + Railway API).
+ * Supabase is only used when no CCWEB token is stored.
  * @returns {Promise<string|null>}
  */
 export async function getApiBearerToken() {
-  const supa = await getSupabaseAccessToken();
-  if (supa) return supa;
-  return readCcwebAccessToken();
+  const ccweb = readCcwebAccessToken();
+  if (ccweb) return ccweb;
+  return getSupabaseAccessToken();
 }
 
 function shouldSkipAutoBearer(urlStr) {

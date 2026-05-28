@@ -1,5 +1,44 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { apiFetch } from "../src/lib/apiClient.js";
+import { apiFetch, getApiBearerToken } from "../src/lib/apiClient.js";
+import { SESSION_TOKEN_KEY } from "../src/authStorageKeys.js";
+
+vi.mock("../src/lib/supabaseClient.js", () => ({
+  getSupabaseAccessToken: vi.fn().mockResolvedValue("supabase-jwt"),
+}));
+
+describe("getApiBearerToken", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "sessionStorage",
+      (() => {
+        const map = new Map();
+        return {
+          getItem: (k) => map.get(k) ?? null,
+          setItem: (k, v) => map.set(k, String(v)),
+          removeItem: (k) => map.delete(k),
+          clear: () => map.clear(),
+        };
+      })()
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("prefers CCWEB session token over Supabase when both exist", async () => {
+    sessionStorage.setItem(SESSION_TOKEN_KEY, "ccweb-access-jwt");
+    await expect(getApiBearerToken()).resolves.toBe("ccweb-access-jwt");
+  });
+
+  it("falls back to Supabase when no CCWEB token", async () => {
+    await expect(getApiBearerToken()).resolves.toBe("supabase-jwt");
+  });
+});
 
 describe("apiFetch", () => {
   beforeEach(() => {

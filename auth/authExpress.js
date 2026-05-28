@@ -28,6 +28,11 @@ function cookieOpts() {
         if (new URL(pub).origin !== new URL(api).origin) {
           sameSite = "none";
         }
+      } else if (process.env.AUTH_COOKIE_CROSS_SITE === "1") {
+        sameSite = "none";
+      } else if (process.env.NODE_ENV === "production" && api && /\.railway\.app$/i.test(new URL(api).hostname)) {
+        // Split deploy (Vercel SPA + Railway API) when PUBLIC_APP_URL is unset.
+        sameSite = "none";
       }
     } catch {
       /* keep lax */

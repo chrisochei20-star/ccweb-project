@@ -80,8 +80,8 @@ export function MobileLayout() {
     let cancelled = false;
     const token = getSessionToken();
     const cached = getLocalSessionUser();
-    if (token && cached) {
-      setUser(cached);
+    if (token) {
+      if (cached) setUser(cached);
       setAuthHydrated(true);
     }
     (async () => {
@@ -110,11 +110,23 @@ export function MobileLayout() {
   }
 
   const refreshSession = useCallback(async () => {
-    try {
-      const u = await fetchMe();
-      setUser(u ?? getStoredUser());
-    } finally {
+    setHydrateTimedOut(false);
+    const token = getSessionToken();
+    const cached = getStoredUser();
+    if (token && cached) {
+      setUser(cached);
       setAuthHydrated(true);
+    }
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const u = await fetchMe();
+        setUser(u ?? getStoredUser());
+        return;
+      } catch {
+        if (attempt < 1) await new Promise((r) => setTimeout(r, 480));
+      } finally {
+        setAuthHydrated(true);
+      }
     }
   }, []);
 

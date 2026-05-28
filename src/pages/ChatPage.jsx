@@ -1,6 +1,5 @@
 import { ArrowLeft, Circle, ImagePlus, Loader2, Send, Smile } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useOutletContext } from "react-router-dom";
 import { apiUrl, assetsUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
 import { compressImageFile } from "../lib/imageCompress";
@@ -8,13 +7,16 @@ import { uploadChatImage, formatUploadError } from "../api/uploadsApi";
 import { getSharedRealtimeSocket } from "../lib/chatSocket";
 import { toast } from "../lib/toastBus";
 import { getSessionToken } from "../session";
+import { CCWEB_UI_LOAD_TIMEOUT_MS } from "../constants/loadTimeout";
+import { useAppShellContext } from "../hooks/useAppShellContext";
+import { useAuthGateRecovery } from "../hooks/useAuthGateRecovery";
 
 const QUICK_EMOJIS = ["😀", "🙂", "😂", "🔥", "❤️", "👍", "🎉", "⚡", "📈", "🚀", "💎", "✨", "🙏", "👀", "💬"];
 
-const CHAT_LOAD_TIMEOUT_MS = 8000;
+const CHAT_LOAD_TIMEOUT_MS = CCWEB_UI_LOAD_TIMEOUT_MS;
 
 export function ChatPage() {
-  const { user, authHydrated, refreshSession } = useOutletContext() || {};
+  const { user, authHydrated, refreshSession } = useAppShellContext();
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState([]);
@@ -74,6 +76,8 @@ export function ChatPage() {
     const id = window.setTimeout(() => setGateTimedOut(true), CHAT_LOAD_TIMEOUT_MS);
     return () => window.clearTimeout(id);
   }, [authHydrated, user]);
+
+  useAuthGateRecovery({ gateTimedOut, authHydrated, refreshSession });
 
   useEffect(() => {
     const vv = window.visualViewport;

@@ -1,15 +1,18 @@
 import { KeyRound, Loader2, LogOut, Shield, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useOutletContext } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { uploadProfileAvatar, uploadProfileBanner, formatUploadError } from "../api/uploadsApi";
 import { assetsUrl, apiUrl } from "../config/env";
 import { ImageDropZone } from "../components/uploads/ImageDropZone";
 import { apiFetch } from "../lib/apiClient";
 import { toast } from "../lib/toastBus";
 import { getSessionToken, logoutApi, setSession } from "../session";
+import { CCWEB_UI_LOAD_TIMEOUT_MS } from "../constants/loadTimeout";
+import { useAppShellContext } from "../hooks/useAppShellContext";
+import { useAuthGateRecovery } from "../hooks/useAuthGateRecovery";
 
 export function ProfileShellPage() {
-  const { user, setUser, authHydrated, refreshSession } = useOutletContext() || {};
+  const { user, setUser, authHydrated, refreshSession } = useAppShellContext();
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState("");
   const [pushEnabled, setPushEnabled] = useState(true);
@@ -33,9 +36,11 @@ export function ProfileShellPage() {
       setGateTimedOut(false);
       return undefined;
     }
-    const id = window.setTimeout(() => setGateTimedOut(true), 8000);
+    const id = window.setTimeout(() => setGateTimedOut(true), CCWEB_UI_LOAD_TIMEOUT_MS);
     return () => window.clearTimeout(id);
   }, [authHydrated, user]);
+
+  useAuthGateRecovery({ gateTimedOut, authHydrated, refreshSession });
 
   useEffect(() => {
     if (user) {

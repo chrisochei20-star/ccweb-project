@@ -7,7 +7,8 @@ import { getSessionToken } from "../session";
 /** Requires a JWT in session storage — pair with API Bearer auth. Waits for MobileLayout auth hydration. */
 export function ProtectedLayout() {
   const location = useLocation();
-  const { authHydrated, refreshSession } = useOutletContext() || {};
+  const shell = useOutletContext() || {};
+  const { authHydrated, refreshSession } = shell;
   const token = getSessionToken();
   const [hydrateTimedOut, setHydrateTimedOut] = useState(false);
 
@@ -51,5 +52,5 @@ export function ProtectedLayout() {
   if (!token) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
-  return <Outlet />;
+  return <Outlet context={shell} />;
 }

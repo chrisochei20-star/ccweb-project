@@ -1,9 +1,10 @@
 import { SESSION_TOKEN_KEY } from "./authStorageKeys";
+import { CCWEB_AUTH_HYDRATION_TIMEOUT_MS } from "./constants/loadTimeout";
 import { getApiBaseUrl } from "./config/env";
 import { apiFetch } from "./lib/apiClient";
 
 /** Max wait for /me + refresh during shell hydration (avoids infinite spinner). */
-const SESSION_HYDRATION_TIMEOUT_MS = 8000;
+const SESSION_HYDRATION_TIMEOUT_MS = CCWEB_AUTH_HYDRATION_TIMEOUT_MS;
 
 const TOKEN_KEY = SESSION_TOKEN_KEY;
 const USER_KEY = "ccweb_user";
@@ -61,7 +62,7 @@ async function tryRefreshSession() {
         credentials: "include",
         body: JSON.stringify(storedRefresh ? { refreshToken: storedRefresh } : {}),
       },
-      { networkRetries: 1 }
+      { networkRetries: 2, timeoutMs: 15000 }
     );
     const data = await r.json();
     if (!r.ok) return null;
@@ -101,7 +102,7 @@ async function fetchMeFromNetwork() {
         headers: { Authorization: `Bearer ${access}` },
         credentials: "include",
       },
-      { networkRetries: 1 }
+      { networkRetries: 2, timeoutMs: 15000 }
     );
   }
 

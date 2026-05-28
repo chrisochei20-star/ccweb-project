@@ -4,6 +4,7 @@ import { cn } from "../../lib/cn";
 import { toast } from "../../lib/toastBus";
 import { Skeleton } from "../ui/Skeleton";
 import { CreatorBadge, VerificationBadge } from "./ProfileBadges";
+import { CreatorStatsCard } from "./CreatorStatsCard";
 import { ProfileMediaUpload } from "./ProfileMediaUpload";
 
 function formatJoined(iso) {
@@ -45,6 +46,7 @@ export function ProfileHeader({
   social,
   creator,
   monetization,
+  stats,
   betaPublicUrl,
   loading,
   isSelf,
@@ -173,15 +175,6 @@ export function ProfileHeader({
                 </span>
               </div>
             )}
-            {isSelf && monetization?.tier && monetization.tier !== "free" && (
-              <p className="mt-2 text-xs text-ccweb-muted">
-                Plan: <span className="font-semibold capitalize text-white">{monetization.tier}</span>
-                {monetization.subscription?.status ? ` · ${monetization.subscription.status}` : ""}
-              </p>
-            )}
-            {isSelf && user?.walletAddress && (
-              <p className="mt-2 break-all font-mono text-xs text-ccweb-muted">Wallet: {user.walletAddress}</p>
-            )}
           </div>
 
           <div className="flex shrink-0 flex-wrap gap-2">
@@ -207,6 +200,18 @@ export function ProfileHeader({
           </div>
         </div>
       </div>
+      <CreatorStatsCard social={social} stats={stats} creator={creator} monetization={monetization} isSelf={isSelf} />
+      {(isSelf && user?.walletAddress) || (isSelf && monetization?.subscription?.status) ? (
+        <div className="border-t border-white/10 bg-black/40 px-4 py-3 text-xs text-ccweb-muted md:px-6">
+          {isSelf && monetization?.tier && monetization.tier !== "free" && (
+            <p>
+              Plan: <span className="font-semibold capitalize text-white">{monetization.tier}</span>
+              {monetization.subscription?.status ? ` · ${monetization.subscription.status}` : ""}
+            </p>
+          )}
+          {isSelf && user?.walletAddress && <p className="mt-1 break-all font-mono">Wallet: {user.walletAddress}</p>}
+        </div>
+      ) : null}
     </section>
   );
 }

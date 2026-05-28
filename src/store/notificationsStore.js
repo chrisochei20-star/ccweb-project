@@ -117,7 +117,15 @@ export const useNotificationsStore = create((set, get) => ({
       set((s) => ({
         items: s.items.map((x) => (ids.has(x.id) ? { ...x, read: true, readAt: new Date().toISOString() } : x)),
         previewItems: s.previewItems.map((x) => (ids.has(x.id) ? { ...x, read: true } : x)),
-        unreadCount: Math.max(0, (s.unreadCount ?? 0) - payload.readIds.length),
+        unreadCount:
+          typeof payload.unreadCount === "number"
+            ? Math.max(0, payload.unreadCount)
+            : Math.max(0, (s.unreadCount ?? 0) - payload.readIds.length),
+      }));
+    }
+    if (payload.prefs && typeof payload.prefs === "object") {
+      set((s) => ({
+        prefs: { ...DEFAULT_PREFS, ...s.prefs, ...payload.prefs },
       }));
     }
   },

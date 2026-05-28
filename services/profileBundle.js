@@ -8,6 +8,8 @@ const betaPg = require("../db/persistenceBeta");
 const profileSocial = require("../db/profileSocial");
 const monPg = require("../db/persistenceMonetization");
 const learningPg = require("../db/persistenceLearning");
+const communityPg = require("../db/persistenceCommunity");
+const { getPool } = require("../db/pool");
 const { trimOrigin } = require("./deploymentOrigins");
 
 function parseSocialLinks(raw) {
@@ -121,6 +123,15 @@ async function buildProfileBundle({ ccwebUsers, buildUserProfile, sanitizeUser, 
 
   const creator = creatorFromUser(user, monetization?.tier);
 
+  let postCount = 0;
+  if (getPool()) {
+    try {
+      postCount = await communityPg.countPostsByAuthor(userId);
+    } catch {
+      /* ignore */
+    }
+  }
+
   return {
     user: {
       ...publicUser,
@@ -133,6 +144,7 @@ async function buildProfileBundle({ ccwebUsers, buildUserProfile, sanitizeUser, 
     social: { followers: socialCounts.followers, following: socialCounts.following, isFollowing },
     creator,
     monetization: isSelf ? monetization : monetization ? { tier: monetization.tier } : null,
+    stats: { postCount },
   };
 }
 

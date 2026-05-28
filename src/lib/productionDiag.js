@@ -25,3 +25,20 @@ export function logClientStructured(event, fields = {}) {
     /* ignore */
   }
 }
+
+/** Snapshot for support / QA when client diag is enabled. */
+export async function getClientDiagnostics() {
+  let realtime = null;
+  try {
+    const mod = await import("./realtimeSocket.js");
+    realtime = mod.getRealtimeDiagnostics();
+  } catch {
+    /* SSR / tests */
+  }
+  return {
+    online: typeof navigator !== "undefined" ? navigator.onLine : null,
+    visibility: typeof document !== "undefined" ? document.visibilityState : null,
+    buildId: import.meta.env.VITE_CCWEB_BUILD_ID || null,
+    realtime,
+  };
+}

@@ -11,6 +11,7 @@ import {
 } from "../api/communityApi";
 import { SocialPostCard } from "../components/community/SocialPostCard";
 import { Skeleton } from "../components/ui/Skeleton";
+import { composerPaddingBottom, useKeyboardInset } from "../hooks/useKeyboardInset";
 import { useStaleLoadingGuard } from "../hooks/useStaleLoadingGuard";
 import { dedupeById, mergeChatsById } from "../lib/feedMerge";
 import { useRealtimeSubscription } from "../hooks/useRealtimeSubscription";
@@ -48,6 +49,7 @@ export function CommunityShellPage() {
   const [postingBusy, setPostingBusy] = useState(false);
   const [commentSubmittingId, setCommentSubmittingId] = useState(null);
   const [chatSending, setChatSending] = useState(false);
+  const keyboardInset = useKeyboardInset();
 
   const loadPosts = useCallback(async () => {
     setLoadingPosts(true);
@@ -333,7 +335,7 @@ export function CommunityShellPage() {
     }
   }
 
-  const shownPosts = posts.slice(0, Math.max(visibleCount, posts.length));
+  const shownPosts = posts.slice(0, visibleCount);
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 px-3 pb-6 pt-3 md:max-w-2xl">
@@ -380,7 +382,10 @@ export function CommunityShellPage() {
       {tab === "feed" && (
         <>
           {authHydrated && user ? (
-            <div className="sticky bottom-0 z-30 -mx-3 border-t border-white/10 bg-[#050810]/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_30px_rgba(0,0,0,0.45)] backdrop-blur-md md:static md:z-0 md:mx-0 md:border-t-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none">
+            <div
+              className="sticky bottom-0 z-30 -mx-3 border-t border-white/10 bg-[#050810]/95 px-3 pt-3 shadow-[0_-8px_30px_rgba(0,0,0,0.45)] backdrop-blur-md md:static md:z-0 md:mx-0 md:border-t-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none"
+              style={{ paddingBottom: composerPaddingBottom(keyboardInset) }}
+            >
               <form
                 onSubmit={submitPost}
                 className="ccweb-card-premium space-y-3 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-transparent p-5 md:border-white/10"

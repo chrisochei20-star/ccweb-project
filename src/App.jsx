@@ -13,27 +13,31 @@ import { GrowthHubPage } from "./GrowthHubPage";
 import { MobileLayout } from "./layout/MobileLayout";
 import { ProtectedLayout } from "./layout/ProtectedLayout";
 import { LoginPage, SignupPage } from "./pages/AuthPages";
-import { BuildHubPage } from "./pages/BuildHubPage";
-import { CommunityShellPage } from "./pages/CommunityShellPage";
-import { EarnShellPage } from "./pages/EarnShellPage";
-import { LearnShellPage } from "./pages/LearnShellPage";
-import { MobileDashboardPage } from "./pages/MobileDashboardPage";
-import { ProfileShellPage } from "./pages/ProfileShellPage";
-import { ChatPage } from "./pages/ChatPage";
-import { CourseAdminDashboard } from "./pages/CourseAdminDashboard";
-import { CourseCatalogPage } from "./pages/CourseCatalogPage";
-import { CourseDetailPage } from "./pages/CourseDetailPage";
-import { CourseLessonPage } from "./pages/CourseLessonPage";
-import { AiTutorPage } from "./pages/AiTutorPage";
 import { Skeleton } from "./components/ui/Skeleton";
 import { CcwebErrorBoundary } from "./components/CcwebErrorBoundary";
-import { NotificationCenterPage } from "./components/notifications/NotificationCenter";
-import { useStaleLoadingGuard } from "./hooks/useStaleLoadingGuard";
-import { LearningAdminPage } from "./learning/LearningAdminPage";
-import { LearningSessionPage } from "./learning/LearningSessionPage";
 import { BetaInvitePage, BetaTestUserPage, BetaUserSlugPage } from "./pages/BetaPages";
 import { apiUrl } from "./config/env";
 import { apiFetch } from "./lib/apiClient";
+import { ApiErrorPanel } from "./components/ui/ApiErrorPanel";
+import { useStaleLoadingGuard } from "./hooks/useStaleLoadingGuard";
+
+const CommunityShellPage = lazy(() => import("./pages/CommunityShellPage").then((m) => ({ default: m.CommunityShellPage })));
+const ChatPage = lazy(() => import("./pages/ChatPage").then((m) => ({ default: m.ChatPage })));
+const ProfileShellPage = lazy(() => import("./pages/ProfileShellPage").then((m) => ({ default: m.ProfileShellPage })));
+const AiTutorPage = lazy(() => import("./pages/AiTutorPage").then((m) => ({ default: m.AiTutorPage })));
+const BuildHubPage = lazy(() => import("./pages/BuildHubPage").then((m) => ({ default: m.BuildHubPage })));
+const EarnShellPage = lazy(() => import("./pages/EarnShellPage").then((m) => ({ default: m.EarnShellPage })));
+const LearnShellPage = lazy(() => import("./pages/LearnShellPage").then((m) => ({ default: m.LearnShellPage })));
+const MobileDashboardPage = lazy(() => import("./pages/MobileDashboardPage").then((m) => ({ default: m.MobileDashboardPage })));
+const NotificationCenterPage = lazy(() =>
+  import("./components/notifications/NotificationCenter").then((m) => ({ default: m.NotificationCenterPage }))
+);
+const CourseAdminDashboard = lazy(() => import("./pages/CourseAdminDashboard").then((m) => ({ default: m.CourseAdminDashboard })));
+const CourseCatalogPage = lazy(() => import("./pages/CourseCatalogPage").then((m) => ({ default: m.CourseCatalogPage })));
+const CourseDetailPage = lazy(() => import("./pages/CourseDetailPage").then((m) => ({ default: m.CourseDetailPage })));
+const CourseLessonPage = lazy(() => import("./pages/CourseLessonPage").then((m) => ({ default: m.CourseLessonPage })));
+const LearningAdminPage = lazy(() => import("./learning/LearningAdminPage").then((m) => ({ default: m.LearningAdminPage })));
+const LearningSessionPage = lazy(() => import("./learning/LearningSessionPage").then((m) => ({ default: m.LearningSessionPage })));
 
 const FindPage = lazy(() => import("./pages/FindPage").then((m) => ({ default: m.FindPage })));
 const EarlySignalsDashboard = lazy(() =>
@@ -1229,7 +1233,9 @@ function AiAgentsPage() {
       </header>
 
       {loading && <p className="muted">Loading agents...</p>}
-      {loadErr && !loading && <p className="muted" style={{ color: "#f87171" }}>{loadErr}</p>}
+      {loadErr && !loading && (
+        <ApiErrorPanel message={loadErr} onRetry={() => window.location.reload()} className="mb-4" />
+      )}
 
       <div className="agents-grid">
         {agents.map((agent) => (

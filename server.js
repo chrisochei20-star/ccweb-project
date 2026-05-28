@@ -1235,10 +1235,13 @@ async function resolveCommunityReactionOwnerId(targetType, targetId) {
 }
 
 function handleListCommunityPosts(req, res) {
+  const requestUrl = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+  const limit = Math.min(100, Math.max(1, Number(requestUrl.searchParams.get("limit")) || 80));
+  const offset = Math.max(0, Number(requestUrl.searchParams.get("offset")) || 0);
   if (useCommunityPg()) {
     communityPg
-      .listPosts()
-      .then((posts) => sendJson(res, 200, { count: posts.length, posts }, req))
+      .listPosts(limit, offset)
+      .then((posts) => sendJson(res, 200, { count: posts.length, posts, limit, offset }, req))
       .catch((e) => sendJson(res, 500, { error: e.message }, req));
     return;
   }
@@ -1248,8 +1251,9 @@ function handleListCommunityPosts(req, res) {
   }
   const posts = Array.from(communityPosts.values())
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .slice(offset, offset + limit)
     .map((p) => ({ ...p, commentCount: counts.get(p.id) || 0 }));
-  sendJson(res, 200, { count: posts.length, posts }, req);
+  sendJson(res, 200, { count: posts.length, posts, limit, offset }, req);
 }
 
 function handleListTrendingCommunityPosts(req, res) {

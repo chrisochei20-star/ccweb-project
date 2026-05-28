@@ -31,19 +31,26 @@ const REALTIME_OPTS = {
 
 /** @type {import("socket.io-client").Socket | null} */
 let sharedSocket = null;
-/** @type {'disconnected' | 'connecting' | 'connected' | 'reconnecting'} */
+/** @type {'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'failed'} */
 let connectionState = "disconnected";
 let wired = false;
+let hadConnectedOnce = false;
 /** event -> Map<subscriberId, handler> */
 const listenerRegistry = new Map();
 const reconnectHandlers = new Set();
 const stateHandlers = new Set();
 /** @type {BroadcastChannel | null} */
 let crossTabChannel = null;
+/** @type {ReturnType<typeof setInterval> | null} */
+let heartbeatTimer = null;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let staleRecoveryTimer = null;
+let lifecycleCleanup = null;
 
 function setConnectionState(next) {
   if (connectionState === next) return;
   connectionState = next;
+  realtimeLog("realtime_state", { state: next });
   for (const fn of stateHandlers) {
     try {
       fn(next);
@@ -71,9 +78,6 @@ function ensureCrossTab() {
   if (crossTabChannel) {
     crossTabChannel.onmessage = (ev) => {
       const { type, payload } = ev.data || {};
-      if (type === "realtime:event" && payload?.event) {
-        dispatchEvent(payload.event, payload.data);
-      }
       if (type === "notifications:sync") {
         dispatchEvent("notifications:cross-tab", payload);
       }
@@ -82,31 +86,93 @@ function ensureCrossTab() {
   return crossTabChannel;
 }
 
+function clearHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
+
+function scheduleStaleRecovery() {
+  if (staleRecoveryTimer) clearTimeout(staleRecoveryTimer);
+  staleRecoveryTimer = setTimeout(() => {
+    staleRecoveryTimer = null;
+    if (connectionState !== "disconnected" && connectionState !== "failed") return;
+    if (!sharedSocket || sharedSocket.connected) return;
+    realtimeLog("socket_stale_recovery");
+    try {
+      sharedSocket.removeAllListeners();
+      sharedSocket.disconnect();
+    } catch {
+      /* ignore */
+    }
+    sharedSocket = null;
+    wired = false;
+    getSharedRealtimeSocket();
+  }, 45000);
+}
+
 function wireSocket(socket) {
   if (wired) return;
   wired = true;
   ensureCrossTab();
 
-  socket.io.on("reconnect_attempt", () => {
+  socket.io.on("reconnect_attempt", (attempt) => {
     setConnectionState("reconnecting");
-    realtimeLog("socket_reconnect_attempt");
+    realtimeLog("socket_reconnect_attempt", { attempt });
+  });
+
+  socket.io.on("reconnect_failed", () => {
+    setConnectionState("failed");
+    realtimeLog("socket_reconnect_failed");
+    scheduleStaleRecovery();
+  });
+
+  socket.io.on("reconnect", (attempt) => {
+    realtimeLog("socket_reconnected", { attempt });
   });
 
   socket.on("connect", () => {
     setConnectionState("connected");
-    realtimeLog("socket_connect", { socketId: socket.id });
-    for (const fn of reconnectHandlers) {
-      try {
-        fn(socket);
-      } catch (e) {
-        realtimeLog("reconnect_handler_error", { err: e?.message });
+    if (staleRecoveryTimer) {
+      clearTimeout(staleRecoveryTimer);
+      staleRecoveryTimer = null;
+    }
+    realtimeLog("socket_connect", { socketId: socket.id, recovered: !!socket.recovered });
+
+    const isReconnect = hadConnectedOnce;
+    hadConnectedOnce = true;
+
+    clearHeartbeat();
+    heartbeatTimer = setInterval(() => {
+      realtimeLog("realtime_heartbeat", {
+        connected: socket.connected,
+        state: connectionState,
+        subscribers: getSubscriberCounts(),
+      });
+    }, 60000);
+    if (heartbeatTimer.unref) heartbeatTimer.unref();
+
+    if (isReconnect) {
+      for (const fn of reconnectHandlers) {
+        try {
+          fn(socket);
+        } catch (e) {
+          realtimeLog("reconnect_handler_error", { err: e?.message });
+        }
       }
     }
   });
 
   socket.on("disconnect", (reason) => {
-    setConnectionState("disconnected");
+    clearHeartbeat();
+    if (reason === "io server disconnect" || reason === "io client disconnect") {
+      setConnectionState("disconnected");
+    } else {
+      setConnectionState("reconnecting");
+    }
     realtimeLog("socket_disconnect", { reason });
+    scheduleStaleRecovery();
   });
 
   socket.on("connect_error", (err) => {
@@ -117,7 +183,6 @@ function wireSocket(socket) {
     socket.on(event, (payload) => {
       realtimeLog("socket_event", { event, kind: payload?.kind });
       dispatchEvent(event, payload);
-      publishCrossTab(ensureCrossTab(), "realtime:event", { event, data: payload });
     });
   }
 }
@@ -127,6 +192,14 @@ function createSocketInstance() {
   if (base) return io(base, REALTIME_OPTS);
   if (typeof window !== "undefined") return io(window.location.origin, REALTIME_OPTS);
   return io(REALTIME_OPTS);
+}
+
+function getSubscriberCounts() {
+  const out = {};
+  for (const [event, subs] of listenerRegistry.entries()) {
+    out[event] = subs.size;
+  }
+  return out;
 }
 
 /**
@@ -146,11 +219,60 @@ export function getSharedRealtimeSocket() {
 }
 
 /**
+ * Disconnect and reset the shared socket (logout / session expiry).
+ */
+export function disconnectSharedRealtimeSocket() {
+  clearHeartbeat();
+  if (staleRecoveryTimer) {
+    clearTimeout(staleRecoveryTimer);
+    staleRecoveryTimer = null;
+  }
+  if (sharedSocket) {
+    try {
+      sharedSocket.removeAllListeners();
+      sharedSocket.disconnect();
+    } catch {
+      /* ignore */
+    }
+    sharedSocket = null;
+  }
+  wired = false;
+  hadConnectedOnce = false;
+  setConnectionState("disconnected");
+  realtimeLog("socket_disconnected_logout");
+}
+
+/**
+ * Reconnect when app returns to foreground or network is back online.
+ */
+export function initRealtimeLifecycle() {
+  if (typeof document === "undefined") return () => {};
+  if (lifecycleCleanup) return lifecycleCleanup;
+
+  const recover = () => {
+    if (document.visibilityState && document.visibilityState !== "visible") return;
+    const socket = getSharedRealtimeSocket();
+    if (socket && !socket.connected) {
+      realtimeLog("socket_foreground_reconnect");
+      socket.connect();
+    }
+  };
+
+  document.addEventListener("visibilitychange", recover);
+  window.addEventListener("online", recover);
+  window.addEventListener("focus", recover);
+
+  lifecycleCleanup = () => {
+    document.removeEventListener("visibilitychange", recover);
+    window.removeEventListener("online", recover);
+    window.removeEventListener("focus", recover);
+    lifecycleCleanup = null;
+  };
+  return lifecycleCleanup;
+}
+
+/**
  * Subscribe to a realtime event with deduplicated handler registration.
- * @param {string} event
- * @param {(payload: unknown) => void} handler
- * @param {string} [subscriberId] stable id prevents duplicate registration on strict-mode remounts when reused
- * @returns {() => void} unsubscribe
  */
 export function subscribeRealtime(event, handler, subscriberId) {
   const subId = subscriberId || `sub_${event}_${Math.random().toString(36).slice(2, 10)}`;
@@ -182,6 +304,16 @@ export function onConnectionStateChange(handler) {
 
 export function getRealtimeConnectionState() {
   return connectionState;
+}
+
+export function getRealtimeDiagnostics() {
+  return {
+    state: connectionState,
+    connected: !!sharedSocket?.connected,
+    socketId: sharedSocket?.id || null,
+    hadConnectedOnce,
+    subscribers: getSubscriberCounts(),
+  };
 }
 
 /** Notify other tabs (notification read, badge sync). */

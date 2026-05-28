@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { ApiErrorPanel } from "./components/ui/ApiErrorPanel";
 import { apiUrl } from "./config/env";
 import { apiFetch } from "./lib/apiClient";
 import { useStaleLoadingGuard } from "./hooks/useStaleLoadingGuard";
@@ -110,8 +111,8 @@ export function EarlySignalsDashboard() {
 
   if (error) {
     return (
-      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 text-rose-100">
-        {error}
+      <div className="mx-auto max-w-lg px-4 py-16">
+        <ApiErrorPanel message={error} onRetry={() => { setLoading(true); setError(null); load(); }} />
       </div>
     );
   }

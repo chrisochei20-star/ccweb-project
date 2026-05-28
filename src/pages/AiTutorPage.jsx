@@ -20,6 +20,8 @@ import {
   fetchTutorMemory,
   streamTutor,
 } from "../api/coursesApi";
+import { ApiErrorPanel } from "../components/ui/ApiErrorPanel";
+import { composerPaddingBottom, useKeyboardInset } from "../hooks/useKeyboardInset";
 import { getSessionToken } from "../session";
 
 const MODES = [
@@ -42,15 +44,18 @@ export function AiTutorPage() {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [memoryNote, setMemoryNote] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [listErr, setListErr] = useState(null);
   const endRef = useRef(null);
+  const keyboardInset = useKeyboardInset();
 
   async function refreshList() {
     if (!user) return;
     try {
       const list = await fetchTutorConversations();
       setConversations(list);
-    } catch {
-      /* ignore */
+      setListErr(null);
+    } catch (e) {
+      setListErr(e.message || "Could not load conversations.");
     }
   }
 
@@ -115,6 +120,8 @@ export function AiTutorPage() {
     if (!user || !draft.trim()) return;
     setBusy(true);
     setErr(null);
+    let replyId = null;
+    let userText = "";
     try {
       let cid = activeId;
       if (!cid) {
@@ -123,11 +130,11 @@ export function AiTutorPage() {
         setActiveId(cid);
         await refreshList();
       }
-      const userText = draft.trim();
+      userText = draft.trim();
       setDraft("");
       setMessages((prev) => [...prev, { role: "user", content: userText, id: `local_${Date.now()}` }]);
       let assistantText = "";
-      const replyId = `tmp_${Date.now()}`;
+      replyId = `tmp_${Date.now()}`;
       setMessages((prev) => [...prev, { role: "assistant", content: "", id: replyId }]);
 
       await streamTutor({
@@ -146,6 +153,9 @@ export function AiTutorPage() {
       const data = await fetchTutorMessages(cid);
       setMessages(data.messages || []);
     } catch (e) {
+      if (replyId) {
+        setMessages((prev) => prev.filter((m) => m.id !== replyId));
+      }
       setErr(e.message || String(e));
     } finally {
       setBusy(false);
@@ -325,13 +335,11 @@ export function AiTutorPage() {
           </div>
         )}
 
-        {err && (
-          <div className="mx-3 mt-2 rounded-lg border border-rose-500/40 bg-rose-950/50 px-3 py-2 text-sm text-rose-100">
-            {err}
-          </div>
-        )}
+        {listErr ? <ApiErrorPanel message={listErr} onRetry={() => refreshList()} className="mx-3 mt-2" /> : null}
 
-        <div className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
+        {err ? <ApiErrorPanel message={err} onRetry={() => setErr(null)} retryLabel="Dismiss" className="mx-3 mt-2" /> : null}
+
+        <div className="ccweb-scroll-momentum flex-1 space-y-3 overflow-y-auto px-3 py-4">
           {messages.length === 0 && (
             <p className="text-center text-sm text-ccweb-muted">
               Pick a mode, then <strong className="text-white">Open mode thread</strong> or <strong className="text-white">New</strong>
@@ -357,6 +365,7 @@ export function AiTutorPage() {
 
         <form
           className="border-t border-white/10 p-3"
+          style={{ paddingBottom: composerPaddingBottom(keyboardInset) }}
           onSubmit={(e) => {
             e.preventDefault();
             send();

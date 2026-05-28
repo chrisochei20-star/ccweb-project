@@ -8,6 +8,7 @@ import { CCWEB_UI_LOAD_TIMEOUT_MS } from "../constants/loadTimeout";
 import { isSearchNavActive } from "../lib/navPaths";
 import { fetchMe, getLocalSessionUser, getSessionToken, getStoredUser, logoutApi } from "../session";
 import { captureInviteFromSearch, postBetaClientEvent } from "../lib/betaTelemetry";
+import { disconnectSharedRealtimeSocket, initRealtimeLifecycle } from "../lib/realtimeSocket";
 import { initNotificationsRealtime, useNotificationsStore } from "../store/notificationsStore";
 import { useProfileStore } from "../store/profileStore";
 
@@ -65,6 +66,11 @@ export function MobileLayout() {
   const location = useLocation();
 
   useEffect(() => {
+    const stopLifecycle = initRealtimeLifecycle();
+    return stopLifecycle;
+  }, []);
+
+  useEffect(() => {
     if (!authHydrated || !user?.id) return;
     initNotificationsRealtime().catch(() => {});
     useNotificationsStore.getState().loadPreferences().catch(() => {});
@@ -118,6 +124,7 @@ export function MobileLayout() {
 
   async function handleLogout() {
     await logoutApi();
+    disconnectSharedRealtimeSocket();
     setUser(null);
     useNotificationsStore.getState().reset();
     navigate("/login");

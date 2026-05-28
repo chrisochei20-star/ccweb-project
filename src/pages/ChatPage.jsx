@@ -6,8 +6,10 @@ import { compressImageFile } from "../lib/imageCompress";
 import { uploadChatImage, formatUploadError } from "../api/uploadsApi";
 import { dedupeById } from "../lib/feedMerge";
 import { getSharedRealtimeSocket, getRealtimeConnectionState } from "../lib/realtimeSocket";
+import { composerPaddingBottom, useKeyboardInset } from "../hooks/useKeyboardInset";
 import { useConnectionState, useRealtimeSubscription, useSocketReconnect } from "../hooks/useRealtimeSubscription";
 import { toast } from "../lib/toastBus";
+import { validateUploadFileSize } from "../lib/uploadLimits";
 import { getSessionToken } from "../session";
 import { CCWEB_UI_LOAD_TIMEOUT_MS } from "../constants/loadTimeout";
 import { useAppShellContext } from "../hooks/useAppShellContext";
@@ -31,8 +33,9 @@ export function ChatPage() {
   const [newDmId, setNewDmId] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const [gateTimedOut, setGateTimedOut] = useState(false);
-  const [keyboardInset, setKeyboardInset] = useState(0);
+  const keyboardInset = useKeyboardInset();
   const [chatUploadProgress, setChatUploadProgress] = useState(null);
+  const uploadAbortRef = useRef(null);
   const [connectionState, setConnectionState] = useState(() => getRealtimeConnectionState());
   const typingTimer = useRef(null);
   const socketRef = useRef(null);
@@ -84,21 +87,7 @@ export function ChatPage() {
 
   useAuthGateRecovery({ gateTimedOut, authHydrated, refreshSession });
 
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv || typeof vv.addEventListener !== "function") return undefined;
-    const update = () => {
-      const obscured = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      setKeyboardInset(Math.min(200, Math.round(obscured)));
-    };
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
-    update();
-    return () => {
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
-    };
-  }, []);
+  useConnectionState(setConnectionState);
 
   useEffect(() => {
     if (!authHydrated) return;
@@ -327,6 +316,11 @@ export function ChatPage() {
 
   async function uploadImage(file) {
     if (!activeId || !file) return;
+    const sizeErr = validateUploadFileSize(file);
+    if (sizeErr) {
+      toast.error(sizeErr);
+      return;
+    }
     const isGif = file.type === "image/gif";
     let prepared = file;
     if (!isGif) {
@@ -336,19 +330,33 @@ export function ChatPage() {
         prepared = file;
       }
     }
+    uploadAbortRef.current?.abort();
+    const controller = new AbortController();
+    uploadAbortRef.current = controller;
     setChatUploadProgress(0);
     try {
       const data = await uploadChatImage(activeId, prepared, {
         onProgress: (pct) => setChatUploadProgress(pct),
+        signal: controller.signal,
       });
-      if (data.message) setMessages((prev) => [...prev, data.message]);
+      if (data.message) setMessages((prev) => dedupeById([...prev, data.message]));
     } catch (e) {
+      if (e?.name === "AbortError" || /abort/i.test(String(e?.message))) {
+        toast.info("Upload cancelled.");
+        return;
+      }
       const m = formatUploadError(e);
       setErr(m);
       toast.error(m);
     } finally {
       setChatUploadProgress(null);
+      if (uploadAbortRef.current === controller) uploadAbortRef.current = null;
     }
+  }
+
+  function cancelChatUpload() {
+    uploadAbortRef.current?.abort();
+    setChatUploadProgress(null);
   }
 
   async function startDm(e) {
@@ -433,7 +441,22 @@ export function ChatPage() {
       {connectionState !== "connected" && (
         <div className="fixed left-3 right-3 top-16 z-40 flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-950/90 px-3 py-2 text-xs text-amber-100 md:mx-auto md:max-w-md">
           <WifiOff className="h-4 w-4 shrink-0" aria-hidden />
-          {connectionState === "reconnecting" ? "Reconnecting to chat…" : "Offline — messages send when you reconnect."}
+          <span className="flex-1">
+            {connectionState === "reconnecting"
+              ? "Reconnecting to chat…"
+              : connectionState === "failed"
+                ? "Connection lost. Tap retry or wait for automatic recovery."
+                : "Offline — messages send when you reconnect."}
+          </span>
+          {(connectionState === "failed" || connectionState === "disconnected") && (
+            <button
+              type="button"
+              className="shrink-0 font-semibold text-ccweb-cyan underline"
+              onClick={() => getSharedRealtimeSocket()?.connect()}
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
 
@@ -640,19 +663,19 @@ export function ChatPage() {
                     />
                   )}
                 </div>
-                <p className="mt-1 text-[10px] text-ccweb-muted">Uploading image…</p>
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <p className="text-[10px] text-ccweb-muted">Uploading image…</p>
+                  <button type="button" className="text-[10px] font-semibold text-rose-300" onClick={cancelChatUpload}>
+                    Cancel
+                  </button>
+                </div>
               </div>
             )}
 
             <form
               onSubmit={sendText}
               className="sticky bottom-0 z-10 border-t border-white/10 bg-slate-950/95 p-3 backdrop-blur-md"
-              style={{
-                paddingBottom:
-                  keyboardInset > 0
-                    ? `calc(0.75rem + env(safe-area-inset-bottom, 0px) + ${keyboardInset}px)`
-                    : "max(0.75rem, env(safe-area-inset-bottom, 0px))",
-              }}
+              style={{ paddingBottom: composerPaddingBottom(keyboardInset) }}
             >
               <div className="flex items-end gap-2">
                 <label

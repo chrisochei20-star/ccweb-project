@@ -9,13 +9,16 @@ function newId(prefix) {
   return `${prefix}_${crypto.randomBytes(5).toString("hex")}`;
 }
 
-async function listPosts() {
+async function listPosts(limit = 80, offset = 0) {
+  const lim = Math.min(100, Math.max(1, Number(limit) || 80));
+  const off = Math.max(0, Number(offset) || 0);
   const { rows } = await query(
     `SELECT p.*, COALESCE(c.cnt, 0)::int AS comment_count
      FROM community_posts p
      LEFT JOIN (SELECT post_id, COUNT(*)::int AS cnt FROM community_post_comments GROUP BY post_id) c ON c.post_id = p.id
-     ORDER BY p.created_at DESC`,
-    []
+     ORDER BY p.created_at DESC
+     LIMIT $1 OFFSET $2`,
+    [lim, off]
   );
   return rows.map((r) => mapPost(r, Number(r.comment_count)));
 }

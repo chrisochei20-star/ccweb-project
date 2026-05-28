@@ -1,9 +1,10 @@
 import { apiUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
 
-export async function fetchCommunityPosts(feedMode) {
-  const path = feedMode === "trending" ? "/api/community/posts/trending" : "/api/community/posts";
-  const res = await apiFetch(apiUrl(path), {}, { networkRetries: 2, timeoutMs: 8000 });
+export async function fetchCommunityPosts(feedMode, { limit = 80, offset = 0 } = {}) {
+  const base = feedMode === "trending" ? "/api/community/posts/trending" : "/api/community/posts";
+  const q = feedMode === "trending" ? "" : `?limit=${limit}&offset=${offset}`;
+  const res = await apiFetch(apiUrl(`${base}${q}`), {}, { networkRetries: 2, timeoutMs: 8000 });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Failed to load posts");
   return data.posts || [];

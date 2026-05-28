@@ -1,6 +1,7 @@
 import { Loader2, LogOut, Shield, Wallet } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useShallow } from "zustand/react/shallow";
 import { uploadProfileAvatar, uploadProfileBanner, formatUploadError } from "../api/uploadsApi";
 import { updateProfile, fetchProfileFeed } from "../api/profileApi";
 import { ProfileBottomSheet } from "../components/profile/ProfileBottomSheet";
@@ -9,7 +10,9 @@ import { ProfileHeader } from "../components/profile/ProfileHeader";
 import { ProfileTabs } from "../components/profile/ProfileTabs";
 import { apiUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
+import { disconnectSharedRealtimeSocket } from "../lib/realtimeSocket";
 import { toast } from "../lib/toastBus";
+import { validateUploadFileSize } from "../lib/uploadLimits";
 import { getSessionToken, logoutApi, setSession } from "../session";
 import { CCWEB_UI_LOAD_TIMEOUT_MS } from "../constants/loadTimeout";
 import { useAppShellContext } from "../hooks/useAppShellContext";
@@ -19,16 +22,33 @@ import { useProfileStore, syncProfileFromUpload } from "../store/profileStore";
 export function ProfileShellPage() {
   const { user: shellUser, setUser, authHydrated, refreshSession } = useAppShellContext();
   const navigate = useNavigate();
-  const storeUser = useProfileStore((s) => s.user);
-  const social = useProfileStore((s) => s.social);
-  const creator = useProfileStore((s) => s.creator);
-  const monetization = useProfileStore((s) => s.monetization);
-  const betaSlugFromStore = useProfileStore((s) => s.betaSlug);
-  const betaPublicUrl = useProfileStore((s) => s.betaPublicUrl);
-  const profileLoading = useProfileStore((s) => s.loading);
-  const profileOffline = useProfileStore((s) => s.offline);
-  const hydrateMe = useProfileStore((s) => s.hydrateMe);
-  const applyBundle = useProfileStore((s) => s.applyBundle);
+  const {
+    storeUser,
+    social,
+    creator,
+    monetization,
+    betaSlugFromStore,
+    betaPublicUrl,
+    profileLoading,
+    profileOffline,
+    stats,
+    hydrateMe,
+    applyBundle,
+  } = useProfileStore(
+    useShallow((s) => ({
+      storeUser: s.user,
+      social: s.social,
+      creator: s.creator,
+      monetization: s.monetization,
+      betaSlugFromStore: s.betaSlug,
+      betaPublicUrl: s.betaPublicUrl,
+      profileLoading: s.loading,
+      profileOffline: s.offline,
+      stats: s.stats,
+      hydrateMe: s.hydrateMe,
+      applyBundle: s.applyBundle,
+    }))
+  );
 
   const user = storeUser || shellUser;
 
@@ -61,6 +81,7 @@ export function ProfileShellPage() {
   const [totpCode, setTotpCode] = useState("");
   const [backupCodes, setBackupCodes] = useState(null);
   const [gateTimedOut, setGateTimedOut] = useState(false);
+  const uploadAbortRef = useRef({ avatar: null, banner: null });
 
   useEffect(() => {
     const waitingHydrate = !authHydrated;
@@ -155,18 +176,29 @@ export function ProfileShellPage() {
 
   const runAvatarUpload = useCallback(
     async (file) => {
+      const sizeErr = validateUploadFileSize(file);
+      if (sizeErr) {
+        setMediaError((m) => ({ ...m, avatar: sizeErr }));
+        toast.error(sizeErr);
+        return;
+      }
       setMediaError((m) => ({ ...m, avatar: null }));
       const token = getSessionToken();
+      uploadAbortRef.current.avatar?.abort();
+      const controller = new AbortController();
+      uploadAbortRef.current.avatar = controller;
       setMediaBusy((m) => ({ ...m, avatar: true }));
       setMediaProgress((p) => ({ ...p, avatar: 0 }));
       try {
         const data = await uploadProfileAvatar(file, {
           onProgress: (pct) => setMediaProgress((p) => ({ ...p, avatar: pct })),
+          signal: controller.signal,
         });
         syncProfileFromUpload(token, data);
         setUser(data.user);
         toast.success("Profile photo updated.");
       } catch (e) {
+        if (e?.name === "AbortError" || /abort/i.test(String(e?.message))) return;
         const m = formatUploadError(e);
         setMediaError((s) => ({ ...s, avatar: m }));
         toast.error(m);
@@ -174,6 +206,7 @@ export function ProfileShellPage() {
       } finally {
         setMediaProgress((p) => ({ ...p, avatar: null }));
         setMediaBusy((m) => ({ ...m, avatar: false }));
+        if (uploadAbortRef.current.avatar === controller) uploadAbortRef.current.avatar = null;
       }
     },
     [setUser]
@@ -181,18 +214,29 @@ export function ProfileShellPage() {
 
   const runBannerUpload = useCallback(
     async (file) => {
+      const sizeErr = validateUploadFileSize(file);
+      if (sizeErr) {
+        setMediaError((m) => ({ ...m, banner: sizeErr }));
+        toast.error(sizeErr);
+        return;
+      }
       setMediaError((m) => ({ ...m, banner: null }));
       const token = getSessionToken();
+      uploadAbortRef.current.banner?.abort();
+      const controller = new AbortController();
+      uploadAbortRef.current.banner = controller;
       setMediaBusy((m) => ({ ...m, banner: true }));
       setMediaProgress((p) => ({ ...p, banner: 0 }));
       try {
         const data = await uploadProfileBanner(file, {
           onProgress: (pct) => setMediaProgress((p) => ({ ...p, banner: pct })),
+          signal: controller.signal,
         });
         syncProfileFromUpload(token, data);
         setUser(data.user);
         toast.success("Banner updated.");
       } catch (e) {
+        if (e?.name === "AbortError" || /abort/i.test(String(e?.message))) return;
         const m = formatUploadError(e);
         setMediaError((s) => ({ ...s, banner: m }));
         toast.error(m);
@@ -200,6 +244,7 @@ export function ProfileShellPage() {
       } finally {
         setMediaProgress((p) => ({ ...p, banner: null }));
         setMediaBusy((m) => ({ ...m, banner: false }));
+        if (uploadAbortRef.current.banner === controller) uploadAbortRef.current.banner = null;
       }
     },
     [setUser]
@@ -263,7 +308,10 @@ export function ProfileShellPage() {
   }
 
   async function handleLogout() {
+    uploadAbortRef.current.avatar?.abort();
+    uploadAbortRef.current.banner?.abort();
     await logoutApi();
+    disconnectSharedRealtimeSocket();
     setUser(null);
     useProfileStore.getState().reset();
     navigate("/login");
@@ -334,6 +382,7 @@ export function ProfileShellPage() {
         social={social}
         creator={creator}
         monetization={monetization}
+        stats={stats}
         betaPublicUrl={betaPublicUrl}
         loading={profileLoading}
         isSelf

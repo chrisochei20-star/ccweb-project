@@ -23,6 +23,18 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.VITE_CCWEB_BUILD_ID": JSON.stringify(ccwebBuildId),
     },
     plugins: [react(), tailwindcss()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes("node_modules/react-dom") || id.includes("node_modules/react/")) return "vendor-react";
+            if (id.includes("node_modules/react-router")) return "vendor-router";
+            if (id.includes("node_modules/socket.io-client")) return "vendor-socket";
+            if (id.includes("node_modules/recharts")) return "vendor-charts";
+          },
+        },
+      },
+    },
     server: {
       proxy: {
         "/api": { target: apiProxy, changeOrigin: true },

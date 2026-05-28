@@ -37,6 +37,11 @@
   a,
   [role="button"] {
     touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(34, 211, 238, 0.15);
+  }
+  .ccweb-scroll-momentum {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
   }
   ::selection {
     background: rgba(34, 211, 238, 0.28);

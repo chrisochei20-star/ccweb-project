@@ -15,7 +15,6 @@ import {
 import { useEffect, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import { useRealtimeSubscription } from "../../hooks/useRealtimeSubscription";
-import { createCrossTabChannel } from "../../lib/crossTabSync";
 import { useNotificationsStore } from "../../store/notificationsStore";
 import { toast } from "../../lib/toastBus";
 import { getSessionToken } from "../../session";
@@ -102,21 +101,9 @@ export function NotificationCenterPage() {
   useRealtimeSubscription(
     "notifications:cross-tab",
     (payload) => applyCrossTabSync(payload),
-    true,
+    Boolean(authHydrated && user?.id),
     "notification-center-cross-tab"
   );
-
-  useEffect(() => {
-    const ch = createCrossTabChannel();
-    if (!ch) return undefined;
-    const onMsg = (ev) => {
-      if (ev.data?.type === "notifications:sync") {
-        applyCrossTabSync(ev.data.payload);
-      }
-    };
-    ch.addEventListener("message", onMsg);
-    return () => ch.removeEventListener("message", onMsg);
-  }, [applyCrossTabSync]);
 
   async function markAllRead() {
     try {
@@ -308,23 +295,22 @@ export function NotificationBell({ user, authHydrated = true }) {
     "notifications:update",
     () => {
       useNotificationsStore.getState().notifySocketTick();
-      void refreshPreview();
     },
     Boolean(authHydrated && user?.id),
     "notification-bell"
   );
 
+  useRealtimeSubscription(
+    "notifications:cross-tab",
+    (payload) => applyCrossTabSync(payload),
+    Boolean(authHydrated && user?.id),
+    "notification-bell-cross-tab"
+  );
+
   useEffect(() => {
-    const ch = createCrossTabChannel();
-    if (!ch) return undefined;
-    const onMsg = (ev) => {
-      if (ev.data?.type === "notifications:sync") {
-        applyCrossTabSync(ev.data.payload);
-      }
-    };
-    ch.addEventListener("message", onMsg);
-    return () => ch.removeEventListener("message", onMsg);
-  }, [applyCrossTabSync]);
+    if (!open || !user) return;
+    void refreshPreview();
+  }, [open, user, refreshPreview]);
 
   if (!authHydrated && getSessionToken()) {
     return (

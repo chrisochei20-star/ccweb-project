@@ -223,6 +223,86 @@ async function createReaction(body) {
   return { created: true, ...mapReactionRow(rows[0]) };
 }
 
+async function listPostsByAuthor(userId, limit = 30, offset = 0) {
+  const lim = Math.min(50, Math.max(1, limit));
+  const off = Math.max(0, offset);
+  const { rows } = await query(
+    `SELECT p.*, COALESCE(c.cnt, 0)::int AS comment_count
+     FROM community_posts p
+     LEFT JOIN (SELECT post_id, COUNT(*)::int AS cnt FROM community_post_comments GROUP BY post_id) c ON c.post_id = p.id
+     WHERE p.author_user_id = $1
+     ORDER BY p.created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [userId, lim, off]
+  );
+  return rows.map((r) => mapPost(r, Number(r.comment_count)));
+}
+
+async function listRepliesByAuthor(userId, limit = 30, offset = 0) {
+  const lim = Math.min(50, Math.max(1, limit));
+  const off = Math.max(0, offset);
+  const { rows } = await query(
+    `SELECT c.*, p.title AS post_title, p.id AS parent_post_id
+     FROM community_post_comments c
+     JOIN community_posts p ON p.id = c.post_id
+     WHERE c.author_user_id = $1
+     ORDER BY c.created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [userId, lim, off]
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    postId: r.post_id,
+    parentPostId: r.parent_post_id,
+    postTitle: r.post_title,
+    authorUserId: r.author_user_id,
+    authorDisplayName: r.author_display_name,
+    body: r.body,
+    createdAt: new Date(r.created_at).toISOString(),
+    kind: "reply",
+  }));
+}
+
+async function listLikedPostsByUser(userId, limit = 30, offset = 0) {
+  const lim = Math.min(50, Math.max(1, limit));
+  const off = Math.max(0, offset);
+  const { rows } = await query(
+    `SELECT p.*, COALESCE(cc.cnt, 0)::int AS comment_count, r.created_at AS liked_at
+     FROM community_reactions r
+     JOIN community_posts p ON p.id = r.target_id
+     LEFT JOIN (SELECT post_id, COUNT(*)::int AS cnt FROM community_post_comments GROUP BY post_id) cc ON cc.post_id = p.id
+     WHERE r.author_user_id = $1 AND r.target_type = 'post' AND r.reaction = 'like'
+     ORDER BY r.created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [userId, lim, off]
+  );
+  return rows.map((r) => ({
+    ...mapPost(r, Number(r.comment_count)),
+    likedAt: new Date(r.liked_at).toISOString(),
+  }));
+}
+
+async function listMediaPostsByAuthor(userId, limit = 30, offset = 0) {
+  const lim = Math.min(50, Math.max(1, limit));
+  const off = Math.max(0, offset);
+  const { rows } = await query(
+    `SELECT p.*, COALESCE(c.cnt, 0)::int AS comment_count
+     FROM community_posts p
+     LEFT JOIN (SELECT post_id, COUNT(*)::int AS cnt FROM community_post_comments GROUP BY post_id) c ON c.post_id = p.id
+     WHERE p.author_user_id = $1
+       AND (p.content ~* 'https?://[^\\s]+\\.(jpg|jpeg|png|gif|webp)' OR p.content ~* 'res\\.cloudinary\\.com')
+     ORDER BY p.created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [userId, lim, off]
+  );
+  return rows.map((r) => mapPost(r, Number(r.comment_count)));
+}
+
+async function countPostsByAuthor(userId) {
+  const { rows } = await query(`SELECT COUNT(*)::int AS c FROM community_posts WHERE author_user_id = $1`, [userId]);
+  return rows[0]?.c || 0;
+}
+
 async function listBugs() {
   const { rows } = await query("SELECT * FROM community_bug_reports ORDER BY created_at DESC", []);
   return rows.map((r) => ({
@@ -274,6 +354,11 @@ module.exports = {
   listComments,
   createComment,
   getCommentAuthorUserId,
+  listPostsByAuthor,
+  listRepliesByAuthor,
+  listLikedPostsByUser,
+  listMediaPostsByAuthor,
+  countPostsByAuthor,
   listChats,
   createChat,
   listReactions,

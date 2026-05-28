@@ -9,6 +9,7 @@ import { isSearchNavActive } from "../lib/navPaths";
 import { fetchMe, getLocalSessionUser, getSessionToken, getStoredUser, logoutApi } from "../session";
 import { captureInviteFromSearch, postBetaClientEvent } from "../lib/betaTelemetry";
 import { useNotificationsStore } from "../store/notificationsStore";
+import { useProfileStore } from "../store/profileStore";
 
 const bottomTabs = [
   { id: "home", to: "/", label: "Home", shortLabel: "Home", icon: Home, end: true, match: (p) => p === "/" },
@@ -51,7 +52,12 @@ const bottomTabs = [
 ];
 
 export function MobileLayout() {
-  const [user, setUser] = useState(() => getStoredUser());
+  const [user, setUserState] = useState(() => getStoredUser());
+  const setUser = useCallback((u) => {
+    setUserState(u);
+    if (u) useProfileStore.getState().applySessionUser(u);
+    else useProfileStore.getState().reset();
+  }, []);
   const [authHydrated, setAuthHydrated] = useState(false);
   const [hydrateTimedOut, setHydrateTimedOut] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -87,7 +93,9 @@ export function MobileLayout() {
     (async () => {
       try {
         const u = await fetchMe();
-        if (!cancelled) setUser(u);
+        if (!cancelled) {
+          setUser(u ?? getStoredUser());
+        }
       } finally {
         if (!cancelled) setAuthHydrated(true);
       }

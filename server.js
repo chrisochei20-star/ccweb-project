@@ -312,6 +312,19 @@ function buildUserProfile(input, existing = null) {
     input.avatarUrl !== undefined ? input.avatarUrl || null : existing?.avatarUrl ?? null;
   const bannerUrl =
     input.bannerUrl !== undefined ? input.bannerUrl || null : existing?.bannerUrl ?? null;
+  const bio = input.bio !== undefined ? (input.bio ? String(input.bio).trim().slice(0, 500) : null) : existing?.bio ?? null;
+  const location =
+    input.location !== undefined ? (input.location ? String(input.location).trim().slice(0, 120) : null) : existing?.location ?? null;
+  const website =
+    input.website !== undefined ? (input.website ? String(input.website).trim().slice(0, 512) : null) : existing?.website ?? null;
+  const socialLinks =
+    input.socialLinks !== undefined
+      ? Array.isArray(input.socialLinks)
+        ? input.socialLinks
+        : existing?.socialLinks || []
+      : existing?.socialLinks || [];
+  const verifiedAt =
+    input.verifiedAt !== undefined ? input.verifiedAt || null : existing?.verifiedAt ?? null;
   return {
     id,
     email: email ? String(email).trim().toLowerCase() : null,
@@ -321,6 +334,11 @@ function buildUserProfile(input, existing = null) {
     pushEnabled: input.pushEnabled === undefined ? existing?.pushEnabled ?? true : Boolean(input.pushEnabled),
     avatarUrl,
     bannerUrl,
+    bio,
+    location,
+    website,
+    socialLinks,
+    verifiedAt,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
   };
@@ -336,6 +354,11 @@ function sanitizeUser(user) {
     pushEnabled: user.pushEnabled,
     avatarUrl: user.avatarUrl || null,
     bannerUrl: user.bannerUrl || null,
+    bio: user.bio || null,
+    location: user.location || null,
+    website: user.website || null,
+    socialLinks: Array.isArray(user.socialLinks) ? user.socialLinks : [],
+    verifiedAt: user.verifiedAt || null,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };

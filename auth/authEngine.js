@@ -34,6 +34,10 @@ async function persistNewUserProfile(userId, profile) {
       roles: profile.roles,
       isOrganic: profile.isOrganic,
       pushEnabled: profile.pushEnabled,
+      bio: profile.bio,
+      location: profile.location,
+      website: profile.website,
+      socialLinks: profile.socialLinks,
     });
   } catch (e) {
     logger.warn({ msg: "profile_persist_skipped", userId, err: e.message });
@@ -57,6 +61,12 @@ async function ensureUserProfile(ccwebUsers, buildUserProfile, userId) {
 
   let avatarUrl = null;
   let bannerUrl = null;
+  let bio = null;
+  let location = null;
+  let website = null;
+  let socialLinks = [];
+  let verifiedAt = null;
+  let profileCreatedAt = null;
 
   if ((process.env.DATABASE_URL || "").trim()) {
     try {
@@ -69,6 +79,12 @@ async function ensureUserProfile(ccwebUsers, buildUserProfile, userId) {
         pushEnabled = prof.push_enabled !== false;
         avatarUrl = prof.avatar_url || null;
         bannerUrl = prof.banner_url || null;
+        bio = prof.bio || null;
+        location = prof.location || null;
+        website = prof.website || null;
+        socialLinks = pgUserProfile.parseSocialLinks(prof.social_links);
+        verifiedAt = prof.verified_at ? new Date(prof.verified_at).toISOString() : null;
+        profileCreatedAt = prof.created_at ? new Date(prof.created_at).toISOString() : null;
       }
     } catch (e) {
       logger.warn({ msg: "profile_row_load_failed", userId, err: e.message });
@@ -85,8 +101,13 @@ async function ensureUserProfile(ccwebUsers, buildUserProfile, userId) {
       pushEnabled,
       avatarUrl,
       bannerUrl,
+      bio,
+      location,
+      website,
+      socialLinks,
+      verifiedAt,
     },
-    null
+    profileCreatedAt ? { createdAt: profileCreatedAt } : null
   );
   ccwebUsers.set(userId, user);
   return user;

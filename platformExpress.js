@@ -31,6 +31,9 @@ const { saveUploadedImage } = require("./services/imageStorage");
 const { isCloudinaryConfigured } = require("./services/cloudinaryUpload");
 const { imageMulter, createUploadsRouter, MAX_BYTES } = require("./uploadsExpress");
 const { publicAppBaseUrl, trimOrigin } = require("./services/deploymentOrigins");
+const { buildProfileBundle, parseSocialLinks } = require("./services/profileBundle");
+const communityPg = require("./db/persistenceCommunity");
+const pgUserProfile = require("./db/pgUserProfile");
 const { flutterwaveCheckoutOperational } = require("./payments/flutterwaveConfig");
 const { handleFlutterwaveWebhook } = require("./payments/flutterwaveWebhook");
 const {
@@ -101,21 +104,21 @@ function createPlatformApp(deps) {
 
   usersRouter.get("/me", authJwtMiddleware, async (req, res, next) => {
     try {
-      const { ccwebUsers, sanitizeUser, buildUserProfile } = deps;
-      const user = await authEngine.ensureUserProfile(ccwebUsers, buildUserProfile, req.ccwebUserId);
-      if (!user) return res.status(401).json({ error: "Session invalid.", code: "USER_NOT_FOUND" });
-      let betaSlug = null;
-      try {
-        betaSlug = await betaPg.getSlugForUser(req.ccwebUserId);
-      } catch {
-        /* ignore */
-      }
-      const base = trimOrigin(process.env.PUBLIC_APP_URL) || null;
-      res.json({
-        user: sanitizeUser(user),
-        betaSlug,
-        betaPublicUrl: betaSlug && base ? `${base}/u/${betaSlug}` : null,
+      const bundle = await buildProfileBundle({
+        ...deps,
+        userId: req.ccwebUserId,
+        viewerId: req.ccwebUserId,
       });
+      if (!bundle) return res.status(401).json({ error: "Session invalid.", code: "USER_NOT_FOUND" });
+      let postCount = 0;
+      if ((process.env.DATABASE_URL || "").trim()) {
+        try {
+          postCount = await communityPg.countPostsByAuthor(req.ccwebUserId);
+        } catch {
+          /* ignore */
+        }
+      }
+      res.json({ ...bundle, stats: { postCount } });
     } catch (e) {
       next(e);
     }
@@ -131,6 +134,13 @@ function createPlatformApp(deps) {
         return res.status(400).json({ error: "displayName required (max 120 chars)." });
       }
       const pushEnabled = req.body?.pushEnabled !== false;
+      const bio = req.body?.bio !== undefined ? String(req.body.bio || "").trim().slice(0, 500) || null : undefined;
+      const location =
+        req.body?.location !== undefined ? String(req.body.location || "").trim().slice(0, 120) || null : undefined;
+      const website =
+        req.body?.website !== undefined ? String(req.body.website || "").trim().slice(0, 512) || null : undefined;
+      const socialLinks =
+        req.body?.socialLinks !== undefined ? parseSocialLinks(req.body.socialLinks) : undefined;
       const existingInMem = ccwebUsers.get(req.ccwebUserId);
       const merged = buildUserProfile(
         {
@@ -140,11 +150,27 @@ function createPlatformApp(deps) {
           roles: existingInMem?.roles || ["member"],
           pushEnabled,
           isOrganic: existingInMem?.isOrganic ?? true,
+          bio,
+          location,
+          website,
+          socialLinks,
         },
         existingInMem || null
       );
       ccwebUsers.set(req.ccwebUserId, merged);
       await authEngine.persistNewUserProfile(req.ccwebUserId, merged);
+      if ((process.env.DATABASE_URL || "").trim()) {
+        try {
+          await pgUserProfile.patchProfileFields(req.ccwebUserId, {
+            bio,
+            location,
+            website,
+            socialLinks,
+          });
+        } catch {
+          /* ignore */
+        }
+      }
       await authStore.saveUser({
         ...row,
         email: row.email || merged.email || null,
@@ -156,18 +182,65 @@ function createPlatformApp(deps) {
           return res.status(409).json({ error: "That public URL is already taken.", code: bs.error });
         }
       }
-      let betaSlugOut = null;
-      try {
-        betaSlugOut = await betaPg.getSlugForUser(req.ccwebUserId);
-      } catch {
-        /* ignore */
-      }
-      const base = trimOrigin(process.env.PUBLIC_APP_URL) || null;
-      res.json({
-        user: sanitizeUser(merged),
-        betaSlug: betaSlugOut,
-        betaPublicUrl: betaSlugOut && base ? `${base}/u/${betaSlugOut}` : null,
+      const bundle = await buildProfileBundle({
+        ...deps,
+        userId: req.ccwebUserId,
+        viewerId: req.ccwebUserId,
       });
+      res.json(bundle || { user: sanitizeUser(merged) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  usersRouter.get("/:id/profile", optionalJwt, async (req, res, next) => {
+    try {
+      const id = (req.params.id || "").trim();
+      if (!id || id === "me") return res.status(400).json({ error: "Invalid user id." });
+      const row = await authStore.findById(id);
+      if (!row) return res.status(404).json({ error: "Profile not found." });
+      const bundle = await buildProfileBundle({
+        ...deps,
+        userId: id,
+        viewerId: req.ccwebUserId || null,
+      });
+      if (!bundle) return res.status(404).json({ error: "Profile not found." });
+      let postCount = 0;
+      if ((process.env.DATABASE_URL || "").trim()) {
+        try {
+          postCount = await communityPg.countPostsByAuthor(id);
+        } catch {
+          /* ignore */
+        }
+      }
+      res.json({ ...bundle, stats: { postCount } });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  usersRouter.get("/:id/feed", optionalJwt, async (req, res, next) => {
+    try {
+      const id = (req.params.id || "").trim();
+      const tab = String(req.query.tab || "posts").toLowerCase();
+      const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 30));
+      const offset = Math.max(0, Number(req.query.offset) || 0);
+      if (!id) return res.status(400).json({ error: "userId required." });
+      if (!(process.env.DATABASE_URL || "").trim()) {
+        return res.json({ tab, items: [], source: "memory_unavailable" });
+      }
+      const row = await authStore.findById(id);
+      if (!row) return res.status(404).json({ error: "Profile not found." });
+      const isSelf = req.ccwebUserId === id;
+      if (tab === "likes" && !isSelf) {
+        return res.status(403).json({ error: "Likes are only visible on your own profile.", code: "PRIVATE_TAB" });
+      }
+      let items = [];
+      if (tab === "replies") items = await communityPg.listRepliesByAuthor(id, limit, offset);
+      else if (tab === "media") items = await communityPg.listMediaPostsByAuthor(id, limit, offset);
+      else if (tab === "likes") items = await communityPg.listLikedPostsByUser(id, limit, offset);
+      else items = await communityPg.listPostsByAuthor(id, limit, offset);
+      res.json({ tab, items, limit, offset });
     } catch (e) {
       next(e);
     }
@@ -728,16 +801,19 @@ function createPlatformApp(deps) {
     }
   });
 
-  betaRouter.get("/profile/:slug", async (req, res, next) => {
+  betaRouter.get("/profile/:slug", optionalJwt, async (req, res, next) => {
     try {
       if (!betaPg.usePostgres()) {
         return res.status(503).json({ error: "PostgreSQL required for beta profile URLs.", code: "NO_DATABASE" });
       }
       const row = await betaPg.resolveSlug(req.params.slug);
       if (!row) return res.status(404).json({ error: "Profile not found." });
-      const { ccwebUsers, sanitizeUser } = deps;
-      const u = ccwebUsers.get(row.userId);
-      if (!u) {
+      const bundle = await buildProfileBundle({
+        ...deps,
+        userId: row.userId,
+        viewerId: req.ccwebUserId || null,
+      });
+      if (!bundle) {
         return res.json({
           userId: row.userId,
           slug: row.slug,
@@ -745,9 +821,13 @@ function createPlatformApp(deps) {
           note: "Profile hydration pending login sync.",
         });
       }
-      const publicUser = sanitizeUser(u);
-      delete publicUser.email;
-      res.json({ ...publicUser, slug: row.slug, userId: row.userId });
+      let postCount = 0;
+      try {
+        postCount = await communityPg.countPostsByAuthor(row.userId);
+      } catch {
+        /* ignore */
+      }
+      res.json({ ...bundle, slug: row.slug, userId: row.userId, stats: { postCount } });
     } catch (e) {
       next(e);
     }

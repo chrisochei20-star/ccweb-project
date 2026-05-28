@@ -32,6 +32,7 @@ const { isCloudinaryConfigured } = require("./services/cloudinaryUpload");
 const { imageMulter, createUploadsRouter, MAX_BYTES } = require("./uploadsExpress");
 const { publicAppBaseUrl, trimOrigin } = require("./services/deploymentOrigins");
 const { flutterwaveCheckoutOperational } = require("./payments/flutterwaveConfig");
+const { handleFlutterwaveWebhook } = require("./payments/flutterwaveWebhook");
 const {
   broadcastChatMessage,
   broadcastInboxRefresh,
@@ -44,6 +45,14 @@ function createPlatformApp(deps) {
   const app = express();
   applyExpressSecurity(app);
   app.locals.ccwebAuth = deps;
+
+  app.post(
+    "/api/v1/payments/flutterwave/webhook",
+    express.raw({ type: "application/json", limit: "256kb" }),
+    (req, res, next) => {
+      Promise.resolve(handleFlutterwaveWebhook(req, res)).catch(next);
+    }
+  );
 
   app.use(express.json({ limit: "512kb" }));
   const cookieParser = require("cookie-parser");
@@ -64,6 +73,9 @@ function createPlatformApp(deps) {
       },
       payments: {
         flutterwaveCheckoutEnabled: flutterwaveCheckoutOperational(),
+        webhookConfigured: Boolean(
+          (process.env.FLUTTERWAVE_WEBHOOK_SECRET || process.env.FLUTTERWAVE_SECRET_HASH || "").trim()
+        ),
       },
       uploads: {
         cloudinary: isCloudinaryConfigured(),

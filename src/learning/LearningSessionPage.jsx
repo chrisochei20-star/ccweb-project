@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useOutletContext, useParams, useSearchParams } from "react-router-dom";
-import { closePaymentModal, useFlutterwave } from "flutterwave-react-v3";
+import { Loader2 } from "lucide-react";
 import {
   fetchChannelMessages,
   fetchSessionDetail,
@@ -12,10 +12,12 @@ import {
   prepareLearningFlutterwave,
   upsertAttendance,
   quoteAccess,
-  verifyFlutterwavePayment,
 } from "../api/learningApi";
+import { fetchMonetizationStatus } from "../api/paymentsApi";
+import { useFlutterwaveCheckout } from "../hooks/useFlutterwaveCheckout";
 import { useLearningStore } from "../store/learningStore";
 import { apiUrl } from "../config/env";
+import { toast } from "../lib/toastBus";
 
 function formatDuration(totalSeconds) {
   const m = Math.floor(totalSeconds / 60);
@@ -23,15 +25,7 @@ function formatDuration(totalSeconds) {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-const IDLE_FW_CONFIG = {
-  public_key: "FLWPUBK_TEST-00000000000000000000000000000000-X",
-  tx_ref: "ccweb_idle",
-  amount: 1,
-  currency: "USD",
-  payment_options: "card",
-  customer: { email: "idle@ccweb.local", phone_number: "08000000000", name: "Idle" },
-  customizations: { title: "CCWEB", description: "Idle" },
-};
+const QUICK_EMOJIS = ["😀", "🙂", "😂", "🔥", "❤️", "👍", "🎉", "⚡", "📈", "🚀", "💎", "✨", "🙏", "👀", "💬"];
 
 export function LearningSessionPage() {
   const { roomId } = useParams();
@@ -51,9 +45,9 @@ export function LearningSessionPage() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState(paid ? "Payment completed — if access was purchased, try Join again." : "");
   const [hours, setHours] = useState(1);
-  const [payLoading, setPayLoading] = useState(false);
+  const [payAction, setPayAction] = useState(null);
+  const [entitlements, setEntitlements] = useState(null);
   const [chatInput, setChatInput] = useState("");
-  const [fwLearnPayload, setFwLearnPayload] = useState(null);
   const [tutorInput, setTutorInput] = useState("");
   const [tutorThread, setTutorThread] = useState([]);
   const [elapsed, setElapsed] = useState(0);
@@ -61,40 +55,20 @@ export function LearningSessionPage() {
 
   const fwPublicKey = (import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY || "").trim();
 
-  const fwLearnConfig = useMemo(() => {
-    if (!fwLearnPayload || !fwPublicKey) return IDLE_FW_CONFIG;
-    return {
-      public_key: fwPublicKey,
-      tx_ref: fwLearnPayload.txRef,
-      amount: fwLearnPayload.amountUsd,
-      currency: "USD",
-      payment_options: "card",
-      customer: {
-        email: user?.email || "learner@ccweb.local",
-        phone_number: (user?.phone || "").toString().trim() || "08000000000",
-        name: user?.displayName || "Learner",
-      },
-      customizations: {
-        title: "CCWEB Learning",
-        description: fwLearnPayload.narration || "Learning checkout",
-      },
-    };
-  }, [fwLearnPayload, fwPublicKey, user?.email, user?.displayName, user?.phone]);
-
-  const openFlutterwaveLearning = useFlutterwave(fwLearnConfig);
-
   const { isLiveJoined, setSessionState, resetSession } = useLearningStore();
 
   const uid = user?.id || "";
   const displayName = user?.displayName || "Guest";
 
-  useEffect(() => {
-    const st = useLearningStore.getState();
-    if (st.isLiveJoined && st.activeRoomId && st.activeRoomId !== roomId) {
-      useLearningStore.getState().resetSession();
-      joinedAtRef.current = null;
+  const refreshEntitlements = useCallback(async () => {
+    if (!uid) return;
+    try {
+      const status = await fetchMonetizationStatus();
+      setEntitlements(status);
+    } catch {
+      /* non-fatal */
     }
-  }, [roomId]);
+  }, [uid]);
 
   const loadAll = useCallback(async () => {
     if (!roomId) return;
@@ -111,41 +85,52 @@ export function LearningSessionPage() {
       setDetail(d);
       const q = await quoteAccess(roomId, hours).catch(() => null);
       setQuote(q);
+      await refreshEntitlements();
     } catch (e) {
       setError(e.response?.data?.error || e.message || "Load failed");
     }
-  }, [roomId, hours]);
+  }, [roomId, hours, refreshEntitlements]);
+
+  const fwCheckout = useFlutterwaveCheckout({
+    publicKey: fwPublicKey,
+    user,
+    title: "CCWEB Learning",
+    onVerified: async (result) => {
+      setPayAction(null);
+      if (result?.entitlements) setEntitlements(result.entitlements);
+      const tier = result?.entitlements?.tier || result?.tier;
+      const kind = result?.kind;
+      if (kind === "learning_subscription") {
+        setInfo(`Subscription active (${tier || "pro"}) — premium limits apply immediately.`);
+        toast.success("Subscription activated.");
+      } else if (kind === "learning_credits") {
+        setInfo("Credits added to your wallet.");
+        toast.success("Credits added.");
+      } else if (kind === "learning_session_access") {
+        setInfo("Session access unlocked — tap Join.");
+        toast.success("Session access unlocked.");
+      } else {
+        setInfo("Payment verified — refresh access if needed.");
+        toast.success("Payment verified.");
+      }
+      await loadAll();
+    },
+    onCancel: () => setPayAction(null),
+  });
+
+  const payBusy = fwCheckout.isBusy;
+
+  useEffect(() => {
+    const st = useLearningStore.getState();
+    if (st.isLiveJoined && st.activeRoomId && st.activeRoomId !== roomId) {
+      useLearningStore.getState().resetSession();
+      joinedAtRef.current = null;
+    }
+  }, [roomId]);
 
   useEffect(() => {
     loadAll();
   }, [loadAll]);
-
-  useEffect(() => {
-    if (!fwLearnPayload) return undefined;
-    let cancelled = false;
-    const payload = fwLearnPayload;
-    openFlutterwaveLearning({
-      callback: async () => {
-        if (cancelled) return;
-        closePaymentModal();
-        try {
-          await verifyFlutterwavePayment(payload.txRef);
-          setInfo("Payment verified — you can join or refresh access.");
-          setFwLearnPayload(null);
-          await loadAll();
-        } catch (e) {
-          setError(e.response?.data?.error || e.message || "Verification failed");
-          setFwLearnPayload(null);
-        }
-      },
-      onClose: () => {
-        if (!cancelled) setFwLearnPayload(null);
-      },
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [fwLearnPayload, openFlutterwaveLearning, loadAll]);
 
   useEffect(() => {
     if (!roomId || !room) return undefined;
@@ -293,92 +278,59 @@ export function LearningSessionPage() {
       setError("Sign in to pay.");
       return;
     }
-    if (!fwPublicKey) {
-      setError("Payments are not configured (missing VITE_FLUTTERWAVE_PUBLIC_KEY).");
-      return;
-    }
-    setPayLoading(true);
+    if (payBusy) return;
+    setPayAction("session");
     setError("");
     try {
-      const prep = await prepareLearningFlutterwave({
-        kind: "session_access",
-        userId: uid,
-        streamRoomId: roomId,
-        hours,
-      });
-      if (prep.txRef && prep.amountUsd != null) {
-        setFwLearnPayload({
-          txRef: prep.txRef,
-          amountUsd: Number(prep.amountUsd),
-          narration: prep.narration || "Session access",
-        });
-        return;
-      }
-      setError(prep.error || "Could not start checkout.");
+      await fwCheckout.startCheckout(() =>
+        prepareLearningFlutterwave({
+          kind: "session_access",
+          userId: uid,
+          streamRoomId: roomId,
+          hours,
+        })
+      );
     } catch (e) {
-      setError(e.response?.data?.error || e.message || "Checkout failed");
-    } finally {
-      setPayLoading(false);
+      setError(fwCheckout.error || e.message || "Checkout failed");
+      setPayAction(null);
     }
   }
 
   async function handleBuyCredits() {
     if (!uid) return;
-    if (!fwPublicKey) {
-      setError("Payments are not configured (missing VITE_FLUTTERWAVE_PUBLIC_KEY).");
-      return;
-    }
-    setPayLoading(true);
+    if (payBusy) return;
+    setPayAction("credits");
     setError("");
     try {
-      const prep = await prepareLearningFlutterwave({
-        kind: "credits",
-        userId: uid,
-        amountUsd: 25,
-      });
-      if (prep.txRef && prep.amountUsd != null) {
-        setFwLearnPayload({
-          txRef: prep.txRef,
-          amountUsd: Number(prep.amountUsd),
-          narration: prep.narration || "Learning credits",
-        });
-        return;
-      }
-      setError(prep.error || "Could not start checkout.");
+      await fwCheckout.startCheckout(() =>
+        prepareLearningFlutterwave({
+          kind: "credits",
+          userId: uid,
+          amountUsd: 25,
+        })
+      );
     } catch (e) {
-      setError(e.response?.data?.error || e.message || "Checkout failed");
-    } finally {
-      setPayLoading(false);
+      setError(fwCheckout.error || e.message || "Checkout failed");
+      setPayAction(null);
     }
   }
 
   async function handleSubscribe(tier) {
     if (!uid) return;
-    if (!fwPublicKey) {
-      setError("Payments are not configured (missing VITE_FLUTTERWAVE_PUBLIC_KEY).");
-      return;
-    }
-    setPayLoading(true);
+    if (payBusy) return;
+    setPayAction(`sub-${tier}`);
     setError("");
     try {
-      const prep = await prepareLearningFlutterwave({
-        kind: "subscription",
-        userId: uid,
-        tier,
-      });
-      if (prep.txRef && prep.amountUsd != null) {
-        setFwLearnPayload({
-          txRef: prep.txRef,
-          amountUsd: Number(prep.amountUsd),
-          narration: prep.narration || "Subscription",
-        });
-        return;
-      }
-      setError(prep.error || "Could not start checkout.");
+      await fwCheckout.startCheckout(() =>
+        prepareLearningFlutterwave({
+          kind: "subscription",
+          userId: uid,
+          tier,
+        })
+      );
     } catch (e) {
-      setError(e.response?.data?.error || e.message || "Checkout failed");
-    } finally {
-      setPayLoading(false);
+      setError(fwCheckout.error || e.message || "Checkout failed");
+      setPayAction(null);
     }
   }
 
@@ -461,7 +413,33 @@ export function LearningSessionPage() {
       </header>
 
       {error && <p className="error-text">{error}</p>}
+      {fwCheckout.error && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          <p>{fwCheckout.error}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" className="btn btn-outline min-h-[44px]" onClick={() => fwCheckout.retryVerify()}>
+              Retry verification
+            </button>
+            <button type="button" className="btn btn-outline min-h-[44px]" onClick={() => fwCheckout.clearPaymentState()}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+      {fwCheckout.phase === "verifying" && (
+        <p className="muted flex items-center gap-2">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+          Confirming payment with the server…
+        </p>
+      )}
       {info && <p className="muted">{info}</p>}
+      {entitlements?.tier && entitlements.tier !== "free" && (
+        <p className="learning-pill">
+          Plan: {entitlements.tier}
+          {entitlements.subscription?.tier ? ` (${entitlements.subscription.tier})` : ""} · credits $
+          {((entitlements.wallet?.creditsCents ?? entitlements.creditsCents ?? 0) / 100).toFixed(2)}
+        </p>
+      )}
 
       <div className="learning-grid learning-grid--2">
         <article className="panel learning-glass">
@@ -494,19 +472,19 @@ export function LearningSessionPage() {
             <button type="button" className="btn btn-outline" disabled={!isLiveJoined} onClick={handleLeave}>
               Leave
             </button>
-            <button type="button" className="btn btn-outline" disabled={payLoading} onClick={handlePaySession}>
-              Pay session
+            <button type="button" className="btn btn-outline min-h-[44px]" disabled={payBusy} onClick={handlePaySession}>
+              {payAction === "session" && payBusy ? "Opening checkout…" : "Pay session"}
             </button>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
-            <button type="button" className="btn btn-outline" disabled={payLoading || !uid} onClick={handleBuyCredits}>
-              Buy credits ($25)
+            <button type="button" className="btn btn-outline min-h-[44px]" disabled={payBusy || !uid} onClick={handleBuyCredits}>
+              {payAction === "credits" && payBusy ? "Opening…" : "Buy credits ($25)"}
             </button>
-            <button type="button" className="btn btn-outline" disabled={payLoading || !uid} onClick={() => handleSubscribe("standard")}>
-              Subscribe Standard
+            <button type="button" className="btn btn-outline min-h-[44px]" disabled={payBusy || !uid} onClick={() => handleSubscribe("standard")}>
+              {payAction === "sub-standard" && payBusy ? "Opening…" : "Subscribe Standard"}
             </button>
-            <button type="button" className="btn btn-outline" disabled={payLoading || !uid} onClick={() => handleSubscribe("premium")}>
-              Subscribe Premium
+            <button type="button" className="btn btn-outline min-h-[44px]" disabled={payBusy || !uid} onClick={() => handleSubscribe("premium")}>
+              {payAction === "sub-premium" && payBusy ? "Opening…" : "Subscribe Premium"}
             </button>
           </div>
           {uid && (

@@ -1,21 +1,12 @@
 import { Link, useOutletContext } from "react-router-dom";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { closePaymentModal, useFlutterwave } from "flutterwave-react-v3";
 import { http } from "./api/http";
+import { prepareEscrowCheckout } from "./api/paymentsApi";
 import { apiUrl } from "./config/env";
 import { apiFetch } from "./lib/apiClient";
+import { useFlutterwaveCheckout } from "./hooks/useFlutterwaveCheckout";
 import { getSessionToken } from "./session";
-
-const IDLE_FW_CONFIG = {
-  public_key: "FLWPUBK_TEST-00000000000000000000000000000000-X",
-  tx_ref: "ccweb_idle",
-  amount: 1,
-  currency: "USD",
-  payment_options: "card",
-  customer: { email: "idle@ccweb.local", phone_number: "08000000000", name: "Idle" },
-  customizations: { title: "CCWEB", description: "Idle" },
-};
 
 async function j(path, opts = {}) {
   const res = await apiFetch(apiUrl(`/api/growth${path}`), opts);
@@ -40,8 +31,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
   const [suggestions, setSuggestions] = useState(null);
   const [err, setErr] = useState(null);
   const [msg, setMsg] = useState(null);
-  const [checkoutLoading, setCheckoutLoading] = useState(null);
-  const [fwEscrowPayload, setFwEscrowPayload] = useState(null);
+  const [checkoutListingId, setCheckoutListingId] = useState(null);
   const [newListing, setNewListing] = useState({
     title: "",
     type: "service",
@@ -58,28 +48,6 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
   const [leadForm, setLeadForm] = useState({ industry: "consulting", region: "EU" });
 
   const fwPublicKey = (import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY || "").trim();
-
-  const fwConfig = useMemo(() => {
-    if (!fwEscrowPayload || !fwPublicKey) return IDLE_FW_CONFIG;
-    return {
-      public_key: fwPublicKey,
-      tx_ref: fwEscrowPayload.txRef,
-      amount: fwEscrowPayload.amountUsd,
-      currency: "USD",
-      payment_options: "card",
-      customer: {
-        email: user?.email || "buyer@ccweb.local",
-        phone_number: (user?.phone || "").toString().trim() || "08000000000",
-        name: user?.displayName || "Customer",
-      },
-      customizations: {
-        title: "CCWEB Escrow",
-        description: fwEscrowPayload.narration || "Marketplace escrow",
-      },
-    };
-  }, [fwEscrowPayload, fwPublicKey, user?.email, user?.displayName, user?.phone]);
-
-  const openFlutterwave = useFlutterwave(fwConfig);
 
   const loadOrders = useCallback(async () => {
     if (!user) {
@@ -114,6 +82,22 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
     }
   }, [user?.id, loadOrders]);
 
+  const fwCheckout = useFlutterwaveCheckout({
+    publicKey: fwPublicKey,
+    user,
+    title: "CCWEB Escrow",
+    onVerified: async (result) => {
+      setMsg(
+        result?.duplicate
+          ? "Payment already recorded — escrow status updated."
+          : "Payment verified — escrow funded."
+      );
+      setCheckoutListingId(null);
+      await loadAll();
+    },
+    onCancel: () => setCheckoutListingId(null),
+  });
+
   useEffect(() => {
     loadAll();
   }, [loadAll]);
@@ -141,33 +125,6 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
     }
   }
 
-  useEffect(() => {
-    if (!fwEscrowPayload) return undefined;
-    let cancelled = false;
-    const payload = fwEscrowPayload;
-    openFlutterwave({
-      callback: async () => {
-        if (cancelled) return;
-        closePaymentModal();
-        try {
-          await http.post("/api/v1/payments/flutterwave/verify", { tx_ref: payload.txRef });
-          setMsg("Payment verified — escrow funded.");
-          setFwEscrowPayload(null);
-          await loadAll();
-        } catch (e) {
-          setErr(e.response?.data?.error || e.message || "Verification failed");
-          setFwEscrowPayload(null);
-        }
-      },
-      onClose: () => {
-        if (!cancelled) setFwEscrowPayload(null);
-      },
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [fwEscrowPayload, openFlutterwave, loadAll]);
-
   async function startEscrowCheckout(listingId) {
     setErr(null);
     setMsg(null);
@@ -175,29 +132,18 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
       setErr("Sign in to purchase.");
       return;
     }
-    if (!fwPublicKey) {
-      setErr("Payments are not configured (missing VITE_FLUTTERWAVE_PUBLIC_KEY).");
-      return;
-    }
-    setCheckoutLoading(listingId);
+    if (fwCheckout.isBusy) return;
+    setCheckoutListingId(listingId);
     try {
-      const { data } = await http.post("/api/v1/payments/create", {
-        listingId,
-        buyerName: user.displayName || "Customer",
-      });
-      if (data.txRef && data.amountUsd != null) {
-        setFwEscrowPayload({
-          txRef: data.txRef,
-          amountUsd: Number(data.amountUsd),
-          narration: data.narration || "Marketplace escrow",
-        });
-        return;
-      }
-      setErr(data.error || "Checkout could not be started.");
+      await fwCheckout.startCheckout(() =>
+        prepareEscrowCheckout({
+          listingId,
+          buyerName: user.displayName || "Customer",
+        })
+      );
     } catch (e) {
-      setErr(e.response?.data?.error || e.message || "Checkout failed");
-    } finally {
-      setCheckoutLoading(null);
+      setErr(fwCheckout.error || e.message || "Checkout failed");
+      setCheckoutListingId(null);
     }
   }
 
@@ -297,6 +243,25 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
       )}
 
       {err && <p className="text-sm text-rose-400">{err}</p>}
+      {fwCheckout.error && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          <p>{fwCheckout.error}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" className="ccweb-outline-btn min-h-[44px] px-3 text-xs" onClick={() => fwCheckout.retryVerify()}>
+              Retry verification
+            </button>
+            <button type="button" className="ccweb-outline-btn min-h-[44px] px-3 text-xs" onClick={() => fwCheckout.clearPaymentState()}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+      {fwCheckout.phase === "verifying" && (
+        <p className="flex items-center gap-2 rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-sm text-ccweb-muted">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+          Confirming payment with the server…
+        </p>
+      )}
       {msg && <p className="text-sm text-emerald-300">{msg}</p>}
 
       {tab === "overview" && overview && (
@@ -338,12 +303,12 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
                     </div>
                     <button
                       type="button"
-                      disabled={!user || checkoutLoading === l.id || l.sellerId === user?.id}
-                      className="rounded-lg bg-ccweb-green/90 px-3 py-1 text-xs font-semibold text-[#061329] disabled:opacity-40"
+                      disabled={!user || fwCheckout.isBusy || checkoutListingId === l.id || l.sellerId === user?.id}
+                      className="rounded-lg bg-ccweb-green/90 px-3 py-1 text-xs font-semibold text-[#061329] disabled:opacity-40 min-h-[44px]"
                       onClick={() => startEscrowCheckout(l.id)}
                       title={l.sellerId === user?.id ? "You cannot buy your own listing" : ""}
                     >
-                      {checkoutLoading === l.id ? "Opening checkout…" : "Pay with card"}
+                      {checkoutListingId === l.id || fwCheckout.isBusy ? "Opening checkout…" : "Pay with card"}
                     </button>
                   </div>
                 </li>

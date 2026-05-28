@@ -1,4 +1,5 @@
 import { http } from "./http";
+import { verifyFlutterwavePayment as verifyPaymentApi } from "./paymentsApi";
 
 export async function listStreamRooms() {
   const { data } = await http.get("/api/streaming/rooms");
@@ -53,8 +54,7 @@ export async function prepareLearningFlutterwave(payload) {
 }
 
 export async function verifyFlutterwavePayment(txRef) {
-  const { data } = await http.post("/api/v1/payments/flutterwave/verify", { tx_ref: txRef });
-  return data;
+  return verifyPaymentApi(txRef);
 }
 
 export async function postTutorMessage(body) {

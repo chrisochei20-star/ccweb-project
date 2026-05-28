@@ -5,6 +5,7 @@ const learningPg = require("../db/persistenceLearning");
 const revenuePg = require("../db/persistenceRevenue");
 const { verifyTransactionByTxRef } = require("./flutterwaveClient");
 const { flutterwaveCheckoutOperational, flutterwaveDisabledPayload } = require("./flutterwaveConfig");
+const { buildPaymentEntitlements } = require("./flutterwaveEntitlements");
 
 const STANDARD_USD = Number(process.env.CCWEB_SUBSCRIPTION_STANDARD_USD || 19);
 const PREMIUM_USD = Number(process.env.CCWEB_SUBSCRIPTION_PREMIUM_USD || 49);
@@ -24,6 +25,31 @@ async function expressReadBody(req) {
 
 function expressSendJson(res, statusCode, payload) {
   res.status(statusCode).json(payload);
+}
+
+/**
+ * Resolve payer from pending checkout rows (webhook + verify).
+ * @param {string} txRef
+ * @returns {Promise<string|null>}
+ */
+async function resolveUserIdForTxRef(txRef) {
+  const ref = String(txRef || "").trim();
+  if (!ref) return null;
+
+  const order = await pgGrowth.findPendingOrderByTxRef(ref);
+  if (order?.buyerId) return String(order.buyerId);
+
+  const access = await learningPg.findPendingAccessByTxRef(ref);
+  if (access?.user_id) return String(access.user_id);
+
+  const pend = await revenuePg.findPendingFlutterwaveCharge(ref);
+  if (pend) {
+    const meta = typeof pend.metadata === "object" && pend.metadata ? pend.metadata : JSON.parse(pend.metadata || "{}");
+    const uid = String(meta.userId || "").trim();
+    if (uid) return uid;
+  }
+
+  return null;
 }
 
 /**
@@ -61,6 +87,14 @@ async function expressFlutterwaveEscrowPrepare(req, res) {
     }
     const txRef = newTxRef("esc");
     await pgGrowth.setOrderPaymentTxRef(order.id, txRef);
+    logger.info({
+      msg: "flutterwave_escrow_prepare_ok",
+      orderId: order.id,
+      listingId,
+      buyerId: buyerId || "buyer-anon",
+      txRef,
+      amountUsd: Number(order.amountUsd),
+    });
     expressSendJson(res, 200, {
       txRef,
       amountUsd: Number(order.amountUsd),
@@ -133,6 +167,7 @@ async function handleFlutterwaveLearningPrepare(req, res, readJsonBody, sendJson
         creatorUsd: creator,
         stripeCheckoutSessionId: txRef,
       });
+      logger.info({ msg: "flutterwave_learning_prepare_ok", kind, userId, txRef, amountUsd: gross, accessId });
       sendJson(res, 200, {
         txRef,
         amountUsd: gross,
@@ -151,6 +186,7 @@ async function handleFlutterwaveLearningPrepare(req, res, readJsonBody, sendJson
         amountUsd: usd,
         metadata: { intent: "credits", userId, cents },
       });
+      logger.info({ msg: "flutterwave_learning_prepare_ok", kind, userId, txRef, amountUsd: usd });
       sendJson(res, 200, { txRef, amountUsd: usd, narration: "CCWEB learning credits" });
       return;
     }
@@ -164,25 +200,38 @@ async function handleFlutterwaveLearningPrepare(req, res, readJsonBody, sendJson
         amountUsd,
         metadata: { intent: "subscription", userId, tier },
       });
+      logger.info({ msg: "flutterwave_learning_prepare_ok", kind, userId, txRef, amountUsd, tier });
       sendJson(res, 200, { txRef, amountUsd, narration: `CCWEB ${tier} learning (30-day access)` });
       return;
     }
 
     sendJson(res, 400, { error: "Unknown kind. Use session_access, credits, or subscription." });
   } catch (e) {
-    logger.error({ msg: "flutterwave_learning_prepare_fail", err: e.message });
+    logger.error({ msg: "flutterwave_learning_prepare_fail", err: e.message, userId });
     sendJson(res, 500, { error: e.message || "Flutterwave prepare failed" });
   }
 }
 
-async function fulfillFlutterwaveVerify(txRef, jwtUserId) {
-  const data = await verifyTransactionByTxRef(txRef);
+/**
+ * Server-side verify against Flutterwave API + idempotent DB fulfillment.
+ * @param {string} txRef
+ * @param {string} userId
+ */
+async function fulfillFlutterwaveVerify(txRef, userId) {
+  const ref = String(txRef || "").trim();
+  const uid = String(userId || "").trim();
+  if (!ref || !uid) {
+    throw new Error("tx_ref and authenticated user required.");
+  }
+
+  const data = await verifyTransactionByTxRef(ref);
   const flwId = String(data.id != null ? data.id : "");
   if (!flwId) {
     throw new Error("Invalid Flutterwave transaction payload");
   }
   if (await revenuePg.isFlutterwaveTxnCaptured(flwId)) {
-    return { ok: true, duplicate: true };
+    const entitlements = await buildPaymentEntitlements(uid);
+    return { ok: true, duplicate: true, entitlements };
   }
 
   const paidUsd = Number(data.amount);
@@ -191,42 +240,46 @@ async function fulfillFlutterwaveVerify(txRef, jwtUserId) {
     throw new Error("Unexpected currency from Flutterwave");
   }
 
-  const order = await pgGrowth.findPendingOrderByBuyerAndTxRef(jwtUserId, txRef);
+  const order = await pgGrowth.findPendingOrderByBuyerAndTxRef(uid, ref);
   if (order) {
     if (!closeUsd(paidUsd, order.amountUsd)) {
       throw new Error("Paid amount does not match order total");
     }
-    await pgGrowth.attachStripeToOrder(order.id, txRef, flwId);
+    await pgGrowth.attachStripeToOrder(order.id, ref, flwId);
     await revenuePg.recordFlutterwaveCapture({
       kind: "growth_escrow",
       referenceId: flwId,
       amountUsd: paidUsd,
-      metadata: { tx_ref: txRef, orderId: order.id, listingId: order.listingId, buyerId: jwtUserId },
+      metadata: { tx_ref: ref, orderId: order.id, listingId: order.listingId, buyerId: uid },
     });
-    return { ok: true, kind: "growth_escrow", orderId: order.id };
+    logger.info({ msg: "flutterwave_verify_fulfilled", kind: "growth_escrow", txRef: ref, userId: uid, flwId });
+    const entitlements = await buildPaymentEntitlements(uid);
+    return { ok: true, kind: "growth_escrow", orderId: order.id, entitlements };
   }
 
-  const access = await learningPg.findPendingAccessByUserAndTxRef(jwtUserId, txRef);
+  const access = await learningPg.findPendingAccessByUserAndTxRef(uid, ref);
   if (access) {
     const expected = Number(access.amount_usd);
     if (!closeUsd(paidUsd, expected)) {
       throw new Error("Paid amount does not match access quote");
     }
-    await learningPg.activateAccessByCheckoutSession(txRef, flwId);
+    await learningPg.activateAccessByCheckoutSession(ref, flwId);
     await revenuePg.recordFlutterwaveCapture({
       kind: "learning_access",
       referenceId: flwId,
       amountUsd: paidUsd,
-      metadata: { tx_ref: txRef, userId: jwtUserId, accessId: access.id },
+      metadata: { tx_ref: ref, userId: uid, accessId: access.id },
     });
-    return { ok: true, kind: "learning_session_access" };
+    logger.info({ msg: "flutterwave_verify_fulfilled", kind: "learning_session_access", txRef: ref, userId: uid, flwId });
+    const entitlements = await buildPaymentEntitlements(uid);
+    return { ok: true, kind: "learning_session_access", entitlements };
   }
 
-  const pend = await revenuePg.findPendingFlutterwaveCharge(txRef);
+  const pend = await revenuePg.findPendingFlutterwaveCharge(ref);
   if (pend) {
     const meta = typeof pend.metadata === "object" && pend.metadata ? pend.metadata : JSON.parse(pend.metadata || "{}");
     const metaUser = String(meta.userId || "").trim();
-    if (!metaUser || metaUser !== jwtUserId) {
+    if (!metaUser || metaUser !== uid) {
       throw new Error("Pending payment does not belong to this account");
     }
     const expected = Number(pend.amount_usd);
@@ -236,28 +289,32 @@ async function fulfillFlutterwaveVerify(txRef, jwtUserId) {
     if (meta.intent === "credits") {
       const cents = Number(meta.cents || 0);
       if (cents <= 0) throw new Error("Invalid credits metadata");
-      await learningPg.addCredits(jwtUserId, cents, txRef);
-      await revenuePg.deletePendingFlutterwave(txRef);
+      await learningPg.addCredits(uid, cents, ref);
+      await revenuePg.deletePendingFlutterwave(ref);
       await revenuePg.recordFlutterwaveCapture({
         kind: "learning_credits",
         referenceId: flwId,
         amountUsd: paidUsd,
-        metadata: { tx_ref: txRef, userId: jwtUserId, cents },
+        metadata: { tx_ref: ref, userId: uid, cents },
       });
-      return { ok: true, kind: "learning_credits" };
+      logger.info({ msg: "flutterwave_verify_fulfilled", kind: "learning_credits", txRef: ref, userId: uid, flwId });
+      const entitlements = await buildPaymentEntitlements(uid);
+      return { ok: true, kind: "learning_credits", entitlements };
     }
     if (meta.intent === "subscription") {
       const tier = String(meta.tier || "standard").toLowerCase() === "premium" ? "premium" : "standard";
       const end = new Date(Date.now() + 30 * 864e5).toISOString();
-      await learningPg.setSubscriptionActive(jwtUserId, tier, `fw_${jwtUserId}`, `fw_${flwId}`, end);
-      await revenuePg.deletePendingFlutterwave(txRef);
+      await learningPg.setSubscriptionActive(uid, tier, `fw_${uid}`, `fw_${flwId}`, end);
+      await revenuePg.deletePendingFlutterwave(ref);
       await revenuePg.recordFlutterwaveCapture({
         kind: "learning_subscription",
         referenceId: flwId,
         amountUsd: paidUsd,
-        metadata: { tx_ref: txRef, userId: jwtUserId, tier },
+        metadata: { tx_ref: ref, userId: uid, tier },
       });
-      return { ok: true, kind: "learning_subscription", tier };
+      logger.info({ msg: "flutterwave_verify_fulfilled", kind: "learning_subscription", txRef: ref, userId: uid, flwId, tier });
+      const entitlements = await buildPaymentEntitlements(uid);
+      return { ok: true, kind: "learning_subscription", tier, entitlements };
     }
   }
 
@@ -289,7 +346,7 @@ async function handleFlutterwaveVerify(req, res, readJsonBody, sendJson, jwtUser
     const out = await fulfillFlutterwaveVerify(txRef, jwtUserId);
     sendJson(res, 200, out);
   } catch (e) {
-    logger.warn({ msg: "flutterwave_verify_fail", txRef, err: e.message });
+    logger.warn({ msg: "flutterwave_verify_fail", txRef, userId: jwtUserId, err: e.message });
     sendJson(res, 400, { error: e.message || "Verification failed" });
   }
 }
@@ -303,6 +360,8 @@ module.exports = {
   handleFlutterwaveLearningPrepare,
   handleFlutterwaveVerify,
   expressFlutterwaveVerify,
+  fulfillFlutterwaveVerify,
+  resolveUserIdForTxRef,
   STANDARD_USD,
   PREMIUM_USD,
   CREDIT_PACK_USD,

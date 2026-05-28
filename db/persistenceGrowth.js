@@ -387,6 +387,15 @@ async function findPendingOrderByBuyerAndTxRef(buyerId, txRef) {
   return rows[0] ? mapOrderRow(rows[0]) : null;
 }
 
+async function findPendingOrderByTxRef(txRef) {
+  await seedIfEmpty();
+  const { rows } = await query(
+    `SELECT * FROM growth_orders WHERE stripe_checkout_session_id = $1 AND status = 'pending_payment' LIMIT 1`,
+    [String(txRef)]
+  );
+  return rows[0] ? mapOrderRow(rows[0]) : null;
+}
+
 async function setOrderPaymentTxRef(orderId, txRef) {
   await query(`UPDATE growth_orders SET stripe_checkout_session_id = $2 WHERE id = $1 AND status = 'pending_payment'`, [
     orderId,
@@ -445,4 +454,5 @@ module.exports = {
   attachStripeToOrder,
   setOrderPaymentTxRef,
   findPendingOrderByBuyerAndTxRef,
+  findPendingOrderByTxRef,
 };

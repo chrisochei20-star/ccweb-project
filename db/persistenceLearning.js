@@ -397,6 +397,15 @@ async function findPendingAccessByUserAndTxRef(userId, txRef) {
   return rows[0] || null;
 }
 
+async function findPendingAccessByTxRef(txRef) {
+  if (!usePostgres()) return null;
+  const { rows } = await query(
+    `SELECT * FROM learning_access WHERE stripe_checkout_session_id = $1 AND status = 'pending_payment' LIMIT 1`,
+    [String(txRef)]
+  );
+  return rows[0] || null;
+}
+
 module.exports = {
   usePostgres,
   money,
@@ -427,4 +436,5 @@ module.exports = {
   getLearningSessionDetail,
   listLearningSessions,
   findPendingAccessByUserAndTxRef,
+  findPendingAccessByTxRef,
 };

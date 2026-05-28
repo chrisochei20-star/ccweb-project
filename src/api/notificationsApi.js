@@ -30,6 +30,27 @@ export async function markNotificationsRead({ markAll = false, ids = [] } = {}) 
   return data;
 }
 
+export async function fetchNotificationPreferences() {
+  const res = await apiFetch(apiUrl("/api/v1/notifications/preferences"), {}, { networkRetries: 2 });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not load preferences");
+  return data;
+}
+
+export async function updateNotificationPreferences(preferences) {
+  const res = await apiFetch(
+    apiUrl("/api/v1/notifications/preferences"),
+    {
+      method: "PUT",
+      body: JSON.stringify({ preferences }),
+    },
+    { networkRetries: 1 }
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not save preferences");
+  return data;
+}
+
 export async function followUser(userId) {
   const res = await apiFetch(apiUrl(`/api/v1/users/${encodeURIComponent(userId)}/follow`), {
     method: "POST",

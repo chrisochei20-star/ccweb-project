@@ -27,6 +27,18 @@ function parseSocialLinks(raw) {
   }
 }
 
+function parseNotificationPrefs(raw) {
+  if (!raw || typeof raw !== "object") {
+    try {
+      const j = typeof raw === "string" ? JSON.parse(raw) : raw;
+      return j && typeof j === "object" && !Array.isArray(j) ? j : {};
+    } catch {
+      return {};
+    }
+  }
+  return raw;
+}
+
 function mapProfileRow(r) {
   if (!r) return null;
   return {
@@ -42,6 +54,7 @@ function mapProfileRow(r) {
     website: r.website,
     social_links: r.social_links,
     verified_at: r.verified_at,
+    notification_prefs: r.notification_prefs,
     created_at: r.created_at,
     updated_at: r.updated_at,
   };
@@ -50,7 +63,7 @@ function mapProfileRow(r) {
 async function findByUserId(userId) {
   const { rows } = await query(
     `SELECT user_id, display_name, roles, is_organic, push_enabled, avatar_url, banner_url,
-            bio, location, website, social_links, verified_at, created_at, updated_at
+            bio, location, website, social_links, verified_at, notification_prefs, created_at, updated_at
      FROM ccweb_user_profiles WHERE user_id = $1`,
     [userId]
   );
@@ -144,11 +157,32 @@ async function patchProfileMedia(userId, patch = {}) {
   );
 }
 
+async function patchNotificationPrefs(userId, prefs = {}) {
+  if (!userId || !prefs || typeof prefs !== "object") return null;
+  const merged = JSON.stringify(prefs);
+  await query(
+    `UPDATE ccweb_user_profiles SET notification_prefs = COALESCE(notification_prefs, '{}'::jsonb) || $1::jsonb, updated_at = NOW()
+     WHERE user_id = $2`,
+    [merged, userId]
+  );
+  const row = await findByUserId(userId);
+  return parseNotificationPrefs(row?.notification_prefs);
+}
+
+async function getNotificationPrefs(userId) {
+  const row = await findByUserId(userId);
+  if (!row) return {};
+  return parseNotificationPrefs(row.notification_prefs);
+}
+
 module.exports = {
   findByUserId,
   upsert,
   parseRoles,
   parseSocialLinks,
+  parseNotificationPrefs,
   patchProfileMedia,
   patchProfileFields,
+  patchNotificationPrefs,
+  getNotificationPrefs,
 };

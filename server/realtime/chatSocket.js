@@ -30,6 +30,10 @@ function corsOriginFn() {
 
 /** userId -> Set(socket.id) */
 const socketCounts = new Map();
+/** userId -> last disconnect timestamp (ms) */
+const lastActiveAt = new Map();
+/** chatId -> Map<userId, expiresAt> typing indicators */
+const typingState = new Map();
 
 function addPresence(uid, sid) {
   if (!socketCounts.has(uid)) socketCounts.set(uid, new Set());
@@ -62,6 +66,36 @@ async function emitPresenceToPartners(io, userId, online) {
   }
 }
 
+function clearTyping(chatId, userId) {
+  const m = typingState.get(chatId);
+  if (!m) return;
+  m.delete(userId);
+  if (m.size === 0) typingState.delete(chatId);
+}
+
+function setTyping(chatId, userId, active) {
+  if (!chatId || !userId) return;
+  if (!active) {
+    clearTyping(chatId, userId);
+    return;
+  }
+  if (!typingState.has(chatId)) typingState.set(chatId, new Map());
+  typingState.get(chatId).set(userId, Date.now() + 4000);
+}
+
+function cleanupStaleTyping() {
+  const now = Date.now();
+  for (const [chatId, users] of typingState.entries()) {
+    for (const [uid, exp] of users.entries()) {
+      if (exp <= now) users.delete(uid);
+    }
+    if (users.size === 0) typingState.delete(chatId);
+  }
+}
+
+const typingCleanupTimer = setInterval(cleanupStaleTyping, 5000);
+if (typingCleanupTimer.unref) typingCleanupTimer.unref();
+
 /**
  * @param {import("http").Server} httpServer
  */
@@ -89,9 +123,11 @@ function attachChatSocket(httpServer) {
 
   io.on("connection", (socket) => {
     const uid = socket.data.userId;
+    socket.data.joinedChats = socket.data.joinedChats || new Set();
     socket.join(`user:${uid}`);
     const wasNew = !socketCounts.has(uid) || socketCounts.get(uid).size === 0;
     addPresence(uid, socket.id);
+    logger.info({ msg: "socket_connected", userId: uid, socketId: socket.id, wasNew });
     if (wasNew) {
       emitPresenceToPartners(io, uid, true).catch(() => {});
     }
@@ -100,10 +136,13 @@ function attachChatSocket(httpServer) {
       (async () => {
         try {
           if (!(await chatPg.verifyMember(chatId, uid))) {
+            logger.warn({ msg: "socket_join_denied", userId: uid, chatId });
             ack?.({ ok: false, error: "forbidden" });
             return;
           }
           socket.join(`chat:${chatId}`);
+          socket.data.joinedChats.add(chatId);
+          logger.info({ msg: "socket_join_chat", userId: uid, chatId });
           ack?.({ ok: true });
         } catch (e) {
           ack?.({ ok: false, error: e.message });
@@ -112,7 +151,12 @@ function attachChatSocket(httpServer) {
     });
 
     socket.on("leave:chat", (chatId) => {
-      if (chatId) socket.leave(`chat:${chatId}`);
+      if (chatId) {
+        socket.leave(`chat:${chatId}`);
+        socket.data.joinedChats.delete(chatId);
+        clearTyping(chatId, uid);
+        logger.info({ msg: "socket_leave_chat", userId: uid, chatId });
+      }
     });
 
     socket.on("typing", (payload, ack) => {
@@ -121,10 +165,12 @@ function attachChatSocket(httpServer) {
           const chatId = payload?.chatId;
           if (!chatId) return ack?.({ ok: false });
           if (!(await chatPg.verifyMember(chatId, uid))) return ack?.({ ok: false, error: "forbidden" });
+          const active = !!payload?.typing;
+          setTyping(chatId, uid, active);
           socket.to(`chat:${chatId}`).emit("typing", {
             chatId,
             userId: uid,
-            typing: !!payload?.typing,
+            typing: active,
           });
           ack?.({ ok: true });
         } catch (e) {
@@ -133,8 +179,15 @@ function attachChatSocket(httpServer) {
       })();
     });
 
-    socket.on("disconnect", () => {
+    socket.on("disconnect", (reason) => {
+      for (const chatId of socket.data.joinedChats || []) {
+        socket.leave(`chat:${chatId}`);
+        clearTyping(chatId, uid);
+      }
+      socket.data.joinedChats.clear();
       const gone = removePresence(uid, socket.id);
+      lastActiveAt.set(uid, Date.now());
+      logger.info({ msg: "socket_disconnected", userId: uid, reason, gone });
       if (gone) {
         emitPresenceToPartners(io, uid, false).catch(() => {});
       }
@@ -152,6 +205,7 @@ function getChatIo() {
 
 function broadcastChatMessage(chatId, messagePayload) {
   if (!ioInstance) return;
+  logger.info({ msg: "socket_broadcast_message", chatId, messageId: messagePayload?.id });
   ioInstance.to(`chat:${chatId}`).emit("message:new", messagePayload);
 }
 
@@ -163,12 +217,14 @@ function broadcastInboxRefresh(userId, chatId) {
 /** Push in-app notification list refresh (unread badge, center). */
 function broadcastNotificationUpdate(userId, payload = {}) {
   if (!ioInstance || !userId) return;
+  logger.info({ msg: "socket_notification_update", userId, kind: payload?.kind });
   ioInstance.to(`user:${userId}`).emit("notifications:update", payload);
 }
 
 /** Broadcast community feed / rooms / reaction changes to all connected clients (authenticated namespace). */
 function broadcastCommunityUpdate(payload = {}) {
   if (!ioInstance) return;
+  logger.info({ msg: "socket_community_update", kind: payload?.kind, postId: payload?.postId });
   ioInstance.emit("community:update", payload);
 }
 
@@ -176,6 +232,14 @@ function onlineStatusForUserIds(userIds) {
   const out = {};
   for (const id of userIds) {
     out[id] = isUserOnline(id);
+  }
+  return out;
+}
+
+function lastActiveForUserIds(userIds) {
+  const out = {};
+  for (const id of userIds) {
+    out[id] = lastActiveAt.get(id) ? new Date(lastActiveAt.get(id)).toISOString() : null;
   }
   return out;
 }
@@ -195,5 +259,6 @@ module.exports = {
   broadcastNotificationUpdate,
   broadcastCommunityUpdate,
   onlineStatusForUserIds,
+  lastActiveForUserIds,
   closeChatSocket,
 };

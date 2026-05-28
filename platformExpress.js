@@ -41,6 +41,7 @@ const {
   broadcastInboxRefresh,
   broadcastNotificationUpdate,
   onlineStatusForUserIds,
+  lastActiveForUserIds,
 } = require("./server/realtime/chatSocket");
 const { createCoursesRouter } = require("./coursesExpress");
 
@@ -371,6 +372,72 @@ function createPlatformApp(deps) {
     }
   });
 
+  notificationsRouter.get("/preferences", authJwtMiddleware, async (req, res, next) => {
+    try {
+      if (!(process.env.DATABASE_URL || "").trim()) {
+        return res.json({
+          preferences: {
+            inApp: { chat: true, community: true, learn: true, earn: true, follow: true },
+            browserPush: { enabled: false },
+            nativePush: { enabled: false },
+          },
+          source: "defaults",
+        });
+      }
+      const prefs = await pgUserProfile.getNotificationPrefs(req.ccwebUserId);
+      const row = await pgUserProfile.findByUserId(req.ccwebUserId);
+      res.json({
+        preferences: {
+          inApp: { chat: true, community: true, learn: true, earn: true, follow: true, ...(prefs.inApp || {}) },
+          browserPush: { enabled: false, ...(prefs.browserPush || {}) },
+          nativePush: { enabled: false, ...(prefs.nativePush || {}) },
+          quietHours: prefs.quietHours ?? null,
+          pushEnabled: row?.push_enabled !== false,
+        },
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  notificationsRouter.put("/preferences", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const incoming = req.body?.preferences && typeof req.body.preferences === "object" ? req.body.preferences : {};
+      if (!(process.env.DATABASE_URL || "").trim()) {
+        return res.status(503).json({ error: "PostgreSQL required for notification preferences.", code: "NO_DATABASE" });
+      }
+      const sanitized = {
+        inApp:
+          incoming.inApp && typeof incoming.inApp === "object"
+            ? Object.fromEntries(Object.entries(incoming.inApp).map(([k, v]) => [k, !!v]))
+            : undefined,
+        browserPush:
+          incoming.browserPush && typeof incoming.browserPush === "object"
+            ? { enabled: !!incoming.browserPush.enabled, subscribedAt: incoming.browserPush.subscribedAt || null }
+            : undefined,
+        nativePush:
+          incoming.nativePush && typeof incoming.nativePush === "object"
+            ? { enabled: !!incoming.nativePush.enabled }
+            : undefined,
+        quietHours: incoming.quietHours ?? undefined,
+      };
+      const merged = await pgUserProfile.patchNotificationPrefs(req.ccwebUserId, sanitized);
+      if (incoming.pushEnabled !== undefined) {
+        const { ccwebUsers, buildUserProfile, sanitizeUser } = deps;
+        const existing = ccwebUsers.get(req.ccwebUserId);
+        const updated = buildUserProfile(
+          { userId: req.ccwebUserId, pushEnabled: incoming.pushEnabled !== false },
+          existing || null
+        );
+        ccwebUsers.set(req.ccwebUserId, updated);
+        await authEngine.persistNewUserProfile(req.ccwebUserId, updated);
+      }
+      res.json({ preferences: merged, ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   v1.use("/notifications", apiRateShort, notificationsRouter);
 
   v1.use("/uploads", apiRateShort, createUploadsRouter({ ...deps, authJwtMiddleware }));
@@ -404,7 +471,8 @@ function createPlatformApp(deps) {
         .filter(Boolean)
         .slice(0, 200);
       const presence = onlineStatusForUserIds(ids);
-      res.json({ presence });
+      const lastActive = lastActiveForUserIds(ids);
+      res.json({ presence, lastActive });
     } catch (e) {
       next(e);
     }

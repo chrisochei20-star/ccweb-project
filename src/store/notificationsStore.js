@@ -12,7 +12,15 @@ import { realtimeLog } from "../lib/realtimeLog";
 const DEFAULT_PREFS = {
   inApp: { chat: true, community: true, learn: true, earn: true, follow: true },
   browserPush: { enabled: false, subscribedAt: null },
-  nativePush: { enabled: false },
+  nativePush: {
+    enabled: false,
+    messages: true,
+    mentions: true,
+    follows: true,
+    reactions: true,
+    comments: true,
+    aiAlerts: true,
+  },
   quietHours: null,
 };
 

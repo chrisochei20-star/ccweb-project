@@ -1,6 +1,5 @@
 /**
- * FCM-ready native push architecture for Capacitor Android.
- * Requires `google-services.json` + Firebase project (see docs/MOBILE_APP_DEPLOYMENT.md).
+ * Capacitor FCM native push — registration, refresh, foreground/background, diagnostics.
  */
 
 import { apiUrl } from "../config/env";
@@ -10,9 +9,22 @@ import { useNotificationsStore } from "../store/notificationsStore";
 
 /** @type {string | null} */
 let lastDeviceToken = null;
+/** @type {boolean} */
+let listenersWired = false;
+/** @type {{ registeredAt?: string; lastError?: string; fcmConfigured?: boolean } | null} */
+let lastRegistrationMeta = null;
 
 export function getNativePushDeviceToken() {
   return lastDeviceToken;
+}
+
+export function getNativePushDiagnostics() {
+  return {
+    tokenPresent: Boolean(lastDeviceToken),
+    tokenPreview: lastDeviceToken ? `${lastDeviceToken.slice(0, 8)}…` : null,
+    listenersWired,
+    ...lastRegistrationMeta,
+  };
 }
 
 async function registerDeviceTokenWithApi(token, platform = "android") {
@@ -24,18 +36,48 @@ async function registerDeviceTokenWithApi(token, platform = "android") {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ token, platform, provider: "fcm" }),
+        body: JSON.stringify({
+          token,
+          platform,
+          provider: "fcm",
+          appVersion: import.meta.env.VITE_CCWEB_BUILD_ID || "mobile",
+        }),
       },
       { networkRetries: 2, timeoutMs: 15000 }
     );
-    if (res.status === 404 || res.status === 501) {
-      return { ok: false, reason: "endpoint_not_ready", status: res.status };
-    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      lastRegistrationMeta = { lastError: data.error || "register_failed", registeredAt: null };
       return { ok: false, reason: data.error || "register_failed", status: res.status };
     }
+    lastRegistrationMeta = {
+      registeredAt: new Date().toISOString(),
+      fcmConfigured: data.fcmConfigured,
+      lastError: undefined,
+    };
     return { ok: true, data };
+  } catch (e) {
+    lastRegistrationMeta = { lastError: e?.message || "network" };
+    return { ok: false, reason: e?.message || "network" };
+  }
+}
+
+export async function revokeNativeDeviceToken(token = lastDeviceToken) {
+  if (!token) return { ok: true, revoked: 0 };
+  try {
+    const res = await apiFetch(
+      apiUrl("/api/v1/notifications/device-token"),
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ token }),
+      },
+      { networkRetries: 1, timeoutMs: 10000 }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (token === lastDeviceToken) lastDeviceToken = null;
+    return { ok: res.ok, ...data };
   } catch (e) {
     return { ok: false, reason: e?.message || "network" };
   }
@@ -55,6 +97,65 @@ async function persistNativePushPreference(enabled) {
   }
 }
 
+async function wirePushListeners(PushNotifications) {
+  if (listenersWired) return;
+  listenersWired = true;
+
+  await PushNotifications.addListener("registration", async (ev) => {
+    const next = ev.value || null;
+    if (!next) return;
+    const changed = next !== lastDeviceToken;
+    lastDeviceToken = next;
+    await registerDeviceTokenWithApi(lastDeviceToken);
+    if (changed) await persistNativePushPreference(true);
+  });
+
+  await PushNotifications.addListener("registrationError", (err) => {
+    lastDeviceToken = null;
+    lastRegistrationMeta = { lastError: err?.error || "registration_error" };
+  });
+
+  await PushNotifications.addListener("pushNotificationReceived", (notification) => {
+    useNotificationsStore.getState().notifySocketTick();
+    document.dispatchEvent(
+      new CustomEvent("ccweb:native-push", { detail: { phase: "foreground", notification } })
+    );
+  });
+
+  await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
+    document.dispatchEvent(
+      new CustomEvent("ccweb:native-push", { detail: { phase: "action", action } })
+    );
+  });
+}
+
+/** Re-register token after app resume (FCM token refresh). */
+export async function refreshNativePushRegistration() {
+  if (!isCapacitorNative()) return { ok: false, reason: "not_native" };
+  try {
+    const { PushNotifications } = await import("@capacitor/push-notifications");
+    await PushNotifications.register();
+    if (lastDeviceToken) {
+      await registerDeviceTokenWithApi(lastDeviceToken);
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: e?.message || "refresh_failed" };
+  }
+}
+
+export async function fetchPushDiagnosticsFromApi() {
+  try {
+    const res = await apiFetch(apiUrl("/api/v1/notifications/push/diagnostics"), {
+      credentials: "include",
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Register Capacitor PushNotifications listeners and request permission.
  * Idempotent — safe to call once at app boot on native.
@@ -66,31 +167,7 @@ export async function initNativePushNotifications() {
 
   try {
     const { PushNotifications } = await import("@capacitor/push-notifications");
-
-    await PushNotifications.addListener("registration", async (ev) => {
-      lastDeviceToken = ev.value || null;
-      if (lastDeviceToken) {
-        await registerDeviceTokenWithApi(lastDeviceToken);
-        await persistNativePushPreference(true);
-      }
-    });
-
-    await PushNotifications.addListener("registrationError", () => {
-      lastDeviceToken = null;
-    });
-
-    await PushNotifications.addListener("pushNotificationReceived", (notification) => {
-      useNotificationsStore.getState().notifySocketTick();
-      document.dispatchEvent(
-        new CustomEvent("ccweb:native-push", { detail: { phase: "foreground", notification } })
-      );
-    });
-
-    await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
-      document.dispatchEvent(
-        new CustomEvent("ccweb:native-push", { detail: { phase: "action", action } })
-      );
-    });
+    await wirePushListeners(PushNotifications);
 
     let perm = await PushNotifications.checkPermissions();
     if (perm.receive === "prompt") {
@@ -102,6 +179,11 @@ export async function initNativePushNotifications() {
     }
 
     await PushNotifications.register();
+
+    document.addEventListener("ccweb:app-resume", () => {
+      void refreshNativePushRegistration();
+    });
+
     return { ok: true, permission: perm.receive };
   } catch (e) {
     return { ok: false, reason: e?.message || "init_failed" };

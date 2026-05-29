@@ -34,6 +34,10 @@ const { publicAppBaseUrl, trimOrigin } = require("./services/deploymentOrigins")
 const { buildProfileBundle, parseSocialLinks } = require("./services/profileBundle");
 const communityPg = require("./db/persistenceCommunity");
 const pgUserProfile = require("./db/pgUserProfile");
+const persistencePushDevices = require("./db/persistencePushDevices");
+const persistencePushDelivery = require("./db/persistencePushDelivery");
+const { isFcmConfigured } = require("./services/fcmPush");
+const { DEFAULT_NATIVE_CATEGORIES } = require("./services/pushNotificationDispatch");
 const { flutterwaveCheckoutOperational } = require("./payments/flutterwaveConfig");
 const { handleFlutterwaveWebhook } = require("./payments/flutterwaveWebhook");
 const {
@@ -379,7 +383,7 @@ function createPlatformApp(deps) {
           preferences: {
             inApp: { chat: true, community: true, learn: true, earn: true, follow: true },
             browserPush: { enabled: false },
-            nativePush: { enabled: false },
+            nativePush: { enabled: false, ...DEFAULT_NATIVE_CATEGORIES },
           },
           source: "defaults",
         });
@@ -390,7 +394,11 @@ function createPlatformApp(deps) {
         preferences: {
           inApp: { chat: true, community: true, learn: true, earn: true, follow: true, ...(prefs.inApp || {}) },
           browserPush: { enabled: false, ...(prefs.browserPush || {}) },
-          nativePush: { enabled: false, ...(prefs.nativePush || {}) },
+          nativePush: {
+            enabled: false,
+            ...DEFAULT_NATIVE_CATEGORIES,
+            ...(prefs.nativePush || {}),
+          },
           quietHours: prefs.quietHours ?? null,
           pushEnabled: row?.push_enabled !== false,
         },
@@ -417,7 +425,15 @@ function createPlatformApp(deps) {
             : undefined,
         nativePush:
           incoming.nativePush && typeof incoming.nativePush === "object"
-            ? { enabled: !!incoming.nativePush.enabled }
+            ? {
+                enabled: !!incoming.nativePush.enabled,
+                messages: incoming.nativePush.messages !== false,
+                mentions: incoming.nativePush.mentions !== false,
+                follows: incoming.nativePush.follows !== false,
+                reactions: incoming.nativePush.reactions !== false,
+                comments: incoming.nativePush.comments !== false,
+                aiAlerts: incoming.nativePush.aiAlerts !== false,
+              }
             : undefined,
         quietHours: incoming.quietHours ?? undefined,
       };
@@ -438,28 +454,85 @@ function createPlatformApp(deps) {
     }
   });
 
-  /** FCM-ready device token registration (Capacitor native push). */
+  /** Register or refresh FCM device token (Capacitor native push). */
   notificationsRouter.post("/device-token", authJwtMiddleware, async (req, res, next) => {
     try {
       const token = String(req.body?.token || "").trim();
       const platform = String(req.body?.platform || "android").slice(0, 32);
       const provider = String(req.body?.provider || "fcm").slice(0, 32);
+      const deviceLabel = req.body?.deviceLabel ? String(req.body.deviceLabel).slice(0, 120) : null;
+      const appVersion = req.body?.appVersion ? String(req.body.appVersion).slice(0, 32) : null;
       if (!token || token.length > 512) {
         return res.status(400).json({ error: "Valid device token required.", code: "INVALID_TOKEN" });
       }
-      if (!(process.env.DATABASE_URL || "").trim()) {
+      if (!persistencePushDevices.enabled()) {
         return res.status(503).json({ error: "PostgreSQL required for device token registration.", code: "NO_DATABASE" });
       }
+      const device = await persistencePushDevices.upsertDeviceToken({
+        userId: req.ccwebUserId,
+        token,
+        platform,
+        provider,
+        deviceLabel,
+        appVersion,
+      });
       const merged = await pgUserProfile.patchNotificationPrefs(req.ccwebUserId, {
         nativePush: {
           enabled: true,
           provider,
           platform,
-          deviceToken: token,
           registeredAt: new Date().toISOString(),
         },
       });
-      res.json({ ok: true, preferences: merged, stored: true });
+      res.json({
+        ok: true,
+        device,
+        preferences: merged,
+        fcmConfigured: isFcmConfigured(),
+        stored: true,
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  /** Revoke device token on logout or permission revoke. */
+  notificationsRouter.delete("/device-token", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const token = req.body?.token ? String(req.body.token).trim() : null;
+      if (!persistencePushDevices.enabled()) {
+        return res.json({ ok: true, revoked: 0 });
+      }
+      const revoked = await persistencePushDevices.revokeTokenForUser(req.ccwebUserId, token);
+      if (!token) {
+        await pgUserProfile.patchNotificationPrefs(req.ccwebUserId, {
+          nativePush: { enabled: false },
+        });
+      }
+      res.json({ ok: true, revoked });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  /** Push delivery diagnostics for the signed-in user. */
+  notificationsRouter.get("/push/diagnostics", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const devices = persistencePushDevices.enabled()
+        ? await persistencePushDevices.listDevicesForUser(req.ccwebUserId)
+        : [];
+      const recent = persistencePushDelivery.enabled()
+        ? await persistencePushDelivery.recentForUser(req.ccwebUserId, 15)
+        : [];
+      const summary = persistencePushDelivery.enabled()
+        ? await persistencePushDelivery.summaryForUser(req.ccwebUserId, 24)
+        : { sent: 0, failed: 0, skipped: 0 };
+      res.json({
+        fcmConfigured: isFcmConfigured(),
+        devices,
+        deliverySummary24h: summary,
+        recentDeliveries: recent,
+      });
     } catch (e) {
       next(e);
     }

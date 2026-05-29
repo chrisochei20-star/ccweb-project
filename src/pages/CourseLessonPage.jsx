@@ -1,5 +1,5 @@
 import { ArrowLeft, CheckCircle2, Loader2, Send, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import {
   fetchCourseDetail,
@@ -9,9 +9,14 @@ import {
   postLessonComplete,
   postQuizSubmit,
   streamTutor,
+  abortActiveTutorStream,
 } from "../api/coursesApi";
+import { ApiErrorPanel } from "../components/ui/ApiErrorPanel";
+import { AiLoadingState } from "../components/ai/AiLoadingState";
+import { AiUnavailablePanel } from "../components/ai/AiUnavailablePanel";
 import { getSessionToken } from "../session";
 import { useStaleLoadingGuard } from "../hooks/useStaleLoadingGuard";
+import { composerPaddingBottom, useKeyboardInset } from "../hooks/useKeyboardInset";
 
 export function CourseLessonPage() {
   const { slug, lessonId } = useParams();
@@ -31,6 +36,15 @@ export function CourseLessonPage() {
   const [tutorBusy, setTutorBusy] = useState(false);
   const [tutorConvId, setTutorConvId] = useState(null);
   const [tutorMessages, setTutorMessages] = useState([]);
+  const [tutorErr, setTutorErr] = useState(null);
+  const [tutorUnavailable, setTutorUnavailable] = useState(false);
+  const tutorSendRef = useRef(false);
+  const streamAbortRef = useRef(null);
+  const keyboardInset = useKeyboardInset();
+
+  useEffect(() => {
+    return () => abortActiveTutorStream();
+  }, []);
 
   useEffect(() => {
     let c = false;
@@ -114,9 +128,13 @@ export function CourseLessonPage() {
   }
 
   async function runTutorStream() {
-    if (!tutorMsg.trim() || !user) return;
+    if (!tutorMsg.trim() || !user || tutorSendRef.current) return;
+    tutorSendRef.current = true;
     setTutorBusy(true);
-    setErr(null);
+    setTutorErr(null);
+    setTutorUnavailable(false);
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = new AbortController();
     const replyId = `tmp_${Date.now()}`;
     const userLine = tutorMsg.trim();
     setTutorMsg("");
@@ -125,6 +143,7 @@ export function CourseLessonPage() {
       { role: "user", content: userLine, id: `local_${Date.now()}` },
       { role: "assistant", content: "", id: replyId },
     ]);
+    let assistantText = "";
     try {
       const out = await streamTutor({
         message: userLine,
@@ -132,18 +151,27 @@ export function CourseLessonPage() {
         lessonId,
         mode: "lesson",
         conversationId: tutorConvId,
+        signal: streamAbortRef.current.signal,
         onDelta: (_d, full) => {
+          assistantText = full;
           setTutorMessages((prev) =>
             prev.map((m) => (m.id === replyId ? { ...m, content: full } : m))
           );
         },
       });
       if (out.conversationId) setTutorConvId(out.conversationId);
-      const data = await fetchTutorMessages(out.conversationId || tutorConvId);
-      setTutorMessages(data.messages || []);
+      if (!assistantText.trim()) {
+        setTutorMessages((prev) => prev.filter((m) => m.id !== replyId));
+        setTutorErr("AI returned an empty response. Try again.");
+      }
     } catch (e) {
-      setErr(e.message);
+      if (e?.name !== "AbortError") {
+        setTutorMessages((prev) => prev.filter((m) => m.id !== replyId));
+        setTutorErr(e.message || String(e));
+        setTutorUnavailable(Boolean(e.unavailable));
+      }
     } finally {
+      tutorSendRef.current = false;
       setTutorBusy(false);
     }
   }
@@ -273,6 +301,11 @@ export function CourseLessonPage() {
         )}
         {user && (
           <>
+            {tutorUnavailable && tutorErr ? (
+              <AiUnavailablePanel message={tutorErr} onRetry={() => { setTutorErr(null); setTutorUnavailable(false); }} className="mt-3" />
+            ) : tutorErr ? (
+              <ApiErrorPanel message={tutorErr} onRetry={() => setTutorErr(null)} retryLabel="Dismiss" className="mt-3" />
+            ) : null}
             <div className="mt-4 max-h-64 space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-black/30 p-3 text-sm">
               {tutorMessages.length === 0 && (
                 <p className="text-xs text-ccweb-muted">No messages yet — ask about this lesson.</p>
@@ -287,11 +320,12 @@ export function CourseLessonPage() {
                         : "border border-white/10 bg-white/5 text-white/95")
                     }
                   >
-                    {m.content}
+                    {m.content || (m.role === "assistant" && tutorBusy ? <AiLoadingState label="Streaming…" compact /> : "")}
                   </div>
                 </div>
               ))}
             </div>
+            <div style={{ paddingBottom: composerPaddingBottom(keyboardInset) }}>
             <textarea
               className="ccweb-input mt-3 min-h-[88px] text-sm"
               placeholder="Ask a question about this lesson…"
@@ -313,6 +347,7 @@ export function CourseLessonPage() {
               {tutorBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               Send (stream)
             </button>
+            </div>
           </>
         )}
       </section>

@@ -15,6 +15,7 @@ import { ProtectedLayout } from "./layout/ProtectedLayout";
 import { LoginPage, SignupPage } from "./pages/AuthPages";
 import { Skeleton } from "./components/ui/Skeleton";
 import { CcwebErrorBoundary } from "./components/CcwebErrorBoundary";
+import { AiSurfaceErrorBoundary } from "./components/ai/AiSurfaceErrorBoundary";
 import { BetaInvitePage, BetaTestUserPage, BetaUserSlugPage } from "./pages/BetaPages";
 import { apiUrl } from "./config/env";
 import { apiFetch } from "./lib/apiClient";
@@ -84,11 +85,11 @@ function App() {
           <Route index element={<MobileDashboardPage />} />
           <Route path="learn" element={<LearnShellPage />} />
           <Route path="learn/session/:roomId" element={<LearningSessionPage />} />
-          <Route path="find" element={<FindPage />} />
-          <Route path="crypto-scanner" element={<FindPage initialTab="scanner" />} />
-          <Route path="crypto/trending" element={<FindPage initialTab="trending" />} />
-          <Route path="crypto/early-signals" element={<FindPage initialTab="signals" />} />
-          <Route path="crypto/wallets" element={<FindPage initialTab="wallets" />} />
+          <Route path="find" element={<AiSurfaceErrorBoundary><FindPage /></AiSurfaceErrorBoundary>} />
+          <Route path="crypto-scanner" element={<AiSurfaceErrorBoundary><FindPage initialTab="scanner" /></AiSurfaceErrorBoundary>} />
+          <Route path="crypto/trending" element={<AiSurfaceErrorBoundary><FindPage initialTab="trending" /></AiSurfaceErrorBoundary>} />
+          <Route path="crypto/early-signals" element={<AiSurfaceErrorBoundary><FindPage initialTab="signals" /></AiSurfaceErrorBoundary>} />
+          <Route path="crypto/wallets" element={<AiSurfaceErrorBoundary><FindPage initialTab="wallets" /></AiSurfaceErrorBoundary>} />
           <Route path="build" element={<BuildHubPage />} />
           <Route path="earn" element={<EarnShellPage />} />
           <Route path="community" element={<CommunityShellPage />} />
@@ -104,9 +105,9 @@ function App() {
           <Route path="courses" element={<CourseCatalogPage />} />
           <Route path="courses/:slug/lesson/:lessonId" element={<CourseLessonPage />} />
           <Route path="courses/:slug" element={<CourseDetailPage />} />
-          <Route path="ai-tutor" element={<AiTutorPage />} />
+          <Route path="ai-tutor" element={<AiSurfaceErrorBoundary><AiTutorPage /></AiSurfaceErrorBoundary>} />
           <Route path="ai-streaming" element={<AiStreamingPage />} />
-          <Route path="early-signals" element={<EarlySignalsDashboard />} />
+          <Route path="early-signals" element={<AiSurfaceErrorBoundary><EarlySignalsDashboard /></AiSurfaceErrorBoundary>} />
           <Route path="token/:slug" element={<TokenDetailPage />} />
           <Route path="developers" element={<DeveloperPlatformPage />} />
           <Route path="developers/onboarding" element={<DeveloperOnboardingPage />} />

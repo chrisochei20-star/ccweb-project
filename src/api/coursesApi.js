@@ -1,5 +1,16 @@
 import { apiFetch } from "../lib/apiClient";
 import { apiUrl } from "../config/env";
+import { formatAiError, logAiClient } from "../lib/aiDiagnostics";
+
+/** @type {AbortController | null} */
+let activeTutorStream = null;
+
+export function abortActiveTutorStream() {
+  if (activeTutorStream) {
+    activeTutorStream.abort();
+    activeTutorStream = null;
+  }
+}
 
 export async function fetchCourseCategories() {
   const res = await apiFetch(apiUrl("/api/v1/courses/catalog/categories"));
@@ -90,6 +101,12 @@ export async function fetchMyBookmarks() {
   return data.bookmarks || [];
 }
 
+const TUTOR_STREAM_TIMEOUT_MS = 120_000;
+
+/**
+ * Stream tutor reply. Cancels any in-flight tutor stream before starting a new one.
+ * @param {{ signal?: AbortSignal }} opts
+ */
 export async function streamTutor({
   message,
   courseSlug,
@@ -97,33 +114,107 @@ export async function streamTutor({
   mode = "lesson",
   conversationId,
   onDelta,
+  signal,
+  timeoutMs = TUTOR_STREAM_TIMEOUT_MS,
 }) {
-  const res = await apiFetch(apiUrl("/api/v1/courses/tutor/stream"), {
-    method: "POST",
-    body: JSON.stringify({
-      message,
-      courseSlug,
-      lessonId,
+  abortActiveTutorStream();
+  const localCtrl = new AbortController();
+  activeTutorStream = localCtrl;
+
+  const parentSignal = signal;
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      activeTutorStream = null;
+      throw Object.assign(new Error("Request cancelled."), { name: "AbortError" });
+    }
+    parentSignal.addEventListener("abort", () => localCtrl.abort(), { once: true });
+  }
+
+  const started = Date.now();
+  logAiClient("tutor_stream_start", { mode, hasConversation: Boolean(conversationId) });
+
+  try {
+    const res = await apiFetch(
+      apiUrl("/api/v1/courses/tutor/stream"),
+      {
+        method: "POST",
+        body: JSON.stringify({
+          message,
+          courseSlug,
+          lessonId,
+          mode,
+          conversationId,
+        }),
+        signal: localCtrl.signal,
+      },
+      { timeoutMs, networkRetries: 0 }
+    );
+
+    if (!res.ok || !res.body) {
+      let errBody = {};
+      try {
+        errBody = await res.json();
+      } catch {
+        /* plain-text error body */
+      }
+      const err = new Error(errBody.error || "Stream failed");
+      err.code = errBody.code || (res.status === 503 ? "AI_NOT_CONFIGURED" : undefined);
+      err.status = res.status;
+      throw err;
+    }
+
+    const cid = res.headers.get("X-CCWEB-Conversation-Id");
+    const provider = res.headers.get("X-CCWEB-AI-Provider") || "unknown";
+    const isMock = res.headers.get("X-CCWEB-AI-Mock") === "1";
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let full = "";
+    try {
+      for (;;) {
+        if (localCtrl.signal.aborted) {
+          await reader.cancel().catch(() => {});
+          throw Object.assign(new Error("Request cancelled."), { name: "AbortError" });
+        }
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = dec.decode(value, { stream: true });
+        full += chunk;
+        onDelta?.(chunk, full);
+      }
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        /* ignore */
+      }
+    }
+
+    logAiClient("tutor_stream_ok", {
       mode,
-      conversationId,
-    }),
-  });
-  if (!res.ok || !res.body) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || "Stream failed");
+      provider,
+      mock: isMock,
+      chars: full.length,
+      durationMs: Date.now() - started,
+    });
+
+    return { text: full, conversationId: cid, provider, mock: isMock };
+  } catch (e) {
+    const formatted = formatAiError(e);
+    logAiClient("tutor_stream_error", {
+      mode,
+      message: formatted.message,
+      durationMs: Date.now() - started,
+    });
+    const out = new Error(formatted.message);
+    out.code = e?.code;
+    out.unavailable = formatted.unavailable;
+    out.retryable = formatted.retryable;
+    if (e?.name === "AbortError") out.name = "AbortError";
+    throw out;
+  } finally {
+    if (activeTutorStream === localCtrl) activeTutorStream = null;
   }
-  const cid = res.headers.get("X-CCWEB-Conversation-Id");
-  const reader = res.body.getReader();
-  const dec = new TextDecoder();
-  let full = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const chunk = dec.decode(value, { stream: true });
-    full += chunk;
-    onDelta?.(chunk, full);
-  }
-  return { text: full, conversationId: cid };
 }
 
 export async function ensureTutorConversation({ mode = "general", courseSlug, lessonId, forceNew = false }) {

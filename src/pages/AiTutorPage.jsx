@@ -19,8 +19,11 @@ import {
   fetchTutorMessages,
   fetchTutorMemory,
   streamTutor,
+  abortActiveTutorStream,
 } from "../api/coursesApi";
 import { ApiErrorPanel } from "../components/ui/ApiErrorPanel";
+import { AiLoadingState } from "../components/ai/AiLoadingState";
+import { AiUnavailablePanel } from "../components/ai/AiUnavailablePanel";
 import { composerPaddingBottom, useKeyboardInset } from "../hooks/useKeyboardInset";
 import { getSessionToken } from "../session";
 
@@ -41,11 +44,14 @@ export function AiTutorPage() {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [aiUnavailable, setAiUnavailable] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [memoryNote, setMemoryNote] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [listErr, setListErr] = useState(null);
   const endRef = useRef(null);
+  const streamAbortRef = useRef(null);
+  const sendInFlightRef = useRef(false);
   const keyboardInset = useKeyboardInset();
 
   async function refreshList() {
@@ -60,8 +66,18 @@ export function AiTutorPage() {
   }
 
   useEffect(() => {
+    return () => {
+      abortActiveTutorStream();
+    };
+  }, []);
+
+  useEffect(() => {
     refreshList();
   }, [user?.id]);
+
+  useEffect(() => {
+    abortActiveTutorStream();
+  }, [mode, activeId]);
 
   useEffect(() => {
     if (!user) return;
@@ -83,6 +99,7 @@ export function AiTutorPage() {
     if (!user) return;
     setLoading(true);
     setErr(null);
+    setAiUnavailable(false);
     try {
       const conv = await ensureTutorConversation({ mode, courseSlug: "", lessonId: "" });
       setActiveId(conv.id);
@@ -117,11 +134,16 @@ export function AiTutorPage() {
   }, [messages]);
 
   async function send() {
-    if (!user || !draft.trim()) return;
+    if (!user || !draft.trim() || sendInFlightRef.current) return;
+    sendInFlightRef.current = true;
     setBusy(true);
     setErr(null);
+    setAiUnavailable(false);
     let replyId = null;
     let userText = "";
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = new AbortController();
+    const signal = streamAbortRef.current.signal;
     try {
       let cid = activeId;
       if (!cid) {
@@ -137,10 +159,11 @@ export function AiTutorPage() {
       replyId = `tmp_${Date.now()}`;
       setMessages((prev) => [...prev, { role: "assistant", content: "", id: replyId }]);
 
-      await streamTutor({
+      const out = await streamTutor({
         message: userText,
         mode,
         conversationId: cid,
+        signal,
         onDelta: (_chunk, full) => {
           assistantText = full;
           setMessages((prev) =>
@@ -149,15 +172,25 @@ export function AiTutorPage() {
         },
       });
 
-      void assistantText;
-      const data = await fetchTutorMessages(cid);
-      setMessages(data.messages || []);
-    } catch (e) {
-      if (replyId) {
+      if (out.conversationId && out.conversationId !== cid) setActiveId(out.conversationId);
+      if (assistantText.trim()) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === replyId ? { ...m, content: assistantText, id: `saved_${Date.now()}` } : m))
+        );
+      } else {
         setMessages((prev) => prev.filter((m) => m.id !== replyId));
+        setErr("AI returned an empty response. Try again.");
       }
-      setErr(e.message || String(e));
+    } catch (e) {
+      if (e?.name !== "AbortError") {
+        if (replyId) {
+          setMessages((prev) => prev.filter((m) => m.id !== replyId));
+        }
+        setErr(e.message || String(e));
+        setAiUnavailable(Boolean(e.unavailable));
+      }
     } finally {
+      sendInFlightRef.current = false;
       setBusy(false);
     }
   }
@@ -166,6 +199,7 @@ export function AiTutorPage() {
     if (!user) return;
     setLoading(true);
     setErr(null);
+    setAiUnavailable(false);
     try {
       const conv = await ensureTutorConversation({ mode, courseSlug: "", lessonId: "", forceNew: true });
       setActiveId(conv.id);
@@ -337,10 +371,30 @@ export function AiTutorPage() {
 
         {listErr ? <ApiErrorPanel message={listErr} onRetry={() => refreshList()} className="mx-3 mt-2" /> : null}
 
-        {err ? <ApiErrorPanel message={err} onRetry={() => setErr(null)} retryLabel="Dismiss" className="mx-3 mt-2" /> : null}
+        {aiUnavailable && err ? (
+          <AiUnavailablePanel
+            message={err}
+            onRetry={() => {
+              setErr(null);
+              setAiUnavailable(false);
+            }}
+            className="mx-3 mt-2"
+          />
+        ) : err ? (
+          <ApiErrorPanel
+            message={err}
+            onRetry={() => {
+              setErr(null);
+              setAiUnavailable(false);
+            }}
+            retryLabel="Dismiss"
+            className="mx-3 mt-2"
+          />
+        ) : null}
 
         <div className="ccweb-scroll-momentum flex-1 space-y-3 overflow-y-auto px-3 py-4">
-          {messages.length === 0 && (
+          {loading && messages.length === 0 ? <AiLoadingState label="Loading conversation…" /> : null}
+          {messages.length === 0 && !loading && (
             <p className="text-center text-sm text-ccweb-muted">
               Pick a mode, then <strong className="text-white">Open mode thread</strong> or <strong className="text-white">New</strong>
               . Streaming uses thread history and learner memory when PostgreSQL and OpenAI are configured.
@@ -356,7 +410,9 @@ export function AiTutorPage() {
                     : "border border-white/10 bg-white/5 text-white/95")
                 }
               >
-                {m.content || (m.role === "assistant" && busy ? "…" : "")}
+                {m.content || (m.role === "assistant" && busy ? (
+                  <AiLoadingState label="Streaming…" compact />
+                ) : "")}
               </div>
             </div>
           ))}

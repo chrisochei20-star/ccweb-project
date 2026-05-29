@@ -1,0 +1,114 @@
+/**
+ * Capacitor Android native polish — transitions, touch, scroll, keyboard stability.
+ */
+
+html.ccweb-capacitor-native body {
+  padding-top: 0;
+  overscroll-behavior-y: none;
+}
+
+html.ccweb-capacitor-native .ccweb-app-root.ccweb-mobile-shell {
+  min-height: 100dvh;
+  min-height: 100vh;
+}
+
+html.ccweb-capacitor-native .ccweb-main-pad {
+  scroll-behavior: auto;
+}
+
+html.ccweb-capacitor-native .ccweb-scroll-momentum,
+html.ccweb-capacitor-native .ccweb-native-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+html.ccweb-capacitor-native .ccweb-page-enter {
+  animation: ccwebNativePageIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes ccwebNativePageIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+html.ccweb-capacitor-native .ccweb-nav-item {
+  position: relative;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.ccweb-capacitor-native .ccweb-nav-item:active {
+  transform: scale(0.94);
+}
+
+html.ccweb-capacitor-native .ccweb-nav-item::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at center, rgba(34, 211, 238, 0.35) 0%, transparent 68%);
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  pointer-events: none;
+}
+
+html.ccweb-capacitor-native .ccweb-nav-item:active::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+html.ccweb-capacitor-native .ccweb-gradient-btn,
+html.ccweb-capacitor-native .ccweb-outline-btn,
+html.ccweb-capacitor-native button[type="button"],
+html.ccweb-capacitor-native a[role="button"] {
+  -webkit-tap-highlight-color: rgba(34, 211, 238, 0.12);
+}
+
+html.ccweb-capacitor-native .ccweb-gradient-btn:active:not(:disabled),
+html.ccweb-capacitor-native .ccweb-outline-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+html.ccweb-capacitor-native .ccweb-floating-dock {
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html.ccweb-capacitor-native.ccweb-keyboard-open .ccweb-floating-dock {
+  transform: translateY(calc(100% + 1rem));
+  pointer-events: none;
+  opacity: 0;
+}
+
+html.ccweb-capacitor-native .ccweb-pull-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 0;
+  overflow: hidden;
+  color: #22d3ee;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: height 0.15s ease;
+}
+
+html.ccweb-capacitor-native .ccweb-pull-indicator.active {
+  height: 2.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.ccweb-capacitor-native .ccweb-page-enter {
+    animation: none;
+  }
+  html.ccweb-capacitor-native .ccweb-nav-item:active {
+    transform: none;
+  }
+}

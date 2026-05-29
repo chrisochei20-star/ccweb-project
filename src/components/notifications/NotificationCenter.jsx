@@ -12,7 +12,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Link, useOutletContext } from "react-router-dom";
 import { NotificationPreferencesPanel } from "./NotificationPreferencesPanel";
@@ -22,6 +22,9 @@ import { toast } from "../../lib/toastBus";
 import { getSessionToken } from "../../session";
 import { AuthSessionChecking } from "../auth/AuthSessionChecking";
 import { Skeleton } from "../ui/Skeleton";
+import { usePullToRefresh } from "../../hooks/usePullToRefresh";
+import { PullToRefreshContainer } from "../mobile/PullToRefreshContainer";
+import { isCapacitorNative } from "../../lib/capacitorPlatform";
 
 function hrefForNotification(n) {
   const p = n.payload || {};
@@ -138,7 +141,18 @@ export function NotificationCenterPage() {
     }
   }
 
+  const refreshList = useCallback(
+    () => loadPage({ grouped: showGrouped }),
+    [loadPage, showGrouped]
+  );
+
+  const { pulling, refreshing } = usePullToRefresh(refreshList, {
+    disabled: !isCapacitorNative() || !authHydrated || !user,
+    useDocumentScroll: true,
+  });
+
   return (
+    <PullToRefreshContainer pulling={pulling} refreshing={refreshing}>
     <div className="mx-auto max-w-2xl space-y-5 px-3 pb-24 pt-4 md:pb-10">
       {!authHydrated && getSessionToken() && <AuthSessionChecking message="Loading notifications…" />}
       {!authHydrated && !getSessionToken() && (
@@ -288,6 +302,7 @@ export function NotificationCenterPage() {
       </>
       )}
     </div>
+    </PullToRefreshContainer>
   );
 }
 

@@ -7,7 +7,7 @@
 const pgUserProfile = require("../db/pgUserProfile");
 const persistencePushDevices = require("../db/persistencePushDevices");
 const persistencePushDelivery = require("../db/persistencePushDelivery");
-const { sendMulticast, isFcmConfigured } = require("./fcmPush");
+const { sendMulticast, isFcmConfigured, resolveAndroidChannel } = require("./fcmPush");
 const { logger } = require("../logging/logger");
 
 const DEFAULT_NATIVE_CATEGORIES = {
@@ -142,6 +142,7 @@ async function dispatchPushForUser({
     const result = await sendMulticast(tokens, {
       title: title || "CCWEB",
       body: body || "",
+      channelId: resolveAndroidChannel(category),
       data: {
         kind: String(kind || ""),
         category: String(category || ""),

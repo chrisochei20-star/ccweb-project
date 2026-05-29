@@ -1,4 +1,5 @@
 import { Capacitor } from "@capacitor/core";
+import { runNativeBackHandler } from "./nativeBackStack";
 
 /** True when running inside a Capacitor native shell (Android/iOS). */
 export function isCapacitorNative() {
@@ -37,13 +38,19 @@ export async function initCapacitorShell() {
     const { Keyboard } = await import("@capacitor/keyboard");
     await Keyboard.setAccessoryBarVisible({ isVisible: false });
     await Keyboard.setScroll({ isDisabled: false });
+    Keyboard.addListener("keyboardWillShow", () => {
+      document.documentElement.classList.add("ccweb-keyboard-open");
+    });
+    Keyboard.addListener("keyboardWillHide", () => {
+      document.documentElement.classList.remove("ccweb-keyboard-open");
+    });
   } catch {
     /* optional */
   }
 
   try {
     const { SplashScreen } = await import("@capacitor/splash-screen");
-    await SplashScreen.hide({ fadeOutDuration: 280 });
+    await SplashScreen.hide({ fadeOutDuration: 320 });
   } catch {
     /* optional */
   }
@@ -56,6 +63,7 @@ export async function initCapacitorShell() {
       }
     });
     App.addListener("backButton", ({ canGoBack }) => {
+      if (runNativeBackHandler()) return;
       if (canGoBack) {
         window.history.back();
       } else {

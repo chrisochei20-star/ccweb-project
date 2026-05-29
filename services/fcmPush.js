@@ -52,9 +52,17 @@ function ensureAdmin() {
   return admin;
 }
 
+function resolveAndroidChannel(category) {
+  const c = String(category || "").toLowerCase();
+  if (c === "messages") return "ccweb_messages";
+  if (c === "aialerts") return "ccweb_ai";
+  if (c === "mentions" || c === "follows" || c === "reactions" || c === "comments") return "ccweb_social";
+  return "ccweb_alerts";
+}
+
 /**
  * @param {string[]} tokens
- * @param {{ title: string, body: string, data?: Record<string, string> }} payload
+ * @param {{ title: string, body: string, data?: Record<string, string>, channelId?: string }} payload
  * @returns {Promise<{ sent: number, failed: number, results: Array<{ token: string, ok: boolean, messageId?: string, errorCode?: string }> }>}
  */
 async function sendMulticast(tokens, payload) {
@@ -89,8 +97,9 @@ async function sendMulticast(tokens, payload) {
     android: {
       priority: "high",
       notification: {
-        channelId: "ccweb_alerts",
+        channelId: payload.channelId || resolveAndroidChannel(payload.data?.category),
         sound: "default",
+        color: "#22D3EE",
       },
     },
   };
@@ -129,4 +138,5 @@ module.exports = {
   isFcmConfigured,
   ensureAdmin,
   sendMulticast,
+  resolveAndroidChannel,
 };

@@ -33,7 +33,7 @@ export function useNativePushRouting(enabled = true) {
       if (phase === "action") {
         const route = routeForPushPayload(payload);
         useNotificationsStore.getState().notifySocketTick();
-        if (route) navigate(route);
+        if (route) navigate(route, { replace: Boolean(ev.detail?.coldStart) });
       }
     }
 

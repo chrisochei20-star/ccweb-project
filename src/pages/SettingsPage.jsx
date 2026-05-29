@@ -6,6 +6,9 @@ import { isCapacitorNative } from "../lib/capacitorPlatform";
 import { fetchPushDiagnosticsFromApi, getNativePushDiagnostics } from "../lib/nativePush";
 import { useAppShellContext } from "../hooks/useAppShellContext";
 
+const APP_VERSION = "1.2.0";
+const VERSION_CODE = 3;
+
 const SUPPORT_EMAIL = "support@chrisccweb.com";
 const PRIVACY_URL = "/privacy";
 const TERMS_URL = "/terms";
@@ -71,6 +74,7 @@ export function SettingsPage() {
             App diagnostics
           </h2>
           <p>Platform: Capacitor Android</p>
+          <p>Version: {APP_VERSION} (code {VERSION_CODE})</p>
           <p>Build: {buildId || "(local)"}</p>
           <p>Push token: {localPush.tokenPresent ? localPush.tokenPreview : "not registered"}</p>
           {pushDiag && (

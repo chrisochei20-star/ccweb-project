@@ -1,5 +1,19 @@
 import { Capacitor } from "@capacitor/core";
 import { runNativeBackHandler } from "./nativeBackStack";
+import { releaseDiag } from "./releaseLog";
+
+/** @type {string | null} */
+let pendingDeepLinkUrl = null;
+
+export function consumePendingDeepLink() {
+  const url = pendingDeepLinkUrl;
+  pendingDeepLinkUrl = null;
+  return url;
+}
+
+export function getPendingDeepLink() {
+  return pendingDeepLinkUrl;
+}
 
 /** True when running inside a Capacitor native shell (Android/iOS). */
 export function isCapacitorNative() {
@@ -70,6 +84,24 @@ export async function initCapacitorShell() {
         App.minimizeApp();
       }
     });
+
+    App.addListener("appUrlOpen", ({ url }) => {
+      releaseDiag("app_url_open", { url });
+      document.dispatchEvent(new CustomEvent("ccweb:deep-link", { detail: { url } }));
+    });
+
+    try {
+      const launch = await App.getLaunchUrl();
+      if (launch?.url) {
+        pendingDeepLinkUrl = launch.url;
+        releaseDiag("launch_url", { url: launch.url });
+        document.dispatchEvent(
+          new CustomEvent("ccweb:deep-link", { detail: { url: launch.url, coldStart: true } })
+        );
+      }
+    } catch {
+      /* no cold-start URL */
+    }
   } catch {
     /* optional */
   }

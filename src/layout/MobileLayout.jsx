@@ -15,6 +15,7 @@ import { OfflineBanner } from "../components/shell/OfflineBanner";
 import { InstallPrompt } from "../components/pwa/InstallPrompt";
 import { PageMeta, ROUTE_META } from "../components/seo/PageMeta";
 import { useNativePushRouting } from "../hooks/useNativePushRouting";
+import { useDeepLinkRouting } from "../hooks/useDeepLinkRouting";
 import { useAppResumeSync } from "../hooks/useAppResume";
 import { isCapacitorNative } from "../lib/capacitorPlatform";
 
@@ -73,6 +74,7 @@ export function MobileLayout() {
   const nativeShell = isCapacitorNative();
 
   useNativePushRouting(authHydrated && Boolean(user));
+  useDeepLinkRouting(true);
   useAppResumeSync(authHydrated && Boolean(user));
 
   useEffect(() => {

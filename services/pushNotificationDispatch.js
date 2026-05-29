@@ -146,6 +146,7 @@ async function dispatchPushForUser({
       data: {
         kind: String(kind || ""),
         category: String(category || ""),
+        groupKey: `${category || kind || "ccweb"}_${userId}`.slice(0, 64),
         route,
         notificationId: notificationId ? String(notificationId) : "",
         legacyType: legacyType ? String(legacyType) : "",

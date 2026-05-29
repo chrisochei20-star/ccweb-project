@@ -96,10 +96,12 @@ async function sendMulticast(tokens, payload) {
     data,
     android: {
       priority: "high",
+      collapseKey: payload.data?.groupKey || payload.data?.kind || undefined,
       notification: {
         channelId: payload.channelId || resolveAndroidChannel(payload.data?.category),
         sound: "default",
         color: "#22D3EE",
+        tag: payload.data?.groupKey || payload.data?.kind || "ccweb",
       },
     },
   };

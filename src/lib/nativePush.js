@@ -124,7 +124,7 @@ async function wirePushListeners(PushNotifications) {
 
   await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
     document.dispatchEvent(
-      new CustomEvent("ccweb:native-push", { detail: { phase: "action", action } })
+      new CustomEvent("ccweb:native-push", { detail: { phase: "action", action, coldStart: false } })
     );
   });
 }
@@ -179,10 +179,6 @@ export async function initNativePushNotifications() {
     }
 
     await PushNotifications.register();
-
-    document.addEventListener("ccweb:app-resume", () => {
-      void refreshNativePushRegistration();
-    });
 
     return { ok: true, permission: perm.receive };
   } catch (e) {

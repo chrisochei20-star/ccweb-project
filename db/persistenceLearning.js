@@ -82,11 +82,15 @@ async function attachCheckoutSessionToAccess(accessId, stripeSessionId) {
 }
 
 async function activateAccessByCheckoutSession(stripeSessionId, paymentIntentId) {
-  const { rows } = await query(`SELECT * FROM learning_access WHERE stripe_checkout_session_id = $1`, [stripeSessionId]);
+  const { rows } = await query(
+    `SELECT * FROM learning_access WHERE stripe_checkout_session_id = $1 AND status = 'pending_payment'`,
+    [stripeSessionId]
+  );
   const row = rows[0];
   if (!row) return null;
   await query(
-    `UPDATE learning_access SET status = 'active', stripe_payment_intent_id = COALESCE($2, stripe_payment_intent_id), updated_at = NOW() WHERE id = $1`,
+    `UPDATE learning_access SET status = 'active', stripe_payment_intent_id = COALESCE($2, stripe_payment_intent_id), updated_at = NOW()
+     WHERE id = $1 AND status = 'pending_payment'`,
     [row.id, paymentIntentId || null]
   );
   return row;

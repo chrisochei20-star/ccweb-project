@@ -35,10 +35,18 @@ export async function getClientDiagnostics() {
   } catch {
     /* SSR / tests */
   }
+  const perf =
+    typeof performance !== "undefined" && performance.memory
+      ? {
+          jsHeapUsedMb: Math.round(performance.memory.usedJSHeapSize / 1048576),
+          jsHeapLimitMb: Math.round(performance.memory.jsHeapSizeLimit / 1048576),
+        }
+      : null;
   return {
     online: typeof navigator !== "undefined" ? navigator.onLine : null,
     visibility: typeof document !== "undefined" ? document.visibilityState : null,
     buildId: import.meta.env.VITE_CCWEB_BUILD_ID || null,
+    perf,
     realtime,
   };
 }

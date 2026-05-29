@@ -1,10 +1,8 @@
 import { apiUrl } from "../config/env";
-import { apiFetch } from "../lib/apiClient";
+import { apiFetchJson } from "../lib/parseApiResponse";
 
 export async function fetchNotificationSummary() {
-  const res = await apiFetch(apiUrl("/api/v1/notifications/summary"));
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Summary failed");
+  const data = await apiFetchJson(apiUrl("/api/v1/notifications/summary"), {}, { fallbackError: "Summary failed" });
   return data;
 }
 
@@ -14,49 +12,34 @@ export async function fetchNotifications({ limit = 25, cursor = null, unreadOnly
   if (cursor) q.set("cursor", cursor);
   if (unreadOnly) q.set("unreadOnly", "1");
   if (grouped) q.set("grouped", "1");
-  const res = await apiFetch(apiUrl(`/api/v1/notifications?${q}`));
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Failed to load notifications");
+  const data = await apiFetchJson(
+    apiUrl(`/api/v1/notifications?${q}`),
+    {},
+    { fallbackError: "Failed to load notifications" }
+  );
   return data;
 }
 
 export async function markNotificationsRead({ markAll = false, ids = [] } = {}) {
-  const res = await apiFetch(apiUrl("/api/v1/notifications/read"), {
-    method: "POST",
-    body: JSON.stringify({ markAll, ids }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Could not update read state");
-  return data;
+  return apiFetchJson(
+    apiUrl("/api/v1/notifications/read"),
+    { method: "POST", body: JSON.stringify({ markAll, ids }) },
+    { fallbackError: "Could not update read state" }
+  );
 }
 
 export async function fetchNotificationPreferences() {
-  const res = await apiFetch(apiUrl("/api/v1/notifications/preferences"), {}, { networkRetries: 2 });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Could not load preferences");
-  return data;
+  return apiFetchJson(
+    apiUrl("/api/v1/notifications/preferences"),
+    {},
+    { networkRetries: 2, fallbackError: "Could not load preferences" }
+  );
 }
 
 export async function updateNotificationPreferences(preferences) {
-  const res = await apiFetch(
+  return apiFetchJson(
     apiUrl("/api/v1/notifications/preferences"),
-    {
-      method: "PUT",
-      body: JSON.stringify({ preferences }),
-    },
-    { networkRetries: 1 }
+    { method: "PUT", body: JSON.stringify({ preferences }) },
+    { networkRetries: 1, fallbackError: "Could not save preferences" }
   );
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Could not save preferences");
-  return data;
-}
-
-export async function followUser(userId) {
-  const res = await apiFetch(apiUrl(`/api/v1/users/${encodeURIComponent(userId)}/follow`), {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok && res.status !== 200 && res.status !== 201) throw new Error(data.error || "Follow failed");
-  return data;
 }

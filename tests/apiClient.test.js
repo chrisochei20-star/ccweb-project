@@ -6,6 +6,13 @@ vi.mock("../src/lib/supabaseClient.js", () => ({
   getSupabaseAccessToken: vi.fn().mockResolvedValue("supabase-jwt"),
 }));
 
+vi.mock("@capacitor/core", () => ({
+  Capacitor: {
+    isNativePlatform: vi.fn(() => false),
+    getPlatform: vi.fn(() => "web"),
+  },
+}));
+
 describe("getApiBearerToken", () => {
   beforeEach(() => {
     vi.stubGlobal(

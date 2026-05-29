@@ -31,7 +31,7 @@ function rootPkg(spec) {
 function walk(dir, files = []) {
   const ents = fs.readdirSync(dir, { withFileTypes: true });
   for (const e of ents) {
-    if (e.name === "node_modules" || e.name === "dist" || e.name === ".git") continue;
+    if (e.name === "node_modules" || e.name === "dist" || e.name === ".git" || e.name === "android") continue;
     const p = path.join(dir, e.name);
     if (e.isDirectory()) walk(p, files);
     else if (/\.(js|jsx|mjs|cjs)$/.test(e.name)) files.push(p);

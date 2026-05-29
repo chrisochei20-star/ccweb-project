@@ -4,6 +4,8 @@ import { logCcwebApiRuntimeDebug } from "./config/env";
 import App from "./App";
 import { ToastViewport } from "./components/ui/ToastViewport";
 import { initProductionAnalytics } from "./lib/clientAnalytics";
+import { initCapacitorShell } from "./lib/capacitorPlatform";
+import { initNativePushNotifications } from "./lib/nativePush";
 import { registerServiceWorker } from "./lib/registerServiceWorker";
 import "./index.css";
 import "./styles.css";
@@ -20,6 +22,7 @@ try {
 
 logCcwebApiRuntimeDebug();
 initProductionAnalytics();
+void initCapacitorShell().then(() => initNativePushNotifications());
 registerServiceWorker();
 
 createRoot(document.getElementById("root")).render(

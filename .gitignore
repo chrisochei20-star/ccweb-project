@@ -24,3 +24,9 @@ coverage/
 *.log
 *.local
 .idea/
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/app/google-services.json
+android/keystore.properties

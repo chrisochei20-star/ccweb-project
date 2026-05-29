@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Download, X } from "lucide-react";
 import { trackProductionEvent } from "../../lib/clientAnalytics";
+import { isCapacitorNative } from "../../lib/capacitorPlatform";
 
 /**
  * Android Chrome / desktop install prompt for the CCWEB PWA.
@@ -10,6 +11,10 @@ export function InstallPrompt() {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
+    if (isCapacitorNative()) {
+      setDismissed(true);
+      return undefined;
+    }
     try {
       if (localStorage.getItem("ccweb_pwa_install_dismissed") === "1") {
         setDismissed(true);

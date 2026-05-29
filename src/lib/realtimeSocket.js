@@ -261,11 +261,13 @@ export function initRealtimeLifecycle() {
   document.addEventListener("visibilitychange", recover);
   window.addEventListener("online", recover);
   window.addEventListener("focus", recover);
+  document.addEventListener("ccweb:app-resume", recover);
 
   lifecycleCleanup = () => {
     document.removeEventListener("visibilitychange", recover);
     window.removeEventListener("online", recover);
     window.removeEventListener("focus", recover);
+    document.removeEventListener("ccweb:app-resume", recover);
     lifecycleCleanup = null;
   };
   return lifecycleCleanup;

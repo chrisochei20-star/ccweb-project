@@ -70,6 +70,28 @@ async function findByUserId(userId) {
   return mapProfileRow(rows[0]) || null;
 }
 
+/**
+ * Batch-resolve display names for chat/DM lists (avoids N+1 profile queries).
+ * @param {string[]} userIds
+ * @returns {Promise<Map<string, string>>}
+ */
+async function displayNamesByUserIds(userIds) {
+  const ids = [...new Set((userIds || []).filter(Boolean))];
+  const out = new Map();
+  if (!ids.length) return out;
+  const { rows } = await query(
+    `SELECT user_id, display_name FROM ccweb_user_profiles WHERE user_id = ANY($1::text[])`,
+    [ids]
+  );
+  for (const r of rows) {
+    if (r.display_name) out.set(r.user_id, String(r.display_name).slice(0, 120));
+  }
+  for (const id of ids) {
+    if (!out.has(id)) out.set(id, id.slice(0, 8));
+  }
+  return out;
+}
+
 async function upsert({ userId, displayName, roles, isOrganic, pushEnabled, bio, location, website, socialLinks }) {
   const r = Array.isArray(roles) ? roles : ["member"];
   const linksJson = JSON.stringify(Array.isArray(socialLinks) ? socialLinks : []);
@@ -177,6 +199,7 @@ async function getNotificationPrefs(userId) {
 
 module.exports = {
   findByUserId,
+  displayNamesByUserIds,
   upsert,
   parseRoles,
   parseSocialLinks,

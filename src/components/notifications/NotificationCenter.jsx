@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { Link, useOutletContext } from "react-router-dom";
 import { useRealtimeSubscription } from "../../hooks/useRealtimeSubscription";
 import { useNotificationsStore } from "../../store/notificationsStore";
@@ -72,15 +73,29 @@ function kindIcon(kind) {
 
 export function NotificationCenterPage() {
   const { authHydrated, user } = useOutletContext() || {};
-  const items = useNotificationsStore((s) => s.items);
-  const grouped = useNotificationsStore((s) => s.grouped);
-  const nextCursor = useNotificationsStore((s) => s.nextCursor);
-  const loading = useNotificationsStore((s) => s.loading);
-  const loadingMore = useNotificationsStore((s) => s.loadingMore);
-  const err = useNotificationsStore((s) => s.error);
-  const loadPage = useNotificationsStore((s) => s.loadPage);
-  const markReadOptimistic = useNotificationsStore((s) => s.markReadOptimistic);
-  const applyCrossTabSync = useNotificationsStore((s) => s.applyCrossTabSync);
+  const {
+    items,
+    grouped,
+    nextCursor,
+    loading,
+    loadingMore,
+    err,
+    loadPage,
+    markReadOptimistic,
+    applyCrossTabSync,
+  } = useNotificationsStore(
+    useShallow((s) => ({
+      items: s.items,
+      grouped: s.grouped,
+      nextCursor: s.nextCursor,
+      loading: s.loading,
+      loadingMore: s.loadingMore,
+      err: s.error,
+      loadPage: s.loadPage,
+      markReadOptimistic: s.markReadOptimistic,
+      applyCrossTabSync: s.applyCrossTabSync,
+    }))
+  );
   const [showGrouped, setShowGrouped] = useState(false);
 
   useEffect(() => {
@@ -275,12 +290,16 @@ export function NotificationCenterPage() {
 
 export function NotificationBell({ user, authHydrated = true }) {
   const [open, setOpen] = useState(false);
-  const unread = useNotificationsStore((s) => s.unreadCount ?? 0);
-  const preview = useNotificationsStore((s) => s.previewItems);
-  const loading = useNotificationsStore((s) => s.loading);
-  const err = useNotificationsStore((s) => s.error);
-  const refreshPreview = useNotificationsStore((s) => s.refreshPreview);
-  const applyCrossTabSync = useNotificationsStore((s) => s.applyCrossTabSync);
+  const { unread, preview, loading, err, refreshPreview, applyCrossTabSync } = useNotificationsStore(
+    useShallow((s) => ({
+      unread: s.unreadCount ?? 0,
+      preview: s.previewItems,
+      loading: s.loading,
+      err: s.error,
+      refreshPreview: s.refreshPreview,
+      applyCrossTabSync: s.applyCrossTabSync,
+    }))
+  );
 
   useEffect(() => {
     if (!authHydrated) return;

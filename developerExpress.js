@@ -16,12 +16,18 @@ function getClientIp(req) {
   return (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "";
 }
 
-function apiKeyMiddleware(req, res, next) {
-  const header =
+function extractApiKey(req) {
+  return (
     req.headers["ccweb-api-key"] ||
+    req.headers["ccweb_api_key"] ||
     (req.headers.authorization && req.headers.authorization.startsWith("Bearer ")
       ? req.headers.authorization.slice(7)
-      : null);
+      : null)
+  );
+}
+
+function apiKeyMiddleware(req, res, next) {
+  const header = extractApiKey(req);
   if (!header) {
     res.status(401).json({ error: "Missing API key. Use CCWEB-API-Key or Authorization: Bearer <key>." });
     return;

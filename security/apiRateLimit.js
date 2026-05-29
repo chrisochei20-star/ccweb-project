@@ -12,7 +12,18 @@ function clientIp(req) {
   return (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "unknown";
 }
 
+/** Provider webhooks must not consume user IP rate limits (retries are normal). */
+function isRateLimitExemptPath(pathname) {
+  const p = String(pathname || "").split("?")[0];
+  return (
+    p === "/api/v1/payments/flutterwave/webhook" ||
+    p.endsWith("/payments/flutterwave/webhook")
+  );
+}
+
 function checkApiRateLimit(req, options = {}) {
+  const pathname = (req.url || "").split("?")[0];
+  if (isRateLimitExemptPath(pathname)) return { ok: true };
   const windowMs = Number(options.windowMs || 60_000);
   const max = Number(options.max || Number(process.env.API_RATE_LIMIT_MAX || 400));
   const key = `${clientIp(req)}:${req.method}:${(req.url || "").split("?")[0]}`;
@@ -30,4 +41,4 @@ function checkApiRateLimit(req, options = {}) {
   return { ok: true };
 }
 
-module.exports = { checkApiRateLimit, clientIp };
+module.exports = { checkApiRateLimit, clientIp, isRateLimitExemptPath };

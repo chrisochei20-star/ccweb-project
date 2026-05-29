@@ -96,6 +96,14 @@ function cleanupStaleTyping() {
 const typingCleanupTimer = setInterval(cleanupStaleTyping, 5000);
 if (typingCleanupTimer.unref) typingCleanupTimer.unref();
 
+async function isChatMember(socket, chatId, uid) {
+  socket.data.verifiedChats = socket.data.verifiedChats || new Set();
+  if (socket.data.verifiedChats.has(chatId)) return true;
+  const ok = await chatPg.verifyMember(chatId, uid);
+  if (ok) socket.data.verifiedChats.add(chatId);
+  return ok;
+}
+
 /**
  * @param {import("http").Server} httpServer
  */
@@ -135,14 +143,13 @@ function attachChatSocket(httpServer) {
     socket.on("join:chat", (chatId, ack) => {
       (async () => {
         try {
-          if (!(await chatPg.verifyMember(chatId, uid))) {
+          if (!(await isChatMember(socket, chatId, uid))) {
             logger.warn({ msg: "socket_join_denied", userId: uid, chatId });
             ack?.({ ok: false, error: "forbidden" });
             return;
           }
           socket.join(`chat:${chatId}`);
           socket.data.joinedChats.add(chatId);
-          logger.info({ msg: "socket_join_chat", userId: uid, chatId });
           ack?.({ ok: true });
         } catch (e) {
           ack?.({ ok: false, error: e.message });
@@ -164,7 +171,7 @@ function attachChatSocket(httpServer) {
         try {
           const chatId = payload?.chatId;
           if (!chatId) return ack?.({ ok: false });
-          if (!(await chatPg.verifyMember(chatId, uid))) return ack?.({ ok: false, error: "forbidden" });
+          if (!(await isChatMember(socket, chatId, uid))) return ack?.({ ok: false, error: "forbidden" });
           const active = !!payload?.typing;
           setTyping(chatId, uid, active);
           socket.to(`chat:${chatId}`).emit("typing", {
@@ -185,6 +192,7 @@ function attachChatSocket(httpServer) {
         clearTyping(chatId, uid);
       }
       socket.data.joinedChats.clear();
+      if (socket.data.verifiedChats) socket.data.verifiedChats.clear();
       const gone = removePresence(uid, socket.id);
       lastActiveAt.set(uid, Date.now());
       logger.info({ msg: "socket_disconnected", userId: uid, reason, gone });
@@ -205,7 +213,6 @@ function getChatIo() {
 
 function broadcastChatMessage(chatId, messagePayload) {
   if (!ioInstance) return;
-  logger.info({ msg: "socket_broadcast_message", chatId, messageId: messagePayload?.id });
   ioInstance.to(`chat:${chatId}`).emit("message:new", messagePayload);
 }
 
@@ -217,14 +224,12 @@ function broadcastInboxRefresh(userId, chatId) {
 /** Push in-app notification list refresh (unread badge, center). */
 function broadcastNotificationUpdate(userId, payload = {}) {
   if (!ioInstance || !userId) return;
-  logger.info({ msg: "socket_notification_update", userId, kind: payload?.kind });
   ioInstance.to(`user:${userId}`).emit("notifications:update", payload);
 }
 
 /** Broadcast community feed / rooms / reaction changes to all connected clients (authenticated namespace). */
 function broadcastCommunityUpdate(payload = {}) {
   if (!ioInstance) return;
-  logger.info({ msg: "socket_community_update", kind: payload?.kind, postId: payload?.postId });
   ioInstance.emit("community:update", payload);
 }
 
@@ -245,10 +250,14 @@ function lastActiveForUserIds(userIds) {
 }
 
 function closeChatSocket() {
+  if (typingCleanupTimer) clearInterval(typingCleanupTimer);
   if (ioInstance) {
     ioInstance.close();
     ioInstance = null;
   }
+  socketCounts.clear();
+  typingState.clear();
+  lastActiveAt.clear();
 }
 
 module.exports = {

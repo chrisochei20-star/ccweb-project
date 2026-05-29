@@ -20,13 +20,9 @@ async function ensureCcwebUser(userId) {
 }
 
 async function displayNameFor(userId) {
-  try {
-    const row = await pgUserProfile.findByUserId(userId);
-    if (row?.display_name) return String(row.display_name).slice(0, 120);
-  } catch {
-    /* ignore */
-  }
-  return userId.slice(0, 8);
+  if (!userId) return "System";
+  const map = await pgUserProfile.displayNamesByUserIds([userId]);
+  return map.get(userId) || userId.slice(0, 8);
 }
 
 async function findDirectChat(userId, otherUserId) {
@@ -140,13 +136,13 @@ async function getMessages(chatId, userId, { limit = 50, before } = {}) {
   }
   const { rows } = await query(sql, params);
   const chronological = rows.reverse();
-  const out = [];
-  for (const r of chronological) {
+  const authorIds = chronological.map((r) => r.author_user_id).filter(Boolean);
+  const nameMap = await pgUserProfile.displayNamesByUserIds(authorIds);
+  return chronological.map((r) => {
     const aid = r.author_user_id;
-    const dn = aid ? await displayNameFor(aid) : "System";
-    out.push(hydrateMessageRow(r, dn));
-  }
-  return out;
+    const dn = aid ? nameMap.get(aid) || aid.slice(0, 8) : "System";
+    return hydrateMessageRow(r, dn);
+  });
 }
 
 async function markRead(chatId, userId) {
@@ -196,9 +192,11 @@ async function listConversations(userId) {
   );
 
   const out = [];
+  const otherIds = rows.map((r) => r.other_user_id).filter(Boolean);
+  const nameMap = await pgUserProfile.displayNamesByUserIds(otherIds);
   for (const r of rows) {
     const otherId = r.other_user_id;
-    const otherName = await displayNameFor(otherId);
+    const otherName = nameMap.get(otherId) || otherId.slice(0, 8);
     let lastPreview = r.last_body || "";
     let meta = r.last_metadata;
     if (typeof meta === "string") {

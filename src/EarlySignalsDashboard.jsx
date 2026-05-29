@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiErrorPanel } from "./components/ui/ApiErrorPanel";
 import { apiUrl } from "./config/env";
@@ -46,6 +46,15 @@ export function EarlySignalsDashboard() {
     }
   }, []);
 
+  const loadDebouncedRef = useRef(null);
+  const scheduleReload = useCallback(() => {
+    if (loadDebouncedRef.current) clearTimeout(loadDebouncedRef.current);
+    loadDebouncedRef.current = setTimeout(() => {
+      loadDebouncedRef.current = null;
+      load();
+    }, 3000);
+  }, [load]);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -55,15 +64,16 @@ export function EarlySignalsDashboard() {
     const streamUrl = apiUrl("/api/intelligence/stream");
     const es = new EventSource(streamUrl);
     es.addEventListener("snapshot", () => {
-      load();
+      scheduleReload();
     });
     es.onerror = () => {
       /* SSE may drop behind proxies; manual refresh still works */
     };
     return () => {
       es.close();
+      if (loadDebouncedRef.current) clearTimeout(loadDebouncedRef.current);
     };
-  }, [load]);
+  }, [scheduleReload]);
 
   async function addTracked() {
     setTrackMsg(null);
@@ -154,6 +164,11 @@ export function EarlySignalsDashboard() {
             </button>
           </div>
           <div className="space-y-3">
+            {items.length === 0 && (
+              <p className="rounded-2xl border border-white/10 bg-black/20 px-4 py-6 text-center text-sm text-ccweb-muted">
+                No early signals in the feed right now. Data refreshes automatically when the intelligence engine publishes updates.
+              </p>
+            )}
             {items.map((t) => (
               <Link
                 key={t.id}
@@ -229,6 +244,9 @@ export function EarlySignalsDashboard() {
             <h2 className="text-lg font-semibold text-white">Risk alerts</h2>
             <p className="mt-1 text-xs text-ccweb-muted">Heuristic warnings — not exhaustive audits.</p>
             <ul className="mt-4 space-y-3">
+              {riskAlerts.length === 0 && (
+                <li className="text-sm text-ccweb-muted">No active risk alerts.</li>
+              )}
               {riskAlerts.map((a) => (
                 <li
                   key={a.id}
@@ -258,6 +276,9 @@ export function EarlySignalsDashboard() {
             <h2 className="text-lg font-semibold text-white">Narrative trends</h2>
             <p className="mt-1 text-xs text-ccweb-muted">{narratives?.disclaimer}</p>
             <ul className="mt-4 space-y-3">
+              {!narratives?.keywords?.length && (
+                <li className="text-sm text-ccweb-muted">No narrative trends available.</li>
+              )}
               {narratives?.keywords?.map((k) => (
                 <li key={k.term} className="rounded-xl border border-white/10 bg-black/20 p-3">
                   <div className="flex justify-between gap-2 text-sm font-medium text-white">

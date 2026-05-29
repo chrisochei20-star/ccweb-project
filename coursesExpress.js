@@ -7,6 +7,8 @@ const coursesPg = require("./db/persistenceCourses");
 const tutorPg = require("./db/persistenceAiTutor");
 const pgUserProfile = require("./db/pgUserProfile");
 const aiExecute = require("./services/aiExecute");
+const { buildTutorSystemPrompt, normalizeMode } = require("./services/tutorPrompt");
+const { logger } = require("./logging/logger");
 const { validateImageBuffer } = require("./services/imageMagic");
 const { saveUploadedImage } = require("./services/imageStorage");
 const { imageMulter } = require("./uploadsExpress");
@@ -316,6 +318,14 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
   });
 
   router.post("/tutor/stream", authJwtMiddleware, async (req, res, next) => {
+    let clientDisconnected = false;
+    const abortCtrl = new AbortController();
+    const onClose = () => {
+      clientDisconnected = true;
+      abortCtrl.abort();
+    };
+    req.on("close", onClose);
+
     try {
       const message = (req.body?.message || "").toString().slice(0, 12000);
       if (!message.trim()) return res.status(400).json({ error: "message required." });
@@ -339,27 +349,48 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
       const messages = [{ role: "system", content: system }, ...histMsgs, { role: "user", content: message }];
       await tutorPg.appendMessage(conv.id, "user", message, { mode });
 
+      const provider = aiExecute.getApiKey() ? "openai" : "mock";
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.setHeader("Cache-Control", "no-cache, no-transform");
       res.setHeader("X-Accel-Buffering", "no");
       res.setHeader("X-CCWEB-Conversation-Id", conv.id);
+      res.setHeader("X-CCWEB-AI-Provider", provider);
+      if (provider === "mock") res.setHeader("X-CCWEB-AI-Mock", "1");
 
       let full = "";
-      for await (const chunk of aiExecute.streamChatCompleteMessages(messages, { maxTokens: 2200 })) {
+      for await (const chunk of aiExecute.streamChatCompleteMessages(messages, {
+        maxTokens: 2200,
+        signal: abortCtrl.signal,
+      })) {
+        if (clientDisconnected) break;
         full += chunk;
         res.write(chunk);
       }
-      res.end();
+      if (!clientDisconnected) res.end();
 
-      await tutorPg.appendMessage(conv.id, "assistant", full, { mode });
-      const facts = await aiExecute.extractLearnerFactsFromExchange(message, full);
-      if (facts.length) await tutorPg.appendMemoryFacts(userId, facts);
-      if (full.length > 80 && ((history?.length || 0) + 2) % 4 === 0) {
-        await tutorPg.mergeRollingAssistantSnippet(userId, full);
+      if (clientDisconnected) {
+        logger.info({
+          msg: "tutor_stream_client_disconnect",
+          conversationId: conv.id,
+          userId,
+          chars: full.length,
+        });
+        return;
+      }
+
+      if (full.trim()) {
+        await tutorPg.appendMessage(conv.id, "assistant", full, { mode });
+        const facts = await aiExecute.extractLearnerFactsFromExchange(message, full, { signal: abortCtrl.signal });
+        if (facts.length) await tutorPg.appendMemoryFacts(userId, facts);
+        if (full.length > 80 && ((history?.length || 0) + 2) % 4 === 0) {
+          await tutorPg.mergeRollingAssistantSnippet(userId, full);
+        }
       }
     } catch (e) {
       if (!res.headersSent) {
         if (e.code === "AI_NOT_CONFIGURED") return res.status(503).json({ error: e.message, code: e.code });
+        if (e.code === "AI_TIMEOUT") return res.status(504).json({ error: e.message, code: e.code });
+        if (e.code === "AI_ABORTED") return res.status(499).json({ error: e.message, code: e.code });
         if (e.status === 404) return res.status(404).json({ error: e.message });
         next(e);
       } else {
@@ -369,6 +400,8 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
           /* ignore */
         }
       }
+    } finally {
+      req.off("close", onClose);
     }
   });
 

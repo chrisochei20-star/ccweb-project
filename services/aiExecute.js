@@ -3,7 +3,13 @@
  * (set CCWEB_REQUIRE_OPENAI=1 to fail instead of mock in production).
  */
 
+const { logger } = require("../logging/logger");
+
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const DEFAULT_TIMEOUT_MS = Number(process.env.CCWEB_OPENAI_TIMEOUT_MS) || 60_000;
+const MAX_RETRIES = Number(process.env.CCWEB_OPENAI_MAX_RETRIES) || 2;
+const MAX_TOKENS_CAP = Number(process.env.CCWEB_OPENAI_MAX_TOKENS_CAP) || 4096;
+const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 function requireOpenAI() {
   return process.env.CCWEB_REQUIRE_OPENAI === "1" || process.env.CCWEB_REQUIRE_OPENAI === "true";
@@ -11,6 +17,37 @@ function requireOpenAI() {
 
 function getApiKey() {
   return (process.env.OPENAI_API_KEY || process.env.CCWEB_OPENAI_API_KEY || "").trim();
+}
+
+function clampMaxTokens(n, fallback) {
+  const v = Number.isFinite(n) ? n : fallback;
+  return Math.min(Math.max(1, v), MAX_TOKENS_CAP);
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function mergeAbortSignals(parent, child) {
+  if (!parent) return child;
+  if (!child) return parent;
+  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.any === "function") {
+    return AbortSignal.any([parent, child]);
+  }
+  parent.addEventListener("abort", () => child.abort(), { once: true });
+  return child;
+}
+
+function isRetryableOpenAIStatus(status) {
+  return status === 429 || status === 502 || status === 503 || status === 504;
+}
+
+function logAiDiag(event, fields = {}) {
+  logger.info({ msg: event, subsystem: "ai", ...fields });
+}
+
+function logAiWarn(event, fields = {}) {
+  logger.warn({ msg: event, subsystem: "ai", ...fields });
 }
 
 function mockChatResult(systemPrompt, userPayload) {
@@ -34,6 +71,113 @@ function mockChatResult(systemPrompt, userPayload) {
   };
 }
 
+/**
+ * Shared OpenAI fetch with timeout, retry on transient errors, and abort propagation.
+ */
+async function fetchOpenAI(body, opts = {}) {
+  const key = getApiKey();
+  if (!key) {
+    const err = new Error("OPENAI_API_KEY is not configured.");
+    err.code = "AI_NOT_CONFIGURED";
+    err.status = 503;
+    throw err;
+  }
+
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const maxRetries = Number.isFinite(opts.maxRetries) ? opts.maxRetries : MAX_RETRIES;
+  const operation = opts.operation || "chat";
+  const model = body.model || DEFAULT_MODEL;
+  let lastErr;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    const timeoutCtrl = new AbortController();
+    const timeoutId = setTimeout(() => timeoutCtrl.abort(), timeoutMs);
+    const signal = mergeAbortSignals(opts.signal, timeoutCtrl.signal);
+
+    const started = Date.now();
+    try {
+      const res = await fetch(OPENAI_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal,
+      });
+
+      const durationMs = Date.now() - started;
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        let parsed = {};
+        try {
+          parsed = JSON.parse(errText);
+        } catch {
+          /* ignore */
+        }
+        const msg = parsed.error?.message || errText.slice(0, 400) || res.statusText || "OpenAI request failed";
+        const err = new Error(msg);
+        err.status = res.status >= 400 && res.status < 500 ? res.status : 502;
+        err.openaiStatus = res.status;
+
+        logAiWarn("openai_request_failed", {
+          operation,
+          model,
+          status: res.status,
+          durationMs,
+          attempt: attempt + 1,
+        });
+
+        if (attempt < maxRetries && isRetryableOpenAIStatus(res.status)) {
+          await sleep(400 * (attempt + 1));
+          continue;
+        }
+        throw err;
+      }
+
+      logAiDiag("openai_request_ok", {
+        operation,
+        model,
+        durationMs,
+        attempt: attempt + 1,
+        stream: Boolean(body.stream),
+      });
+      return res;
+    } catch (e) {
+      lastErr = e;
+      const durationMs = Date.now() - started;
+      const aborted = e?.name === "AbortError" || signal?.aborted;
+
+      if (aborted) {
+        logAiWarn("openai_request_aborted", { operation, model, durationMs, attempt: attempt + 1 });
+        const err = new Error(opts.signal?.aborted ? "OpenAI request cancelled." : "OpenAI request timed out.");
+        err.code = opts.signal?.aborted ? "AI_ABORTED" : "AI_TIMEOUT";
+        err.status = 504;
+        throw err;
+      }
+
+      logAiWarn("openai_request_error", {
+        operation,
+        model,
+        durationMs,
+        attempt: attempt + 1,
+        message: String(e?.message || e),
+      });
+
+      if (attempt < maxRetries) {
+        await sleep(400 * (attempt + 1));
+        continue;
+      }
+      throw e;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  throw lastErr || new Error("OpenAI request failed.");
+}
+
 async function chatComplete(systemPrompt, userPayload, opts = {}) {
   const key = getApiKey();
   if (!key) {
@@ -50,7 +194,7 @@ async function chatComplete(systemPrompt, userPayload, opts = {}) {
   const body = {
     model,
     temperature: opts.temperature ?? 0.4,
-    max_tokens: opts.maxTokens ?? 1200,
+    max_tokens: clampMaxTokens(opts.maxTokens, 1200),
     messages: [
       { role: "system", content: systemPrompt },
       {
@@ -61,23 +205,8 @@ async function chatComplete(systemPrompt, userPayload, opts = {}) {
     ],
   };
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-
+  const res = await fetchOpenAI(body, { ...opts, operation: "chat_complete" });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = data.error?.message || res.statusText || "OpenAI request failed";
-    const err = new Error(msg);
-    err.status = res.status >= 400 && res.status < 500 ? res.status : 502;
-    throw err;
-  }
-
   const text = data.choices?.[0]?.message?.content?.trim() || "";
   return {
     text,
@@ -119,62 +248,39 @@ async function* streamChatComplete(systemPrompt, userMessage, opts = {}) {
 
   if (!key) {
     if (requireOpenAI()) {
-      throw Object.assign(new Error("OPENAI_API_KEY is not configured."), { code: "AI_NOT_CONFIGURED", status: 503 });
+      throw Object.assign(new Error("OPENAI_API_KEY is not configured."), {
+        code: "AI_NOT_CONFIGURED",
+        status: 503,
+      });
     }
     const mock = mockChatResult(systemPrompt, userMessage);
     const parts = mock.text.split(/(\s+)/);
     for (const p of parts) {
+      if (opts.signal?.aborted) return;
       if (p) yield p;
     }
     return;
   }
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  const res = await fetchOpenAI(
+    {
       model,
       temperature: opts.temperature ?? 0.35,
-      max_tokens: opts.maxTokens ?? 1800,
+      max_tokens: clampMaxTokens(opts.maxTokens, 1800),
       stream: true,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userContent },
       ],
-    }),
-  });
+    },
+    { ...opts, operation: "stream_chat" }
+  );
 
-  if (!res.ok || !res.body) {
-    const errText = await res.text().catch(() => "");
-    const err = new Error(errText.slice(0, 400) || res.statusText || "OpenAI stream failed");
-    err.status = res.status >= 400 && res.status < 500 ? res.status : 502;
-    throw err;
+  if (!res.body) {
+    throw Object.assign(new Error("OpenAI stream body missing."), { status: 502 });
   }
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split("\n");
-    buf = lines.pop() || "";
-    for (const line of lines) {
-      const s = line.replace(/^data:\s*/, "").trim();
-      if (!s || s === "[DONE]") continue;
-      try {
-        const j = JSON.parse(s);
-        const delta = j.choices?.[0]?.delta?.content;
-        if (delta) yield delta;
-      } catch {
-        /* ignore partial JSON lines */
-      }
-    }
-  }
+  yield* readOpenAIStream(res.body, opts.signal);
 }
 
 function normalizeChatMessages(messages) {
@@ -200,7 +306,10 @@ async function chatCompleteMessages(messages, opts = {}) {
 
   if (!key) {
     if (requireOpenAI()) {
-      throw Object.assign(new Error("OPENAI_API_KEY is not configured."), { code: "AI_NOT_CONFIGURED", status: 503 });
+      throw Object.assign(new Error("OPENAI_API_KEY is not configured."), {
+        code: "AI_NOT_CONFIGURED",
+        status: 503,
+      });
     }
     const lastUser = [...msgs].reverse().find((m) => m.role === "user");
     const mock = mockChatResult("", lastUser?.content || "");
@@ -214,28 +323,17 @@ async function chatCompleteMessages(messages, opts = {}) {
     };
   }
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  const res = await fetchOpenAI(
+    {
       model,
       temperature: opts.temperature ?? 0.35,
-      max_tokens: opts.maxTokens ?? 2200,
+      max_tokens: clampMaxTokens(opts.maxTokens, 2200),
       messages: msgs,
-    }),
-  });
+    },
+    { ...opts, operation: "chat_messages" }
+  );
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = data.error?.message || res.statusText || "OpenAI request failed";
-    const err = new Error(msg);
-    err.status = res.status >= 400 && res.status < 500 ? res.status : 502;
-    throw err;
-  }
-
   const text = data.choices?.[0]?.message?.content?.trim() || "";
   return {
     text,
@@ -246,6 +344,46 @@ async function chatCompleteMessages(messages, opts = {}) {
   };
 }
 
+async function* readOpenAIStream(body, signal) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  try {
+    for (;;) {
+      if (signal?.aborted) {
+        try {
+          await reader.cancel();
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() || "";
+      for (const line of lines) {
+        const s = line.replace(/^data:\s*/, "").trim();
+        if (!s || s === "[DONE]") continue;
+        try {
+          const j = JSON.parse(s);
+          const delta = j.choices?.[0]?.delta?.content;
+          if (delta) yield delta;
+        } catch {
+          /* ignore partial JSON lines */
+        }
+      }
+    }
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 async function* streamChatCompleteMessages(messages, opts = {}) {
   const key = getApiKey();
   const model = opts.model || DEFAULT_MODEL;
@@ -253,66 +391,43 @@ async function* streamChatCompleteMessages(messages, opts = {}) {
 
   if (!key) {
     if (requireOpenAI()) {
-      throw Object.assign(new Error("OPENAI_API_KEY is not configured."), { code: "AI_NOT_CONFIGURED", status: 503 });
+      throw Object.assign(new Error("OPENAI_API_KEY is not configured."), {
+        code: "AI_NOT_CONFIGURED",
+        status: 503,
+      });
     }
     const lastUser = [...msgs].reverse().find((m) => m.role === "user");
     const mock = mockChatResult("", lastUser?.content || "");
     const parts = mock.text.split(/(\s+)/);
     for (const p of parts) {
+      if (opts.signal?.aborted) return;
       if (p) yield p;
     }
     return;
   }
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  const res = await fetchOpenAI(
+    {
       model,
       temperature: opts.temperature ?? 0.35,
-      max_tokens: opts.maxTokens ?? 2200,
+      max_tokens: clampMaxTokens(opts.maxTokens, 2200),
       stream: true,
       messages: msgs,
-    }),
-  });
+    },
+    { ...opts, operation: "stream_messages" }
+  );
 
-  if (!res.ok || !res.body) {
-    const errText = await res.text().catch(() => "");
-    const err = new Error(errText.slice(0, 400) || res.statusText || "OpenAI stream failed");
-    err.status = res.status >= 400 && res.status < 500 ? res.status : 502;
-    throw err;
+  if (!res.body) {
+    throw Object.assign(new Error("OpenAI stream body missing."), { status: 502 });
   }
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split("\n");
-    buf = lines.pop() || "";
-    for (const line of lines) {
-      const s = line.replace(/^data:\s*/, "").trim();
-      if (!s || s === "[DONE]") continue;
-      try {
-        const j = JSON.parse(s);
-        const delta = j.choices?.[0]?.delta?.content;
-        if (delta) yield delta;
-      } catch {
-        /* ignore partial JSON lines */
-      }
-    }
-  }
+  yield* readOpenAIStream(res.body, opts.signal);
 }
 
 /**
  * Extract 0–4 durable learner facts from one exchange (second OpenAI call).
  */
-async function extractLearnerFactsFromExchange(userMessage, assistantReply) {
+async function extractLearnerFactsFromExchange(userMessage, assistantReply, opts = {}) {
   const key = getApiKey();
   if (!key) return [];
 
@@ -333,7 +448,7 @@ async function extractLearnerFactsFromExchange(userMessage, assistantReply) {
         { role: "system", content: system },
         { role: "user", content: user },
       ],
-      { maxTokens: 400, temperature: 0.2 }
+      { maxTokens: 400, temperature: 0.2, timeoutMs: 30_000, ...opts }
     );
     const text = out.text || "";
     const match = text.match(/\{[\s\S]*\}/);
@@ -341,7 +456,8 @@ async function extractLearnerFactsFromExchange(userMessage, assistantReply) {
     const j = JSON.parse(match[0]);
     const facts = Array.isArray(j.facts) ? j.facts.map((x) => String(x).trim()).filter(Boolean) : [];
     return facts.slice(0, 4);
-  } catch {
+  } catch (e) {
+    logAiWarn("learner_facts_extract_failed", { message: String(e?.message || e) });
     return [];
   }
 }
@@ -356,4 +472,7 @@ module.exports = {
   runWorkflowSteps,
   getApiKey,
   mockChatResult,
+  fetchOpenAI,
+  clampMaxTokens,
+  isRetryableOpenAIStatus,
 };

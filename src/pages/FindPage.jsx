@@ -1,8 +1,16 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ShareActions } from "../components/ShareCard";
+import { ApiErrorPanel } from "../components/ui/ApiErrorPanel";
 import { apiUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
+import { logScannerClient } from "../lib/aiDiagnostics";
+
+function fmtProbPct(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return `${(n * 100).toFixed(0)}%`;
+}
 
 export function FindPage({ initialTab = "scanner" }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -33,6 +41,11 @@ export function FindPage({ initialTab = "scanner" }) {
   const [loadingDiscover, setLoadingDiscover] = useState(false);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [smDisclosure, setSmDisclosure] = useState(false);
+  const [signalsErr, setSignalsErr] = useState(null);
+  const [smErr, setSmErr] = useState(null);
+  const [discoverErr, setDiscoverErr] = useState(null);
+  const [alertsErr, setAlertsErr] = useState(null);
+  const [walletErr, setWalletErr] = useState(null);
 
   function goTab(next) {
     setTab(next);
@@ -98,48 +111,64 @@ export function FindPage({ initialTab = "scanner" }) {
 
   async function loadSignals() {
     setLoadingSignals(true);
+    setSignalsErr(null);
     try {
       const res = await apiFetch(apiUrl("/api/find/signals"), {}, { timeoutMs: 8000 });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not load signals.");
       setSignals(data.signals || []);
-    } catch {
-      /* ignore */
+      logScannerClient("signals_ok", { count: (data.signals || []).length });
+    } catch (e) {
+      setSignalsErr(e.message || "Could not load signals.");
+      logScannerClient("signals_error", { message: e.message });
     }
     setLoadingSignals(false);
   }
 
   async function loadSmartMoney() {
     setLoadingSm(true);
+    setSmErr(null);
     try {
       const res = await apiFetch(apiUrl("/api/find/smart-money"), {}, { timeoutMs: 8000 });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not load smart money data.");
       setSmartMoney(data);
-    } catch {
-      /* ignore */
+      logScannerClient("smart_money_ok", { wallets: data?.wallets?.length || 0 });
+    } catch (e) {
+      setSmErr(e.message || "Could not load smart money data.");
+      logScannerClient("smart_money_error", { message: e.message });
     }
     setLoadingSm(false);
   }
 
   async function loadDiscover() {
     setLoadingDiscover(true);
+    setDiscoverErr(null);
     try {
       const res = await apiFetch(apiUrl("/api/discover-tokens"), {}, { timeoutMs: 8000 });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not load discovery feed.");
       setDiscover(data);
-    } catch {
-      /* ignore */
+      logScannerClient("discover_ok", { tokens: data?.tokens?.length || 0 });
+    } catch (e) {
+      setDiscoverErr(e.message || "Could not load discovery feed.");
+      logScannerClient("discover_error", { message: e.message });
     }
     setLoadingDiscover(false);
   }
 
   async function loadAlerts() {
     setLoadingAlerts(true);
+    setAlertsErr(null);
     try {
       const res = await apiFetch(apiUrl("/api/crypto/alerts"), {}, { timeoutMs: 8000 });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not load alerts.");
       setAlerts(data);
-    } catch {
-      /* ignore */
+      logScannerClient("alerts_ok", { count: data?.alerts?.length || 0 });
+    } catch (e) {
+      setAlertsErr(e.message || "Could not load alerts.");
+      logScannerClient("alerts_error", { message: e.message });
     }
     setLoadingAlerts(false);
   }
@@ -149,16 +178,22 @@ export function FindPage({ initialTab = "scanner" }) {
     setWalletLoading(true);
     setWalletScan(null);
     setWalletTrackMsg(null);
+    setWalletErr(null);
     try {
       const res = await apiFetch(
         apiUrl(`/api/scan-wallet?address=${encodeURIComponent(walletInput.trim())}`),
         {},
         { timeoutMs: 8000 }
       );
-      const data = await res.json();
-      setWalletScan(data.error ? null : data);
-    } catch {
-      /* ignore */
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "Wallet scan failed.");
+      }
+      setWalletScan(data);
+      logScannerClient("wallet_scan_ok", { address: walletInput.trim().slice(0, 10) });
+    } catch (e) {
+      setWalletErr(e.message || "Wallet scan failed.");
+      logScannerClient("wallet_scan_error", { message: e.message });
     }
     setWalletLoading(false);
   }
@@ -183,11 +218,11 @@ export function FindPage({ initialTab = "scanner" }) {
   }
 
   useEffect(() => {
-    if (tab === "signals" && !signals.length) loadSignals();
-    if (tab === "trending" && !smartMoney) loadSmartMoney();
-    if (tab === "trending" && !discover) loadDiscover();
-    if (tab === "wallets" && !smartMoney) loadSmartMoney();
-    if (tab === "alerts" && !alerts) loadAlerts();
+    if (tab === "signals" && !signals.length && !signalsErr) loadSignals();
+    if (tab === "trending" && !smartMoney && !smErr) loadSmartMoney();
+    if (tab === "trending" && !discover && !discoverErr) loadDiscover();
+    if (tab === "wallets" && !smartMoney && !smErr) loadSmartMoney();
+    if (tab === "alerts" && !alerts && !alertsErr) loadAlerts();
   }, [tab]);
 
   const scoreColor = (score) =>
@@ -444,7 +479,8 @@ export function FindPage({ initialTab = "scanner" }) {
 
               {ai && (
                 <div className="panel glass-panel find-module-card find-ai-card">
-                  <h4>AI insight layer</h4>
+                  <h4>Heuristic insight layer</h4>
+                  <p className="muted small-print">Rule-based synthesis from on-chain heuristics — not a live LLM call.</p>
                   <ul className="find-insight-list">
                     {ai.insights?.map((ins) => (
                       <li key={ins.id}>
@@ -485,6 +521,10 @@ export function FindPage({ initialTab = "scanner" }) {
             </button>
           </div>
           {loadingSignals && <p className="muted">Loading signals…</p>}
+          {signalsErr ? <ApiErrorPanel message={signalsErr} onRetry={loadSignals} className="mb-3" /> : null}
+          {!loadingSignals && !signalsErr && signals.length === 0 && (
+            <p className="muted">No early signals available right now. Try refreshing in a moment.</p>
+          )}
           <div className="find-signals-grid">
             {signals.map((sig) => (
               <article key={sig.id} className="find-signal-card panel glass-panel">
@@ -515,6 +555,10 @@ export function FindPage({ initialTab = "scanner" }) {
       {tab === "trending" && (
         <div className="find-trending">
           {loadingDiscover && <p className="muted">Loading discovery…</p>}
+          {discoverErr ? <ApiErrorPanel message={discoverErr} onRetry={loadDiscover} className="mb-3" /> : null}
+          {!loadingDiscover && !discoverErr && discover?.tokens?.length === 0 && (
+            <p className="muted">No discovery tokens returned from the API.</p>
+          )}
           {discover?.tokens && (
             <>
               <h3>Alpha discovery (new &amp; early liquidity)</h3>
@@ -558,6 +602,10 @@ export function FindPage({ initialTab = "scanner" }) {
           )}
 
           {loadingSm && <p className="muted">Loading whale trends…</p>}
+          {smErr ? <ApiErrorPanel message={smErr} onRetry={loadSmartMoney} className="mb-3" /> : null}
+          {!loadingSm && !smErr && smartMoney?.trends?.length === 0 && (
+            <p className="muted">No whale trend data available.</p>
+          )}
           {smartMoney && (
             <>
               <h3 style={{ marginTop: "1.5rem" }}>Whale flow trends (sample)</h3>
@@ -602,6 +650,7 @@ export function FindPage({ initialTab = "scanner" }) {
               </button>
             </div>
             {walletTrackMsg && <p className="muted small-print">{walletTrackMsg}</p>}
+            {walletErr ? <ApiErrorPanel message={walletErr} onRetry={scanWallet} className="mt-3" /> : null}
             {walletScan && (
               <div className="find-wallet-scan-result">
                 <div className="find-scan-header">
@@ -615,7 +664,7 @@ export function FindPage({ initialTab = "scanner" }) {
                 </div>
                 <p className="muted">
                   Safety tier: <strong>{walletScan.safetyTier}</strong> · Scam-link probability ~{" "}
-                  {(walletScan.scamLinkedProbability * 100).toFixed(0)}%
+                  {fmtProbPct(walletScan.scamLinkedProbability)}
                 </p>
                 <ul className="find-bullet-list">
                   {walletScan.suspiciousPatterns?.map((p) => (
@@ -633,6 +682,10 @@ export function FindPage({ initialTab = "scanner" }) {
           </div>
 
           {loadingSm && <p className="muted">Loading smart money panel…</p>}
+          {smErr ? <ApiErrorPanel message={smErr} onRetry={loadSmartMoney} className="mb-3" /> : null}
+          {!loadingSm && !smErr && smartMoney?.wallets?.length === 0 && (
+            <p className="muted">No smart money wallet data available.</p>
+          )}
           {smartMoney && (
             <>
               <div className="find-smart-toolbar">
@@ -672,6 +725,10 @@ export function FindPage({ initialTab = "scanner" }) {
       {tab === "alerts" && (
         <div className="find-alerts-tab">
           {loadingAlerts && <p className="muted">Loading alerts…</p>}
+          {alertsErr ? <ApiErrorPanel message={alertsErr} onRetry={loadAlerts} className="mb-3" /> : null}
+          {!loadingAlerts && !alertsErr && alerts?.alerts?.length === 0 && (
+            <p className="muted">No alerts in the feed right now.</p>
+          )}
           {alerts?.alerts && (
             <>
               <h3>Alert stream (sample)</h3>

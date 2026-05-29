@@ -1,5 +1,6 @@
 import { Component } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+import { reportClientError } from "../lib/clientAnalytics";
 
 export class CcwebErrorBoundary extends Component {
   constructor(props) {
@@ -11,6 +12,10 @@ export class CcwebErrorBoundary extends Component {
     return { hasError: true, message: err?.message || "Something went wrong." };
   }
 
+  componentDidCatch(error, info) {
+    reportClientError(error, { componentStack: info?.componentStack?.slice(0, 400) });
+  }
+
   render() {
     if (this.state.hasError) {
       return (
@@ -19,13 +24,23 @@ export class CcwebErrorBoundary extends Component {
             <AlertTriangle className="h-10 w-10 text-rose-300" strokeWidth={1.75} aria-hidden />
             <h1 className="mt-4 text-lg font-semibold text-white">This view crashed</h1>
             <p className="mt-2 text-sm text-ccweb-muted">{this.state.message}</p>
-            <button
-              type="button"
-              className="ccweb-gradient-btn mt-6 px-5 py-2 text-sm font-semibold"
-              onClick={() => window.location.reload()}
-            >
-              Reload page
-            </button>
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
+              <button
+                type="button"
+                className="ccweb-gradient-btn inline-flex min-h-[44px] items-center gap-2 px-5 py-2 text-sm font-semibold"
+                onClick={() => window.location.reload()}
+              >
+                <RefreshCw className="h-4 w-4" aria-hidden />
+                Reload page
+              </button>
+              <button
+                type="button"
+                className="ccweb-outline-btn min-h-[44px] px-5 py-2 text-sm"
+                onClick={() => this.setState({ hasError: false, message: "" })}
+              >
+                Try again
+              </button>
+            </div>
           </div>
         </div>
       );

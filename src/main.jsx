@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import { logCcwebApiRuntimeDebug } from "./config/env";
 import App from "./App";
 import { ToastViewport } from "./components/ui/ToastViewport";
+import { initProductionAnalytics } from "./lib/clientAnalytics";
+import { registerServiceWorker } from "./lib/registerServiceWorker";
 import "./index.css";
 import "./styles.css";
 import "./ccweb-shell.css";
@@ -17,6 +19,8 @@ try {
 }
 
 logCcwebApiRuntimeDebug();
+initProductionAnalytics();
+registerServiceWorker();
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>

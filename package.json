@@ -30,7 +30,9 @@
     "mobile:open": "npx cap open android",
     "mobile:android:debug": "cd android && ./gradlew assembleDebug",
     "mobile:android:release": "cd android && ./gradlew assembleRelease",
-    "validate:android": "node scripts/validate-android-production.mjs"
+    "mobile:android:bundle": "cd android && ./gradlew bundleRelease",
+    "validate:android": "node scripts/validate-android-production.mjs",
+    "validate:android-release": "node scripts/validate-android-release.mjs"
   },
   "engines": {
     "node": "20.x",

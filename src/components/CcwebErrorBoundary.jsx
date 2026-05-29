@@ -1,6 +1,7 @@
 import { Component } from "react";
 import { AlertTriangle, Home, RefreshCw } from "lucide-react";
 import { reportClientError } from "../lib/clientAnalytics";
+import { reportNativeRecovery } from "../lib/nativeCrashReporting";
 
 export class CcwebErrorBoundary extends Component {
   constructor(props) {
@@ -22,6 +23,7 @@ export class CcwebErrorBoundary extends Component {
   };
 
   handleSoftRecover = () => {
+    reportNativeRecovery("error_boundary_recover");
     this.setState({ hasError: false, message: "" });
     document.dispatchEvent(new CustomEvent("ccweb:soft-resume"));
   };

@@ -4,6 +4,8 @@
  */
 
 import { postBetaClientEvent } from "./betaTelemetry";
+import { isCapacitorNative } from "./capacitorPlatform";
+import { releaseLog } from "./releaseLog";
 
 let initialized = false;
 
@@ -17,6 +19,7 @@ export function trackProductionEvent(eventType, fields = {}) {
     error: fields.error,
     metadata: {
       ...fields.metadata,
+      platform: isCapacitorNative() ? "capacitor-android" : "web",
       ...(fields.message ? { message: String(fields.message).slice(0, 240) } : {}),
     },
   });
@@ -65,9 +68,11 @@ export function initProductionAnalytics() {
     }
   });
 
-  if ("serviceWorker" in navigator) {
+  if ("serviceWorker" in navigator && !isCapacitorNative()) {
     navigator.serviceWorker.ready
       .then(() => trackProductionEvent("pwa_sw_ready"))
       .catch(() => {});
   }
+
+  releaseLog("[ccweb] production analytics initialized");
 }

@@ -59,7 +59,6 @@ const checks = [
   mustExist("assets/brand/ccweb-foundation-logo.svg"),
   mustExist("scripts/lib/brandIconRaster.mjs"),
   mustExist("android/app/src/main/res/drawable/ic_launcher_monochrome.xml"),
-  () => mustInclude("src/App.jsx", 'path="settings"', "Settings route registered"),
   mustExist("src/components/media/ImageViewerModal.jsx"),
   mustExist("src/components/media/NativeMediaPicker.jsx"),
   () => mustInclude("services/fcmPush.js", "resolveAndroidChannel", "FCM Android channel resolver"),

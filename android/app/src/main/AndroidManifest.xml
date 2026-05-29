@@ -25,6 +25,22 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Custom scheme deep links: io.chrisccweb.app://app/community -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="io.chrisccweb.app" android:host="app" />
+            </intent-filter>
+
+            <!-- HTTPS App Links — requires /.well-known/assetlinks.json on host -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="ccweb-project-b4jq.vercel.app" android:pathPrefix="/" />
+            </intent-filter>
+
         </activity>
 
         <provider

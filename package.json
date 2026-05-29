@@ -29,7 +29,8 @@
     "mobile:sync": "npm run mobile:build && npx cap sync android",
     "mobile:open": "npx cap open android",
     "mobile:android:debug": "cd android && ./gradlew assembleDebug",
-    "mobile:android:release": "cd android && ./gradlew assembleRelease"
+    "mobile:android:release": "cd android && ./gradlew assembleRelease",
+    "validate:android": "node scripts/validate-android-production.mjs"
   },
   "engines": {
     "node": "20.x",

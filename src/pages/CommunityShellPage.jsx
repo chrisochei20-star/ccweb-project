@@ -15,6 +15,9 @@ import { composerPaddingBottom, useKeyboardInset } from "../hooks/useKeyboardIns
 import { useStaleLoadingGuard } from "../hooks/useStaleLoadingGuard";
 import { dedupeById, mergeChatsById } from "../lib/feedMerge";
 import { useRealtimeSubscription } from "../hooks/useRealtimeSubscription";
+import { usePullToRefresh } from "../hooks/usePullToRefresh";
+import { PullToRefreshContainer } from "../components/mobile/PullToRefreshContainer";
+import { isCapacitorNative } from "../lib/capacitorPlatform";
 import { toast } from "../lib/toastBus";
 import { getSessionToken } from "../session";
 
@@ -336,8 +339,15 @@ export function CommunityShellPage() {
   }
 
   const shownPosts = posts.slice(0, visibleCount);
+  const nativeShell = isCapacitorNative();
+
+  const { pulling, refreshing } = usePullToRefresh(loadPosts, {
+    disabled: !nativeShell || tab !== "feed" || loadingPosts,
+    useDocumentScroll: true,
+  });
 
   return (
+    <PullToRefreshContainer pulling={pulling} refreshing={refreshing}>
     <div className="mx-auto max-w-3xl space-y-5 px-3 pb-6 pt-3 md:max-w-2xl">
       <header className="ccweb-stagger">
         <p className="ccweb-kicker flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-ccweb-cyan">
@@ -583,5 +593,6 @@ export function CommunityShellPage() {
         </section>
       )}
     </div>
+    </PullToRefreshContainer>
   );
 }

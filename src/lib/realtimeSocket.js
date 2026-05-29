@@ -251,12 +251,20 @@ export function initRealtimeLifecycle() {
 
   const recover = () => {
     if (document.visibilityState && document.visibilityState !== "visible") return;
-    const socket = getSharedRealtimeSocket();
-    if (socket && !socket.connected) {
-      realtimeLog("socket_foreground_reconnect");
-      socket.connect();
-    }
+    if (resumeTimer) window.clearTimeout(resumeTimer);
+    resumeTimer = window.setTimeout(() => {
+      resumeTimer = null;
+      const socket = getSharedRealtimeSocket();
+      if (socket && !socket.connected && !socket.active) {
+        realtimeLog("socket_foreground_reconnect");
+        socket.connect();
+      }
+    }, RESUME_DEBOUNCE_MS);
   };
+
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let resumeTimer = null;
+  const RESUME_DEBOUNCE_MS = 500;
 
   document.addEventListener("visibilitychange", recover);
   window.addEventListener("online", recover);
@@ -264,6 +272,7 @@ export function initRealtimeLifecycle() {
   document.addEventListener("ccweb:app-resume", recover);
 
   lifecycleCleanup = () => {
+    if (resumeTimer) window.clearTimeout(resumeTimer);
     document.removeEventListener("visibilitychange", recover);
     window.removeEventListener("online", recover);
     window.removeEventListener("focus", recover);

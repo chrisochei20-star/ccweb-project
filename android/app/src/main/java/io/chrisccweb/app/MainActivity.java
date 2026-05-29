@@ -10,21 +10,47 @@ public class MainActivity extends BridgeActivity {
   @Override
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
-    createNotificationChannel();
+    createNotificationChannels();
   }
 
-  private void createNotificationChannel() {
+  private void createNotificationChannels() {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
-    NotificationChannel channel = new NotificationChannel(
+    NotificationManager manager = getSystemService(NotificationManager.class);
+    if (manager == null) return;
+
+    NotificationChannel messages = new NotificationChannel(
+      "ccweb_messages",
+      "Messages",
+      NotificationManager.IMPORTANCE_HIGH
+    );
+    messages.setDescription("Direct messages and chat");
+    messages.enableVibration(true);
+
+    NotificationChannel social = new NotificationChannel(
+      "ccweb_social",
+      "Social",
+      NotificationManager.IMPORTANCE_DEFAULT
+    );
+    social.setDescription("Mentions, follows, reactions, and comments");
+
+    NotificationChannel ai = new NotificationChannel(
+      "ccweb_ai",
+      "AI & Learning",
+      NotificationManager.IMPORTANCE_DEFAULT
+    );
+    ai.setDescription("AI tutor alerts and learning milestones");
+
+    NotificationChannel general = new NotificationChannel(
       "ccweb_alerts",
       "CCWEB Alerts",
       NotificationManager.IMPORTANCE_HIGH
     );
-    channel.setDescription("Messages, mentions, follows, and AI alerts");
-    channel.enableVibration(true);
-    NotificationManager manager = getSystemService(NotificationManager.class);
-    if (manager != null) {
-      manager.createNotificationChannel(channel);
-    }
+    general.setDescription("General CCWEB notifications");
+    general.enableVibration(true);
+
+    manager.createNotificationChannel(messages);
+    manager.createNotificationChannel(social);
+    manager.createNotificationChannel(ai);
+    manager.createNotificationChannel(general);
   }
 }

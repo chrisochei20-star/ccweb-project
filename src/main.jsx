@@ -10,6 +10,7 @@ import { registerServiceWorker } from "./lib/registerServiceWorker";
 import "./index.css";
 import "./styles.css";
 import "./ccweb-shell.css";
+import "./ccweb-native.css";
 import "./learning/learning.css";
 
 try {

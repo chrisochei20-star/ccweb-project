@@ -8,6 +8,13 @@ import { dedupeById } from "../lib/feedMerge";
 import { getSharedRealtimeSocket, getRealtimeConnectionState } from "../lib/realtimeSocket";
 import { composerPaddingBottom, useKeyboardInset } from "../hooks/useKeyboardInset";
 import { useConnectionState, useRealtimeSubscription, useSocketReconnect } from "../hooks/useRealtimeSubscription";
+import { usePullToRefresh } from "../hooks/usePullToRefresh";
+import { PullToRefreshContainer } from "../components/mobile/PullToRefreshContainer";
+import { ImageViewerModal } from "../components/media/ImageViewerModal";
+import { NativeMediaPicker } from "../components/media/NativeMediaPicker";
+import { MediaImage } from "../components/ui/MediaImage";
+import { isCapacitorNative } from "../lib/capacitorPlatform";
+import { pushNativeBackHandler } from "../lib/nativeBackStack";
 import { toast } from "../lib/toastBus";
 import { validateUploadFileSize } from "../lib/uploadLimits";
 import { getSessionToken } from "../session";
@@ -35,6 +42,8 @@ export function ChatPage() {
   const [gateTimedOut, setGateTimedOut] = useState(false);
   const keyboardInset = useKeyboardInset();
   const [chatUploadProgress, setChatUploadProgress] = useState(null);
+  const [viewerImage, setViewerImage] = useState(null);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const uploadAbortRef = useRef(null);
   const [connectionState, setConnectionState] = useState(() => getRealtimeConnectionState());
   const typingTimer = useRef(null);
@@ -60,6 +69,19 @@ export function ChatPage() {
       if (pr.ok && pd.presence) setPresence(pd.presence);
     }
   }, []);
+
+  const { containerRef: listRefreshRef, pulling, refreshing, refresh: refreshConversations } = usePullToRefresh(
+    loadConversations,
+    { disabled: !user?.id }
+  );
+
+  useEffect(() => {
+    if (!activeId || !isCapacitorNative()) return undefined;
+    return pushNativeBackHandler(() => {
+      setActiveId(null);
+      return true;
+    });
+  }, [activeId]);
 
   const loadMessages = useCallback(async (chatId) => {
     const res = await apiFetch(apiUrl(`/api/v1/chat/${encodeURIComponent(chatId)}/messages?limit=80`));
@@ -490,7 +512,8 @@ export function ChatPage() {
             </button>
           </form>
         </div>
-        <ul className="max-h-[55vh] overflow-y-auto md:max-h-[calc(100vh-14rem)]">
+        <PullToRefreshContainer pulling={pulling} refreshing={refreshing}>
+          <ul ref={listRefreshRef} className="ccweb-native-scroll max-h-[55vh] overflow-y-auto md:max-h-[calc(100vh-14rem)]">
           {conversations.length === 0 ? (
             <li className="px-4 py-8 text-center text-sm text-ccweb-muted">No conversations yet.</li>
           ) : (
@@ -532,6 +555,7 @@ export function ChatPage() {
             ))
           )}
         </ul>
+        </PullToRefreshContainer>
       </aside>
 
       <section
@@ -601,9 +625,14 @@ export function ChatPage() {
                         </p>
                       )}
                       {img ? (
-                        <a href={assetsUrl(img)} target="_blank" rel="noreferrer">
-                          <img src={assetsUrl(img)} alt="" className="max-h-56 max-w-full rounded-lg object-cover" />
-                        </a>
+                        <button type="button" className="block w-full text-left" onClick={() => setViewerImage(assetsUrl(img))}>
+                          <MediaImage
+                            src={assetsUrl(img)}
+                            alt="Chat attachment"
+                            wrapperClassName="max-h-56 w-full rounded-lg"
+                            className="max-h-56 w-full rounded-lg object-cover"
+                          />
+                        </button>
                       ) : (
                         <p className="whitespace-pre-wrap break-words">{m.body}</p>
                       )}
@@ -678,22 +707,14 @@ export function ChatPage() {
               style={{ paddingBottom: composerPaddingBottom(keyboardInset) }}
             >
               <div className="flex items-end gap-2">
-                <label
-                  className={`flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-xl border border-white/15 text-ccweb-muted hover:bg-white/5 ${chatUploadProgress != null ? "pointer-events-none opacity-50" : ""}`}
+                <button
+                  type="button"
+                  className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-white/15 text-ccweb-muted hover:bg-white/5 ${chatUploadProgress != null ? "pointer-events-none opacity-50" : ""}`}
+                  onClick={() => setMediaPickerOpen(true)}
+                  aria-label="Add image"
                 >
                   <ImagePlus className="h-5 w-5" />
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    className="hidden"
-                    disabled={chatUploadProgress != null}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      e.target.value = "";
-                      if (f) uploadImage(f);
-                    }}
-                  />
-                </label>
+                </button>
                 <button
                   type="button"
                   className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-white/15 ${showEmoji ? "bg-white/10 text-ccweb-cyan" : "text-ccweb-muted hover:bg-white/5"}`}
@@ -723,6 +744,13 @@ export function ChatPage() {
           </>
         )}
       </section>
+      <ImageViewerModal src={viewerImage} open={Boolean(viewerImage)} onClose={() => setViewerImage(null)} />
+      <NativeMediaPicker
+        open={mediaPickerOpen}
+        onClose={() => setMediaPickerOpen(false)}
+        onPick={(file) => uploadImage(file)}
+        title="Send image"
+      />
     </div>
   );
 }

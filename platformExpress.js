@@ -1086,12 +1086,7 @@ function createPlatformApp(deps) {
         const mine = [...hub.orders.values()].filter((o) => o.buyerId === req.ccwebUserId || o.sellerId === req.ccwebUserId);
         return res.json({ count: mine.length, orders: mine });
       }
-      const asSeller = await pgGrowth.listOrders(req.ccwebUserId);
-      const asBuyer = await pgGrowth.listOrders(null);
-      const buyerFiltered = asBuyer.filter((o) => o.buyerId === req.ccwebUserId);
-      const map = new Map();
-      [...asSeller, ...buyerFiltered].forEach((o) => map.set(o.id, o));
-      const merged = Array.from(map.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+      const merged = await pgGrowth.listOrdersForParticipant(req.ccwebUserId);
       res.json({ count: merged.length, orders: merged });
     } catch (e) {
       next(e);

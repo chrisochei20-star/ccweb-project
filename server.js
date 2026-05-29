@@ -2380,13 +2380,6 @@ function sendJson(res, statusCode, payload, req) {
   res.end(JSON.stringify(payload));
 }
 
-function sendJsonCors(res, statusCode, payload) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  sendJson(res, statusCode, payload);
-}
-
 function getBearerToken(req) {
   const h = req.headers && req.headers.authorization;
   if (!h || typeof h !== "string") return null;

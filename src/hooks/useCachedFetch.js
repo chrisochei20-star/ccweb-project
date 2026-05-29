@@ -5,6 +5,8 @@ import { apiFetch } from "../lib/apiClient";
 import { toast } from "../lib/toastBus";
 
 const cache = new Map();
+/** @type {Map<string, Promise<unknown>>} */
+const inFlight = new Map();
 
 function resolveFetchUrl(url) {
   if (!url) return null;
@@ -40,11 +42,32 @@ export function useCachedFetch(url, opts = {}) {
     }
     setLoading(true);
     setError(null);
-    try {
+    const existing = inFlight.get(key);
+    if (existing) {
+      try {
+        const json = await existing;
+        if (mounted.current) {
+          setData(json);
+          setError(null);
+          setLoading(false);
+        }
+        return json;
+      } catch (e) {
+        if (mounted.current) setError(e.message || "Error");
+        setLoading(false);
+        throw e;
+      }
+    }
+    const task = (async () => {
       const res = await apiFetch(resolved, {}, { networkRetries: 2, timeoutMs });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || res.statusText || "Request failed");
       cache.set(key, { at: Date.now(), json });
+      return json;
+    })();
+    inFlight.set(key, task);
+    try {
+      const json = await task;
       if (mounted.current) {
         setData(json);
       }
@@ -58,6 +81,7 @@ export function useCachedFetch(url, opts = {}) {
       if (toastOnError && mounted.current) toast.error(msg);
       throw e;
     } finally {
+      inFlight.delete(key);
       if (mounted.current) setLoading(false);
     }
   }, [url, enabled, ttlMs, toastOnError, timeoutMs]);

@@ -1,5 +1,6 @@
 import { Calendar, Copy, ExternalLink, Link2, MapPin, Share2 } from "lucide-react";
 import { assetsUrl } from "../../config/env";
+import { optimizeCloudinaryUrl } from "../../lib/cloudinaryUrl";
 import { cn } from "../../lib/cn";
 import { toast } from "../../lib/toastBus";
 import { Skeleton } from "../ui/Skeleton";
@@ -105,7 +106,13 @@ export function ProfileHeader({
           ) : (
             <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border-4 border-[#070b14] bg-gradient-to-br from-ccweb-cyan/35 to-ccweb-violet/30 text-lg font-bold text-white shadow-2xl ring-1 ring-white/15">
               {user?.avatarUrl ? (
-                <img src={assetsUrl(user.avatarUrl)} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={optimizeCloudinaryUrl(assetsUrl(user.avatarUrl), { width: 256 })}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
               ) : (
                 <span>{(user?.displayName || "?").slice(0, 2).toUpperCase()}</span>
               )}

@@ -1,14 +1,38 @@
 /**
- * Health payloads for load balancers (Render, K8s) — raw HTTP + optional Express use.
+ * Health payloads for load balancers (Render, Railway, K8s) — raw HTTP + optional Express use.
  */
 
 const { setRawCorsHeaders } = require("../../../security/expressHardDefaults");
+const { getPool } = require("../../../db/pool");
+
+const PKG_VERSION = (() => {
+  try {
+    return require("../../../package.json").version || "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+})();
+
+function getBuildId() {
+  return (
+    process.env.RAILWAY_GIT_COMMIT_SHA ||
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.GITHUB_SHA ||
+    process.env.CCWEB_BUILD_ID ||
+    null
+  );
+}
 
 function getHealthPayload() {
+  const pool = getPool();
   return {
     status: "ok",
     message: "CCWEB API is running",
     service: "ccweb-api",
+    version: PKG_VERSION,
+    buildId: getBuildId(),
+    uptimeSec: Math.floor(process.uptime()),
+    postgres: pool ? "configured" : "none",
     timestamp: new Date().toISOString(),
   };
 }
@@ -28,4 +52,4 @@ function sendRawHealth(res, req) {
   res.end(JSON.stringify(getHealthPayload()));
 }
 
-module.exports = { getHealthPayload, sendRawHealth };
+module.exports = { getHealthPayload, sendRawHealth, getBuildId };

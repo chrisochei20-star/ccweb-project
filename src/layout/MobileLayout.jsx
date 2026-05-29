@@ -11,6 +11,9 @@ import { captureInviteFromSearch, postBetaClientEvent } from "../lib/betaTelemet
 import { disconnectSharedRealtimeSocket, initRealtimeLifecycle } from "../lib/realtimeSocket";
 import { initNotificationsRealtime, useNotificationsStore } from "../store/notificationsStore";
 import { useProfileStore } from "../store/profileStore";
+import { OfflineBanner } from "../components/shell/OfflineBanner";
+import { InstallPrompt } from "../components/pwa/InstallPrompt";
+import { PageMeta, ROUTE_META } from "../components/seo/PageMeta";
 
 const bottomTabs = [
   { id: "home", to: "/", label: "Home", shortLabel: "Home", icon: Home, end: true, match: (p) => p === "/" },
@@ -152,9 +155,16 @@ export function MobileLayout() {
   }, []);
 
   const path = location.pathname;
+  const routeMeta = ROUTE_META[path] || (path.startsWith("/u/") ? { title: "Profile", description: "Public CCWEB creator profile." } : null);
 
   return (
     <div className="ccweb-app-root ccweb-app-pattern min-h-screen font-sans antialiased">
+      <a href="#ccweb-main" className="ccweb-skip-link">
+        Skip to main content
+      </a>
+      <PageMeta title={routeMeta?.title} description={routeMeta?.description} path={path} />
+      <OfflineBanner />
+      <InstallPrompt />
       <header className="ccweb-top-bar">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3.5 md:max-w-5xl">
           <NavLink
@@ -253,7 +263,7 @@ export function MobileLayout() {
         </div>
       </nav>
 
-      <main className="ccweb-main-pad mx-auto max-w-3xl md:max-w-5xl">
+      <main id="ccweb-main" className="ccweb-main-pad mx-auto max-w-3xl md:max-w-5xl" tabIndex={-1}>
         <Outlet context={{ user, setUser, authHydrated, refreshSession }} />
       </main>
 

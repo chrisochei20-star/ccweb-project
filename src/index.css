@@ -43,6 +43,33 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
   }
+  .ccweb-skip-link {
+    position: absolute;
+    left: -9999px;
+    top: auto;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    z-index: 100;
+  }
+  .ccweb-skip-link:focus {
+    left: 1rem;
+    top: max(0.75rem, env(safe-area-inset-top));
+    width: auto;
+    height: auto;
+    overflow: visible;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.75rem;
+    background: #0f172a;
+    color: #22d3ee;
+    border: 1px solid rgba(34, 211, 238, 0.35);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  :focus-visible {
+    outline: 2px solid rgba(34, 211, 238, 0.65);
+    outline-offset: 2px;
+  }
   ::selection {
     background: rgba(34, 211, 238, 0.28);
     color: #f8fafc;

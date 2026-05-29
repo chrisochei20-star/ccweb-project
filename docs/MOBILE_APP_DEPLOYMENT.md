@@ -49,7 +49,7 @@ npm ci
 # 2. Production build pinned to Railway API + sync into Android
 npm run mobile:sync
 
-# 3. Generate/replace launcher icons + splash (after android/ exists)
+# 3. Generate CCWEB Foundation adaptive icons + splash (source: assets/brand/ccweb-foundation-logo.svg)
 npm run mobile:assets
 npm run mobile:sync
 

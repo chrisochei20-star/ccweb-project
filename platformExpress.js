@@ -438,6 +438,33 @@ function createPlatformApp(deps) {
     }
   });
 
+  /** FCM-ready device token registration (Capacitor native push). */
+  notificationsRouter.post("/device-token", authJwtMiddleware, async (req, res, next) => {
+    try {
+      const token = String(req.body?.token || "").trim();
+      const platform = String(req.body?.platform || "android").slice(0, 32);
+      const provider = String(req.body?.provider || "fcm").slice(0, 32);
+      if (!token || token.length > 512) {
+        return res.status(400).json({ error: "Valid device token required.", code: "INVALID_TOKEN" });
+      }
+      if (!(process.env.DATABASE_URL || "").trim()) {
+        return res.status(503).json({ error: "PostgreSQL required for device token registration.", code: "NO_DATABASE" });
+      }
+      const merged = await pgUserProfile.patchNotificationPrefs(req.ccwebUserId, {
+        nativePush: {
+          enabled: true,
+          provider,
+          platform,
+          deviceToken: token,
+          registeredAt: new Date().toISOString(),
+        },
+      });
+      res.json({ ok: true, preferences: merged, stored: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   v1.use("/notifications", apiRateShort, notificationsRouter);
 
   v1.use("/uploads", apiRateShort, createUploadsRouter({ ...deps, authJwtMiddleware }));

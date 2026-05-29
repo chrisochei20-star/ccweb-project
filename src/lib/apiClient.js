@@ -1,6 +1,7 @@
 /** Browser fetch with bounded retries for transient network failures (split CDN ↔ API). */
 
 import { SESSION_TOKEN_KEY } from "../authStorageKeys";
+import { authStorageGetItem } from "./authStorage";
 import { getSupabaseAccessToken } from "./supabaseClient";
 import { logClientStructured } from "./productionDiag";
 
@@ -43,11 +44,7 @@ function logApiFailure(phase, input, err, attempt) {
 }
 
 function readCcwebAccessToken() {
-  try {
-    return sessionStorage.getItem(SESSION_TOKEN_KEY);
-  } catch {
-    return null;
-  }
+  return authStorageGetItem(SESSION_TOKEN_KEY);
 }
 
 /**

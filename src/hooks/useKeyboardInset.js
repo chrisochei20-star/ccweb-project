@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { isCapacitorNative } from "../lib/capacitorPlatform";
 
 /**
- * Android Chrome / mobile keyboard inset via visualViewport.
+ * Android Chrome / Capacitor keyboard inset via visualViewport + Capacitor Keyboard plugin.
  * Prevents composer/input areas from being covered by the software keyboard.
  */
 export function useKeyboardInset(maxPx = 200) {
@@ -20,9 +21,29 @@ export function useKeyboardInset(maxPx = 200) {
     vv.addEventListener("scroll", update);
     update();
 
+    let keyboardShow;
+    let keyboardHide;
+    let cancelled = false;
+
+    if (isCapacitorNative()) {
+      void import("@capacitor/keyboard")
+        .then(({ Keyboard }) => {
+          if (cancelled) return;
+          keyboardShow = Keyboard.addListener("keyboardWillShow", (info) => {
+            const h = info?.keyboardHeight ?? 0;
+            if (h > 0) setInset(Math.min(maxPx, Math.round(h)));
+          });
+          keyboardHide = Keyboard.addListener("keyboardWillHide", () => setInset(0));
+        })
+        .catch(() => {});
+    }
+
     return () => {
+      cancelled = true;
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
+      keyboardShow?.remove?.();
+      keyboardHide?.remove?.();
     };
   }, [maxPx]);
 

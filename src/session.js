@@ -1,6 +1,7 @@
 import { SESSION_TOKEN_KEY } from "./authStorageKeys";
 import { CCWEB_AUTH_HYDRATION_TIMEOUT_MS } from "./constants/loadTimeout";
 import { getApiBaseUrl } from "./config/env";
+import { authStorageGetItem, authStorageRemoveItem, authStorageSetItem } from "./lib/authStorage";
 import { apiFetch } from "./lib/apiClient";
 
 /** Max wait for /me + refresh during shell hydration (avoids infinite spinner). */
@@ -11,31 +12,31 @@ const USER_KEY = "ccweb_user";
 const REFRESH_KEY = "ccweb_refresh_token";
 
 export function getSessionToken() {
-  return sessionStorage.getItem(TOKEN_KEY);
+  return authStorageGetItem(TOKEN_KEY);
 }
 
 export function getRefreshToken() {
-  return sessionStorage.getItem(REFRESH_KEY);
+  return authStorageGetItem(REFRESH_KEY);
 }
 
 export function setSession(accessToken, user, refreshToken) {
   if (accessToken !== undefined) {
-    if (accessToken) sessionStorage.setItem(TOKEN_KEY, accessToken);
-    else sessionStorage.removeItem(TOKEN_KEY);
+    if (accessToken) authStorageSetItem(TOKEN_KEY, accessToken);
+    else authStorageRemoveItem(TOKEN_KEY);
   }
   if (user !== undefined) {
-    if (user) sessionStorage.setItem(USER_KEY, JSON.stringify(user));
-    else sessionStorage.removeItem(USER_KEY);
+    if (user) authStorageSetItem(USER_KEY, JSON.stringify(user));
+    else authStorageRemoveItem(USER_KEY);
   }
   if (refreshToken !== undefined) {
-    if (refreshToken) sessionStorage.setItem(REFRESH_KEY, refreshToken);
-    else sessionStorage.removeItem(REFRESH_KEY);
+    if (refreshToken) authStorageSetItem(REFRESH_KEY, refreshToken);
+    else authStorageRemoveItem(REFRESH_KEY);
   }
 }
 
 export function getStoredUser() {
   try {
-    const raw = sessionStorage.getItem(USER_KEY);
+    const raw = authStorageGetItem(USER_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -43,9 +44,9 @@ export function getStoredUser() {
 }
 
 export function clearSession() {
-  sessionStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(USER_KEY);
-  sessionStorage.removeItem(REFRESH_KEY);
+  authStorageRemoveItem(TOKEN_KEY);
+  authStorageRemoveItem(USER_KEY);
+  authStorageRemoveItem(REFRESH_KEY);
 }
 
 async function tryRefreshSession() {

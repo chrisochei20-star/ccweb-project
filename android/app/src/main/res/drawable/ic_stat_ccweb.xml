@@ -3,8 +3,9 @@
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
-    android:viewportHeight="24">
+    android:viewportHeight="24"
+    android:tint="@color/ccweb_notification">
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M13,2L4,14h7l-1,8 9,-12h-7z" />
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M13,2 L4,14 H11 L10,22 L22,10 H15 L13,2 Z" />
 </vector>

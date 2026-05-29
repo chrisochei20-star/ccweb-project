@@ -84,7 +84,7 @@ npm run mobile:android:release
 
 | Item | Status | Blocker? |
 |------|--------|----------|
-| Adaptive launcher icons | Generated | Designer review recommended |
+| Adaptive launcher icons | Done | CCWEB Foundation bolt via `npm run mobile:assets` |
 | Splash assets | Generated | OK for internal testing |
 | App ID / name | `io.chrisccweb.app` / CCWEB | OK |
 | versionCode 2 / versionName 1.1.0 | Set | Bump before each release |

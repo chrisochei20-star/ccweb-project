@@ -33,6 +33,7 @@ const MobileDashboardPage = lazy(() => import("./pages/MobileDashboardPage").the
 const NotificationCenterPage = lazy(() =>
   import("./components/notifications/NotificationCenter").then((m) => ({ default: m.NotificationCenterPage }))
 );
+const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const CourseAdminDashboard = lazy(() => import("./pages/CourseAdminDashboard").then((m) => ({ default: m.CourseAdminDashboard })));
 const CourseCatalogPage = lazy(() => import("./pages/CourseCatalogPage").then((m) => ({ default: m.CourseCatalogPage })));
 const CourseDetailPage = lazy(() => import("./pages/CourseDetailPage").then((m) => ({ default: m.CourseDetailPage })));
@@ -94,6 +95,7 @@ function App() {
           <Route path="earn" element={<EarnShellPage />} />
           <Route path="community" element={<CommunityShellPage />} />
           <Route path="notifications" element={<NotificationCenterPage />} />
+          <Route path="settings" element={<SettingsPage />} />
           <Route element={<ProtectedLayout />}>
             <Route path="profile" element={<ProfileShellPage />} />
             <Route path="messages" element={<ChatPage />} />

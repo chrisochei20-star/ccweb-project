@@ -15,6 +15,8 @@ import { OfflineBanner } from "../components/shell/OfflineBanner";
 import { InstallPrompt } from "../components/pwa/InstallPrompt";
 import { PageMeta, ROUTE_META } from "../components/seo/PageMeta";
 import { useNativePushRouting } from "../hooks/useNativePushRouting";
+import { useAppResumeSync } from "../hooks/useAppResume";
+import { isCapacitorNative } from "../lib/capacitorPlatform";
 
 const bottomTabs = [
   { id: "home", to: "/", label: "Home", shortLabel: "Home", icon: Home, end: true, match: (p) => p === "/" },
@@ -68,8 +70,10 @@ export function MobileLayout() {
   const [moreOpen, setMoreOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const nativeShell = isCapacitorNative();
 
   useNativePushRouting(authHydrated && Boolean(user));
+  useAppResumeSync(authHydrated && Boolean(user));
 
   useEffect(() => {
     const stopLifecycle = initRealtimeLifecycle();
@@ -161,12 +165,12 @@ export function MobileLayout() {
   const routeMeta = ROUTE_META[path] || (path.startsWith("/u/") ? { title: "Profile", description: "Public CCWEB creator profile." } : null);
 
   return (
-    <div className="ccweb-app-root ccweb-app-pattern min-h-screen font-sans antialiased">
+    <div className={`ccweb-app-root ccweb-app-pattern min-h-screen font-sans antialiased${nativeShell ? " ccweb-mobile-shell" : ""}`}>
       <a href="#ccweb-main" className="ccweb-skip-link">
         Skip to main content
       </a>
       <PageMeta title={routeMeta?.title} description={routeMeta?.description} path={path} />
-      <OfflineBanner />
+      <OfflineBanner onSoftRecover={refreshSession} />
       <InstallPrompt />
       <header className="ccweb-top-bar">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3.5 md:max-w-5xl">
@@ -266,8 +270,10 @@ export function MobileLayout() {
         </div>
       </nav>
 
-      <main id="ccweb-main" className="ccweb-main-pad mx-auto max-w-3xl md:max-w-5xl" tabIndex={-1}>
-        <Outlet context={{ user, setUser, authHydrated, refreshSession }} />
+      <main id="ccweb-main" className="ccweb-main-pad ccweb-native-scroll mx-auto max-w-3xl md:max-w-5xl" tabIndex={-1}>
+        <div key={path} className={nativeShell ? "ccweb-page-enter" : undefined}>
+          <Outlet context={{ user, setUser, authHydrated, refreshSession }} />
+        </div>
       </main>
 
       <div className="ccweb-floating-shell lg:hidden" aria-hidden={false}>

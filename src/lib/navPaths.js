@@ -24,4 +24,8 @@ export const CCWEB_SECONDARY_NAV = [
   { to: "/ai-tutor", label: "AI tutor", description: "Standalone tutor" },
   { to: "/about", label: "About", description: "Product story" },
   { to: "/faq", label: "FAQ", description: "Help & answers" },
+  { to: "/settings", label: "Settings", description: "Notifications, legal, support" },
+  { to: "/privacy", label: "Privacy", description: "Privacy policy" },
+  { to: "/terms", label: "Terms", description: "Terms of service" },
+  { to: "/contact", label: "Contact", description: "Support & feedback" },
 ];

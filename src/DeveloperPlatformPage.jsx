@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiUrl } from "./config/env";
 import { apiFetch } from "./lib/apiClient";
+import { developerApiKeyHeaders } from "./lib/developerApiHeaders";
+import { parseApiResponse } from "./lib/parseApiResponse";
 
 const LS_KEY = "ccweb_dev_api_key";
 
@@ -75,9 +77,8 @@ export function DeveloperPlatformPage() {
       return;
     }
     try {
-      const res = await apiFetch(apiUrl("/v1/sessions"), { headers: { CCWEB_API_KEY: apiKey.trim() } });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || res.statusText);
+      const res = await apiFetch(apiUrl("/v1/sessions"), { headers: developerApiKeyHeaders(apiKey) });
+      const data = await parseApiResponse(res);
       setSessions(data);
       setMsg("GET /v1/sessions OK");
       loadConsole();
@@ -94,9 +95,8 @@ export function DeveloperPlatformPage() {
       return;
     }
     try {
-      const res = await apiFetch(apiUrl("/v1/analytics"), { headers: { CCWEB_API_KEY: apiKey.trim() } });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || res.statusText);
+      const res = await apiFetch(apiUrl("/v1/analytics"), { headers: developerApiKeyHeaders(apiKey) });
+      const data = await parseApiResponse(res);
       setUsage(data);
       setMsg("Usage snapshot loaded");
       loadConsole();

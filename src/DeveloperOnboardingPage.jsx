@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchMe, getStoredUser } from "./session";
 import { getApiBaseUrl, apiUrl } from "./config/env";
 import { apiFetch } from "./lib/apiClient";
+import { developerApiKeyHeaders } from "./lib/developerApiHeaders";
+import { parseApiResponse } from "./lib/parseApiResponse";
 
 const LS_KEY = "ccweb_dev_api_key";
 const LS_PROJECT = "ccweb_dev_onboarding_project_id";
@@ -175,9 +177,8 @@ export function DeveloperOnboardingPage() {
     }
     setBusy(true);
     try {
-      const res = await apiFetch(apiUrl("/v1/analytics"), { headers: { CCWEB_API_KEY: apiKey.trim() } });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || res.statusText);
+      const res = await apiFetch(apiUrl("/v1/analytics"), { headers: developerApiKeyHeaders(apiKey) });
+      const data = await parseApiResponse(res);
       setApiTestResult(data);
     } catch (e) {
       setErr(e.message);

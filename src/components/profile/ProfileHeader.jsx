@@ -7,6 +7,7 @@ import { Skeleton } from "../ui/Skeleton";
 import { CreatorBadge, VerificationBadge } from "./ProfileBadges";
 import { CreatorStatsCard } from "./CreatorStatsCard";
 import { ProfileMediaUpload } from "./ProfileMediaUpload";
+import { CcwebBrandAvatarFallback } from "../brand/CcwebBrandMark";
 
 function formatJoined(iso) {
   if (!iso) return null;
@@ -99,8 +100,8 @@ export function ProfileHeader({
               compressOptions={{ maxWidth: 1024, maxHeight: 1024, quality: 0.88 }}
               {...avatarUpload}
             >
-              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ccweb-cyan/35 to-ccweb-violet/30 text-lg font-bold text-white">
-                {(user?.displayName || "?").slice(0, 2).toUpperCase()}
+              <div className="h-full w-full overflow-hidden rounded-2xl">
+                <CcwebBrandAvatarFallback name={user?.displayName} size={96} className="h-full w-full rounded-2xl" />
               </div>
             </ProfileMediaUpload>
           ) : (
@@ -114,7 +115,7 @@ export function ProfileHeader({
                   decoding="async"
                 />
               ) : (
-                <span>{(user?.displayName || "?").slice(0, 2).toUpperCase()}</span>
+                <CcwebBrandAvatarFallback name={user?.displayName} size={96} className="h-full w-full rounded-2xl" />
               )}
             </div>
           )}

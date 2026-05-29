@@ -14,6 +14,7 @@ import { MobileLayout } from "./layout/MobileLayout";
 import { ProtectedLayout } from "./layout/ProtectedLayout";
 import { LoginPage, SignupPage } from "./pages/AuthPages";
 import { Skeleton } from "./components/ui/Skeleton";
+import { CcwebBrandMark } from "./components/brand/CcwebBrandMark";
 import { CcwebErrorBoundary } from "./components/CcwebErrorBoundary";
 import { AiSurfaceErrorBoundary } from "./components/ai/AiSurfaceErrorBoundary";
 import { BetaInvitePage, BetaTestUserPage, BetaUserSlugPage } from "./pages/BetaPages";
@@ -60,7 +61,7 @@ function RouteFallback() {
   return (
     <div className="mx-auto flex min-h-[50vh] max-w-lg flex-col items-center justify-center gap-5 px-4 py-16">
       <div className="ccweb-glass ccweb-card-premium w-full max-w-sm rounded-3xl p-8">
-        <Skeleton className="mx-auto h-11 w-11 rounded-2xl" />
+        <CcwebBrandMark size={56} className="mx-auto" showGlow />
         <Skeleton className="mx-auto mt-5 h-6 w-44 rounded-lg" />
         <Skeleton className="mx-auto mt-3 h-3 w-full max-w-[220px] rounded-md" />
         <div className="mt-6 space-y-2">

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Download, X } from "lucide-react";
+import { CcwebBrandMark } from "../brand/CcwebBrandMark";
 import { trackProductionEvent } from "../../lib/clientAnalytics";
 import { isCapacitorNative } from "../../lib/capacitorPlatform";
 
@@ -71,9 +72,7 @@ export function InstallPrompt() {
       aria-label="Install app"
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-ccweb-cyan/30 to-ccweb-violet/30 text-lg">
-          ⚡
-        </div>
+        <CcwebBrandMark size={40} showGlow />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-white">Install CCWEB</p>
           <p className="mt-0.5 text-xs text-ccweb-muted">Add to your home screen for faster launch and app-like experience.</p>

@@ -13,6 +13,7 @@ import { PullToRefreshContainer } from "../components/mobile/PullToRefreshContai
 import { ImageViewerModal } from "../components/media/ImageViewerModal";
 import { NativeMediaPicker } from "../components/media/NativeMediaPicker";
 import { MediaImage } from "../components/ui/MediaImage";
+import { CcwebBrandAvatarFallback } from "../components/brand/CcwebBrandMark";
 import { isCapacitorNative } from "../lib/capacitorPlatform";
 import { pushNativeBackHandler } from "../lib/nativeBackStack";
 import { toast } from "../lib/toastBus";
@@ -528,9 +529,11 @@ export function ChatPage() {
                   }
                 >
                   <div className="relative">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500/30 to-violet-600/40 text-sm font-bold text-white">
-                      {(c.otherDisplayName || "?").slice(0, 2).toUpperCase()}
-                    </div>
+                    <CcwebBrandAvatarFallback
+                      name={c.otherDisplayName}
+                      size={44}
+                      className="rounded-xl"
+                    />
                     <span
                       className={
                         "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-black " +
@@ -581,9 +584,11 @@ export function ChatPage() {
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <div className="relative">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500/30 to-violet-600/40 text-xs font-bold text-white">
-                  {(activeConv?.otherDisplayName || "?").slice(0, 2).toUpperCase()}
-                </div>
+                <CcwebBrandAvatarFallback
+                  name={activeConv?.otherDisplayName}
+                  size={40}
+                  className="rounded-xl"
+                />
                 <span
                   className={
                     "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-black " +

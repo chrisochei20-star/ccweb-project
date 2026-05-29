@@ -1,5 +1,6 @@
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { CcwebBrandMark } from "../brand/CcwebBrandMark";
 import { CCWEB_UI_LOAD_TIMEOUT_MS } from "../../constants/loadTimeout";
 
 /** Shown while MobileLayout runs initial fetchMe / session restore — avoids false “Sign in” prompts. */
@@ -35,6 +36,7 @@ export function AuthSessionChecking({
       role="status"
       aria-live="polite"
     >
+      <CcwebBrandMark size={44} className="mb-1" showGlow />
       <Loader2 className="h-7 w-7 shrink-0 animate-spin" aria-hidden />
       <p className="text-center text-sm">{message}</p>
     </div>

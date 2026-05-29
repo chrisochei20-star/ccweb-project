@@ -2,6 +2,7 @@ import { Bell, Home, Loader2, MessageSquare, Search, User } from "lucide-react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
 import { ThemeToggle } from "../components/shell/ThemeToggle";
+import { CcwebBrandMark } from "../components/brand/CcwebBrandMark";
 import { NotificationBell } from "../components/notifications/NotificationCenter";
 import { MoreMenuSheet, MoreMenuTrigger } from "../components/shell/MoreMenuSheet";
 import { CCWEB_UI_LOAD_TIMEOUT_MS } from "../constants/loadTimeout";
@@ -180,7 +181,7 @@ export function MobileLayout() {
             to="/"
             className="group flex min-h-[var(--ccweb-touch-min,44px)] min-w-[var(--ccweb-touch-min,44px)] shrink-0 items-center gap-2.5 rounded-xl font-semibold tracking-tight text-white sm:gap-3"
           >
-            <span className="ccweb-brand-mark text-lg transition-transform duration-300 group-hover:scale-105">⚡</span>
+            <CcwebBrandMark size={36} className="transition-transform duration-300 group-hover:scale-105" showGlow />
             <span className="hidden bg-gradient-to-r from-ccweb-cyan via-ccweb-violet to-ccweb-green bg-clip-text text-lg text-transparent sm:inline">
               CCWEB
             </span>

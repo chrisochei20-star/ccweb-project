@@ -163,6 +163,24 @@ function sizeForLocal(n) {
   return Math.max(64, Math.round(n));
 }
 
+/** PWA maskable icon — full background, bolt in 80% safe zone */
+export function renderPwaMaskablePixel(x, y, size) {
+  const bg = backgroundColorAt(x, y, size, "dark");
+  const poly = scalePoly(BOLT_POLY_108, size, 0.24);
+  const nx = x / size;
+  const ny = y / size;
+  if (pointInPoly(x, y, poly)) {
+    const c = boltColorAt(nx, ny);
+    return { r: c.r, g: c.g, b: c.b, a: 255 };
+  }
+  return { r: bg.r, g: bg.g, b: bg.b, a: 255 };
+}
+
+/** Standard PWA / favicon — matches Android legacy launcher composite */
+export function renderPwaIconPixel(x, y, size) {
+  return renderLegacyPixel(x, y, size);
+}
+
 /** Notification icon — white bolt silhouette, high contrast at 24dp */
 export function renderNotificationPixel(x, y, size) {
   const poly = scalePoly(BOLT_POLY_108, size, 0.22);

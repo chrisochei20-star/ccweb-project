@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+/* CCWEB design tokens — premium dark / glass / gradients */
+@theme {
+  --color-ccweb-bg: #030712;
+  --color-ccweb-surface: rgba(12, 22, 48, 0.65);
+  --color-ccweb-card: rgba(10, 19, 40, 0.55);
+  --color-ccweb-border: rgba(117, 160, 214, 0.22);
+  --color-ccweb-cyan: #22d3ee;
+  --color-ccweb-violet: #a78bfa;
+  --color-ccweb-green: #34d399;
+  --color-ccweb-rose: #fb7185;
+  --color-ccweb-muted: #94a3b8;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  :root {
+    --ccweb-touch-min: 44px;
+    --ccweb-safe-top: env(safe-area-inset-top, 0px);
+    --ccweb-safe-bottom: env(safe-area-inset-bottom, 0px);
+    --ccweb-safe-left: env(safe-area-inset-left, 0px);
+    --ccweb-safe-right: env(safe-area-inset-right, 0px);
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+  button,
+  a,
+  [role="button"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(34, 211, 238, 0.15);
+  }
+  .ccweb-scroll-momentum {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+  .ccweb-skip-link {
+    position: absolute;
+    left: -9999px;
+    top: auto;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    z-index: 100;
+  }
+  .ccweb-skip-link:focus {
+    left: 1rem;
+    top: max(0.75rem, env(safe-area-inset-top));
+    width: auto;
+    height: auto;
+    overflow: visible;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.75rem;
+    background: #0f172a;
+    color: #22d3ee;
+    border: 1px solid rgba(34, 211, 238, 0.35);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  :focus-visible {
+    outline: 2px solid rgba(34, 211, 238, 0.65);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: rgba(34, 211, 238, 0.28);
+    color: #f8fafc;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

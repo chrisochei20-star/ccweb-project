@@ -1,6 +1,6 @@
 {
   "name": "ccweb-project",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "The world's first AI-powered Web3 Academy and Business Engine",
   "main": "server.js",
@@ -8,14 +8,27 @@
     "serve": "node server.js",
     "dev": "vite",
     "dev:api": "node server.js",
-    "build": "vite build",
+    "build": "node scripts/generate-pwa-icons.mjs && vite build",
+    "pwa:icons": "node scripts/generate-pwa-icons.mjs",
+    "build:client": "vite build",
     "preview": "vite preview",
     "start": "node server.js",
+    "migrate": "node db/migrate.js",
+    "db:migrate": "node db/migrate.js",
+    "db:verify": "node db/verifySchema.js",
+    "verify:deploy": "node scripts/verify-deployment.js",
+    "verify:imports": "node scripts/check-import-deps.js",
+    "verify:predeploy": "npm run verify:imports && npm test && npm run build",
     "test": "vitest run",
-    "verify:imports": "node scripts/check-no-localhost-in-src.mjs"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:production": "PRODUCTION_E2E=1 playwright test e2e/production-smoke.spec.js --project=chromium",
+    "record:preview": "PW_SLOW_MO=450 CI=1 playwright test e2e/preview-recording.spec.js --project=chromium",
+    "mobile:sync": "npm run build && npx cap sync"
   },
   "engines": {
-    "node": ">=20"
+    "node": "20.x",
+    "npm": ">=10.0.0"
   },
   "keywords": [
     "web3",
@@ -26,20 +39,53 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@capacitor/android": "^8.3.1",
-    "@capacitor/core": "^8.3.1",
+    "@capacitor/android": "7.4.3",
+    "@capacitor/core": "7.4.3",
+    "@supabase/supabase-js": "^2.106.2",
+    "axios": "^1.16.0",
+    "bcryptjs": "^3.0.3",
+    "bs58": "^6.0.0",
+    "cloudinary": "^2.10.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "ethers": "^6.13.5",
+    "express": "^5.1.0",
+    "flutterwave-react-v3": "^1.3.3",
     "framer-motion": "^12.38.0",
+    "google-auth-library": "^10.6.2",
+    "helmet": "^8.1.0",
+    "ioredis": "^5.10.1",
+    "jsonwebtoken": "^9.0.3",
+    "jwks-rsa": "^4.0.1",
     "lucide-react": "^1.8.0",
+    "mongodb": "^6.16.0",
+    "multer": "^2.1.1",
+    "otplib": "^13.4.0",
+    "pg": "^8.20.0",
+    "pino": "^10.3.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.72.1",
+    "react-is": "^19.2.6",
     "react-router-dom": "^7.9.4",
     "recharts": "^3.8.1",
-    "zod": "^4.3.6"
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
+    "tweetnacl": "^1.0.3",
+    "vary": "^1.1.2",
+    "zod": "^4.3.6",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@capacitor/cli": "7.4.3",
+    "@playwright/test": "^1.51.0",
+    "@tailwindcss/vite": "^4.1.11",
     "@vitejs/plugin-react": "^5.1.0",
+    "tailwindcss": "^4.1.11",
     "vite": "^7.1.10",
     "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "@types/node": "^20.19.4"
   }
 }

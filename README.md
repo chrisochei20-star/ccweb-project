@@ -2,52 +2,80 @@
 
 The world's first AI-powered Web3 Academy and Business Engine.
 
-Core pillars: Learn -> Find -> Build -> Earn.
+**Pillars:** Learn → Find → Build → Earn.
 
-## Development setup
+## Prerequisites
 
-### Prerequisites
+- **Node.js 20+** and npm
 
-- Node.js 18+ and npm
+## Install
 
-### Install dependencies
+```bash
+npm install
+```
 
-Run:
+## Development (two terminals)
 
-`npm install`
+1. **API** (port **3000**): `npm run dev:api`
+2. **Vite** (port **5173**): `npm run dev`
 
-### Start the application
+Open **http://localhost:5173**. The Vite dev server proxies `/api` and `/v1` to `http://127.0.0.1:3000`.
 
-Copy `.env.example` to `.env` and set **`VITE_DEV_API_PROXY_TARGET`** (for example `http://127.0.0.1:3000`) so the Vite dev server can proxy `/api` to the Node API.
+## Production-style run
 
-In one terminal run `npm run dev:api`, in another run `npm run dev`, then open the URL Vite prints (usually `http://localhost:5173`).
+```bash
+npm run build
+npm start
+```
 
-For a **Vercel UI + Render API** build, set **`VITE_API_BASE_URL`** on Vercel to your public API origin (see `.env.example`).
+`npm start` serves the built `dist/` folder and the same API as dev.
 
-### Production-style run
+## Tests
 
-Build the SPA, then start the API + static host (serves **`dist/`** when `NODE_ENV=production`, otherwise **`public/`**):
+```bash
+npm test
+```
 
-`npm run build && NODE_ENV=production npm start`
+## Mobile (Capacitor)
 
-Railway/Render: set **`NODE_ENV=production`**, run **`npm run build`** in the build step and **`npm start`** at release. Optional: **`CCWEB_STATIC_ROOT=dist|public`** to force which folder is used.
+After `npm run build`:
 
-## Business applicant + income engine APIs
+```bash
+npm run mobile:sync
+```
 
-The prototype now includes applicant profile and secure payout workflow APIs:
+Requires `@capacitor/cli` (devDependency). Add iOS with `npx cap add ios` on macOS if needed.
 
-- `GET /api/applicants` - list applicant profiles, stats, skill capacity, certificates
-- `GET /api/applicants/:id` - fetch one applicant profile
-- `POST /api/applicants` - create/update applicant profile with capacity and certificates
-- `GET /api/engine/match?applicantId=:id&city=:city&query=:query` - AI business finder compatibility matching
-- `POST /api/deals/:id/confirm` - secure payout release with role + token checks
+## Documentation
 
-## AI web streaming APIs
+| Doc | Purpose |
+|-----|---------|
+| [AGENTS.md](./AGENTS.md) | Agent / cloud workspace notes and key endpoints |
+| [CHANGELOG.md](./CHANGELOG.md) | Release and milestone notes |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | System map and extension points |
+| [docs/STORE_RELEASE.md](./docs/STORE_RELEASE.md) | Play / App Store checklist |
+| [docs/DEMO_VIDEO_SCRIPT.md](./docs/DEMO_VIDEO_SCRIPT.md) | 2-minute demo shot list |
+| [docs/CODE_INVENTORY.md](./docs/CODE_INVENTORY.md) | Refined / changed / outdated snapshot |
+| [docs/REPOSITORY_LAYOUT.md](./docs/REPOSITORY_LAYOUT.md) | Where frontend, backend, API, and SDK live in this repo |
+| [docs/BACKEND_SECURITY_ARCHITECTURE.md](./docs/BACKEND_SECURITY_ARCHITECTURE.md) | Backend security layers, scaling, checklist |
+| [docs/AUTH_API.md](./docs/AUTH_API.md) | JWT, 2FA, wallet sign-in, curl examples |
+| [docs/GROWTH_HUB.md](./docs/GROWTH_HUB.md) | Marketing agent, marketplace, escrow API |
 
-LiveKit-style AI web streaming prototype endpoints:
+## Auth
 
-- `GET /api/streaming/curriculum` - list curriculum/courses supported by AI host
-- `GET /api/streaming/rooms` - list active and scheduled live rooms
-- `POST /api/streaming/rooms` - create a live room with host, curriculum, and revenue split target
-- `POST /api/streaming/rooms/:id/revenue` - add revenue events and compute platform/host payout split
-- `POST /api/streaming/rooms/:id/close` - close room and return final revenue summary
+Email + password with **bcrypt**, **JWT** access + rotating **refresh** (httpOnly cookie; use `AUTH_REFRESH_IN_BODY=1` for Vite dev), optional **TOTP** 2FA, and **wallet** sign-in (EVM / Solana). Configure **`AUTH_JWT_SECRET`** (32+ chars) and **`MONGODB_URI`** for production persistence. See [docs/AUTH_API.md](./docs/AUTH_API.md).
+
+## Growth Hub
+
+Global marketing workspace, marketplace, and simulated escrow: **`/growth-hub`** in the app, **`/api/growth/*`** on the API. See [docs/GROWTH_HUB.md](./docs/GROWTH_HUB.md).
+
+## Key API areas
+
+- **Applicants & deals:** `GET/POST /api/applicants`, `POST /api/deals`, etc.
+- **Streaming:** `GET/POST /api/streaming/rooms`, payouts, attendance
+- **Intelligence:** `/api/intelligence/*` (dashboard, token detail, tracked wallets/tokens)
+- **Auth:** `/api/auth/*` and `/auth/*` — JWT, 2FA, wallet, refresh (see `docs/AUTH_API.md`)
+- **Growth hub:** `/api/growth/*` — marketing campaigns, marketplace, escrow (see `docs/GROWTH_HUB.md`)
+
+- `GET /api/streaming/curriculum` is **not** implemented; curriculum context is embedded in room creation responses (see AGENTS.md).
+- Crypto / intelligence outputs are **signals and probabilities**, not financial advice.

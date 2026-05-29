@@ -15,6 +15,7 @@ import {
 import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Link, useOutletContext } from "react-router-dom";
+import { NotificationPreferencesPanel } from "./NotificationPreferencesPanel";
 import { useRealtimeSubscription } from "../../hooks/useRealtimeSubscription";
 import { useNotificationsStore } from "../../store/notificationsStore";
 import { toast } from "../../lib/toastBus";
@@ -180,6 +181,8 @@ export function NotificationCenterPage() {
           </button>
         </div>
       </header>
+
+      <NotificationPreferencesPanel />
 
       {err && (
         <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">

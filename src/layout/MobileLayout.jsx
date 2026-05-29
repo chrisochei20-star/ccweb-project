@@ -14,6 +14,7 @@ import { useProfileStore } from "../store/profileStore";
 import { OfflineBanner } from "../components/shell/OfflineBanner";
 import { InstallPrompt } from "../components/pwa/InstallPrompt";
 import { PageMeta, ROUTE_META } from "../components/seo/PageMeta";
+import { useNativePushRouting } from "../hooks/useNativePushRouting";
 
 const bottomTabs = [
   { id: "home", to: "/", label: "Home", shortLabel: "Home", icon: Home, end: true, match: (p) => p === "/" },
@@ -67,6 +68,8 @@ export function MobileLayout() {
   const [moreOpen, setMoreOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useNativePushRouting(authHydrated && Boolean(user));
 
   useEffect(() => {
     const stopLifecycle = initRealtimeLifecycle();

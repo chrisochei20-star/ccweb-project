@@ -61,6 +61,22 @@ async function insertRow({ recipientUserId, kind, title, body, payload, actorUse
      VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8)`,
     [id, recipientUserId, kind, title || "", body || "", pay, actorUserId || null, groupKey || null]
   );
+
+  try {
+    const { dispatchPushForNotificationEvent } = require("../services/pushNotificationDispatch");
+    dispatchPushForNotificationEvent({
+      recipientUserIds: [recipientUserId],
+      kind,
+      title,
+      body,
+      payload: payload && typeof payload === "object" ? payload : {},
+      legacyType: payload?.legacyType,
+      notificationId: id,
+    });
+  } catch {
+    /* push optional */
+  }
+
   return id;
 }
 

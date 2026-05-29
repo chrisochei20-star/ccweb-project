@@ -3,6 +3,8 @@ import { CCWEB_AUTH_HYDRATION_TIMEOUT_MS } from "./constants/loadTimeout";
 import { getApiBaseUrl } from "./config/env";
 import { authStorageGetItem, authStorageRemoveItem, authStorageSetItem } from "./lib/authStorage";
 import { apiFetch } from "./lib/apiClient";
+import { revokeNativeDeviceToken } from "./lib/nativePush";
+import { isCapacitorNative } from "./lib/capacitorPlatform";
 
 /** Max wait for /me + refresh during shell hydration (avoids infinite spinner). */
 const SESSION_HYDRATION_TIMEOUT_MS = CCWEB_AUTH_HYDRATION_TIMEOUT_MS;
@@ -194,6 +196,13 @@ export async function fetchMe() {
 export async function logoutApi() {
   const token = getSessionToken();
   const refresh = getRefreshToken();
+  if (isCapacitorNative()) {
+    try {
+      await revokeNativeDeviceToken();
+    } catch {
+      /* ignore */
+    }
+  }
   if (token) {
     try {
       const apiOrigin = getApiBaseUrl();

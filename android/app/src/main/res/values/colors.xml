@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <color name="colorPrimary">#030712</color>
+    <color name="colorPrimaryDark">#030712</color>
+    <color name="colorAccent">#22D3EE</color>
+    <color name="ccweb_splash_bg">#030712</color>
     <color name="ccweb_notification">#22D3EE</color>
 </resources>

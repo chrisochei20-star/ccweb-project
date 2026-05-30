@@ -76,6 +76,10 @@ html.ccweb-capacitor-native .ccweb-outline-btn:active:not(:disabled) {
   transform: scale(0.97);
 }
 
+html.ccweb-capacitor-native.ccweb-keyboard-open .ccweb-floating-dock {
+  transform: translateY(calc(var(--ccweb-keyboard-inset, 0px) * -0.02));
+}
+
 html.ccweb-capacitor-native .ccweb-floating-dock {
   transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }

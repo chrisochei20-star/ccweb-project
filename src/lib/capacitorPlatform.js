@@ -4,6 +4,8 @@ import { releaseDiag } from "./releaseLog";
 
 /** @type {string | null} */
 let pendingDeepLinkUrl = null;
+/** @type {boolean} */
+let splashHideScheduled = false;
 
 export function consumePendingDeepLink() {
   const url = pendingDeepLinkUrl;
@@ -25,6 +27,24 @@ export function isCapacitorAndroid() {
   return Capacitor.getPlatform() === "android";
 }
 
+function scheduleNativeSplashHide() {
+  if (splashHideScheduled || !isCapacitorNative()) return;
+  splashHideScheduled = true;
+
+  const hide = async () => {
+    try {
+      const { SplashScreen } = await import("@capacitor/splash-screen");
+      await SplashScreen.hide({ fadeOutDuration: 420 });
+      releaseDiag("splash_hidden");
+    } catch {
+      /* optional */
+    }
+  };
+
+  document.addEventListener("ccweb:shell-ready", hide, { once: true });
+  window.setTimeout(hide, 3200);
+}
+
 /**
  * Initialize native shell: status bar, splash hide, keyboard, safe-area class, app lifecycle.
  * Safe to call on web — no-ops when plugins are unavailable.
@@ -39,6 +59,8 @@ export async function initCapacitorShell() {
 
   if (!isCapacitorNative()) return;
 
+  scheduleNativeSplashHide();
+
   try {
     const { StatusBar, Style } = await import("@capacitor/status-bar");
     await StatusBar.setOverlaysWebView({ overlay: true });
@@ -52,19 +74,19 @@ export async function initCapacitorShell() {
     const { Keyboard } = await import("@capacitor/keyboard");
     await Keyboard.setAccessoryBarVisible({ isVisible: false });
     await Keyboard.setScroll({ isDisabled: false });
-    Keyboard.addListener("keyboardWillShow", () => {
+    Keyboard.addListener("keyboardWillShow", (info) => {
       document.documentElement.classList.add("ccweb-keyboard-open");
+      if (info?.keyboardHeight) {
+        document.documentElement.style.setProperty(
+          "--ccweb-keyboard-inset",
+          `${info.keyboardHeight}px`
+        );
+      }
     });
     Keyboard.addListener("keyboardWillHide", () => {
       document.documentElement.classList.remove("ccweb-keyboard-open");
+      document.documentElement.style.removeProperty("--ccweb-keyboard-inset");
     });
-  } catch {
-    /* optional */
-  }
-
-  try {
-    const { SplashScreen } = await import("@capacitor/splash-screen");
-    await SplashScreen.hide({ fadeOutDuration: 320 });
   } catch {
     /* optional */
   }
@@ -74,6 +96,8 @@ export async function initCapacitorShell() {
     App.addListener("appStateChange", ({ isActive }) => {
       if (isActive) {
         document.dispatchEvent(new CustomEvent("ccweb:app-resume"));
+      } else {
+        releaseDiag("app_background");
       }
     });
     App.addListener("backButton", ({ canGoBack }) => {
@@ -105,4 +129,10 @@ export async function initCapacitorShell() {
   } catch {
     /* optional */
   }
+}
+
+/** Call when shell content is ready (after auth hydrate) for smoother splash handoff. */
+export function signalNativeShellReady() {
+  if (!isCapacitorNative()) return;
+  document.dispatchEvent(new CustomEvent("ccweb:shell-ready"));
 }

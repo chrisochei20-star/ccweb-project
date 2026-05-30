@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { isAuthRedirectUrl, routeFromAppUrl } from "../lib/deepLinkRouter";
+import { invalidAppUrlReason, isAuthRedirectUrl, routeFromAppUrl } from "../lib/deepLinkRouter";
 import { isCapacitorNative, consumePendingDeepLink } from "../lib/capacitorPlatform";
 import { releaseDiag } from "../lib/releaseLog";
 import { trackProductionEvent } from "../lib/clientAnalytics";
+import { toast } from "../lib/toastBus";
 
 /**
  * Routes Capacitor App URL opens (cold start + warm) into React Router.
@@ -16,7 +17,17 @@ export function useDeepLinkRouting(enabled = true) {
 
     function handleUrl(url, coldStart = false) {
       const route = routeFromAppUrl(url);
-      if (!route) return;
+      if (!route) {
+        const reason = invalidAppUrlReason(url);
+        releaseDiag("deep_link_rejected", { url, reason, coldStart });
+        trackProductionEvent("native_deep_link_rejected", {
+          metadata: { reason, coldStart },
+        });
+        if (reason && reason !== "empty_url") {
+          toast.info("This link cannot be opened in CCWEB.");
+        }
+        return;
+      }
       releaseDiag("deep_link", { url, route, coldStart });
       trackProductionEvent("native_deep_link", {
         metadata: { route, coldStart, auth: isAuthRedirectUrl(url) },

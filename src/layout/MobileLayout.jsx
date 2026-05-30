@@ -18,7 +18,7 @@ import { PageMeta, ROUTE_META } from "../components/seo/PageMeta";
 import { useNativePushRouting } from "../hooks/useNativePushRouting";
 import { useDeepLinkRouting } from "../hooks/useDeepLinkRouting";
 import { useAppResumeSync } from "../hooks/useAppResume";
-import { isCapacitorNative } from "../lib/capacitorPlatform";
+import { isCapacitorNative, signalNativeShellReady } from "../lib/capacitorPlatform";
 
 const bottomTabs = [
   { id: "home", to: "/", label: "Home", shortLabel: "Home", icon: Home, end: true, match: (p) => p === "/" },
@@ -101,11 +101,12 @@ export function MobileLayout() {
   useEffect(() => {
     if (authHydrated) {
       setHydrateTimedOut(false);
+      if (nativeShell) signalNativeShellReady();
       return undefined;
     }
     const id = window.setTimeout(() => setHydrateTimedOut(true), CCWEB_UI_LOAD_TIMEOUT_MS);
     return () => window.clearTimeout(id);
-  }, [authHydrated]);
+  }, [authHydrated, nativeShell]);
 
   useEffect(() => {
     let cancelled = false;

@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { NotificationPreferencesPanel } from "../components/notifications/NotificationPreferencesPanel";
 import { isCapacitorNative } from "../lib/capacitorPlatform";
 import { fetchPushDiagnosticsFromApi, getNativePushDiagnostics } from "../lib/nativePush";
+import { NativePermissionsRationale } from "../components/settings/NativePermissionsRationale";
 import { useAppShellContext } from "../hooks/useAppShellContext";
 
-const APP_VERSION = "1.2.0";
-const VERSION_CODE = 3;
+const APP_VERSION = "1.2.1";
+const VERSION_CODE = 4;
 
 const SUPPORT_EMAIL = "support@chrisccweb.com";
 const PRIVACY_URL = "/privacy";
@@ -35,6 +36,8 @@ export function SettingsPage() {
       </header>
 
       {authHydrated && user && <NotificationPreferencesPanel />}
+
+      {native && <NativePermissionsRationale />}
 
       <section className="ccweb-card-premium space-y-3 rounded-2xl border border-white/10 p-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -77,6 +80,8 @@ export function SettingsPage() {
           <p>Version: {APP_VERSION} (code {VERSION_CODE})</p>
           <p>Build: {buildId || "(local)"}</p>
           <p>Push token: {localPush.tokenPresent ? localPush.tokenPreview : "not registered"}</p>
+          <p>API sync: {localPush.apiSynced ? "yes" : "pending"}</p>
+          <p>Permission: {localPush.permission || "—"}</p>
           {pushDiag && (
             <>
               <p>FCM server: {pushDiag.fcmConfigured ? "configured" : "not configured"}</p>

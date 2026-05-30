@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isAuthRedirectUrl, routeFromAppUrl } from "../src/lib/deepLinkRouter.js";
+import {
+  invalidAppUrlReason,
+  isAuthRedirectUrl,
+  isRecognizedAppUrl,
+  routeFromAppUrl,
+} from "../src/lib/deepLinkRouter.js";
 
 describe("deepLinkRouter", () => {
   it("maps custom scheme URLs to app routes", () => {
@@ -24,5 +29,16 @@ describe("deepLinkRouter", () => {
   it("detects auth redirect URLs", () => {
     expect(isAuthRedirectUrl("https://ccweb-project-b4jq.vercel.app/login")).toBe(true);
     expect(isAuthRedirectUrl("https://ccweb-project-b4jq.vercel.app/community")).toBe(false);
+  });
+
+  it("classifies invalid links for UX", () => {
+    expect(invalidAppUrlReason("https://evil.example/phish")).toBe("untrusted_host");
+    expect(invalidAppUrlReason("javascript:alert(1)")).toBe("unsafe_scheme");
+    expect(invalidAppUrlReason("https://ccweb-project-b4jq.vercel.app/community")).toBeNull();
+  });
+
+  it("recognizes supported URLs", () => {
+    expect(isRecognizedAppUrl("io.chrisccweb.app://app/settings")).toBe(true);
+    expect(isRecognizedAppUrl("https://phish.bad/link")).toBe(false);
   });
 });

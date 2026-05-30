@@ -56,6 +56,40 @@ export function routeFromAppUrl(urlString) {
   return null;
 }
 
+/**
+ * Human-readable reason when a URL cannot be routed (for UX + analytics).
+ * @param {string} urlString
+ * @returns {string | null} null when URL is valid
+ */
+export function invalidAppUrlReason(urlString) {
+  if (!urlString || typeof urlString !== "string") return "empty_url";
+  if (routeFromAppUrl(urlString)) return null;
+
+  const raw = urlString.trim();
+  if (raw.startsWith("javascript:") || raw.startsWith("data:")) return "unsafe_scheme";
+
+  try {
+    const url = new URL(raw);
+    if (url.protocol === `${CUSTOM_SCHEME}:` && url.hostname !== "app" && url.hostname !== CUSTOM_SCHEME) {
+      return "unknown_custom_host";
+    }
+    if (url.protocol === "http:") return "cleartext_not_allowed";
+    if (url.protocol === "https:" && !CCWEB_WEB_HOSTS.has(url.hostname.toLowerCase())) {
+      if (!(url.hostname.endsWith(".vercel.app") && url.hostname.includes("ccweb"))) {
+        return "untrusted_host";
+      }
+    }
+  } catch {
+    return "malformed_url";
+  }
+
+  return "unsupported_link";
+}
+
+export function isRecognizedAppUrl(urlString) {
+  return routeFromAppUrl(urlString) != null;
+}
+
 export function isAuthRedirectUrl(urlString) {
   const route = routeFromAppUrl(urlString);
   if (!route) return false;

@@ -1,3 +1,30 @@
-# Placeholder — copy your Firebase `google-services.json` here for FCM push.
-# See docs/MOBILE_APP_DEPLOYMENT.md for setup steps.
-# Production credentials must not be committed.
+{
+  "_comment": "Copy to google-services.json from Firebase Console (Android app io.chrisccweb.app). Do not commit production credentials.",
+  "project_info": {
+    "project_number": "000000000000",
+    "project_id": "your-firebase-project-id",
+    "storage_bucket": "your-firebase-project-id.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "android_client_info": {
+          "package_name": "io.chrisccweb.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "REPLACE_WITH_FIREBASE_ANDROID_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

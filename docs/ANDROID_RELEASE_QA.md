@@ -2,7 +2,7 @@
 
 Production release checklist for `io.chrisccweb.app` (Capacitor 7, Railway API, Vercel web).
 
-**Version strategy:** `versionCode` increments every Play upload; `versionName` follows semver (`1.2.0` = release track for Play Store readiness phase).
+**Version strategy:** `versionCode` increments every Play upload; `versionName` follows semver (`1.2.1` / code `4` = internal Play testing track — see [ANDROID_PRODUCTION_FINAL_QA.md](./ANDROID_PRODUCTION_FINAL_QA.md)).
 
 ---
 
@@ -26,7 +26,7 @@ cd android && ./gradlew bundleRelease     # AAB (Play Store preferred)
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Release Gradle config | Done | `versionCode 3`, `versionName 1.2.0`, `resConfigs en`, signing template |
+| Release Gradle config | Done | `versionCode 4`, `versionName 1.2.1`, `resConfigs en`, signing template |
 | Release signing | Template | `android/keystore.properties.example` — real keystore gitignored |
 | ProGuard/R8 | Safe default | `minifyEnabled false` — rules ready in `proguard-rules.pro` |
 | Release logging | Done | `src/lib/releaseLog.js` — suppresses console in PROD unless `VITE_CCWEB_DEBUG=1` |

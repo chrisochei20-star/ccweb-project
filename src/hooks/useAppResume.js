@@ -3,6 +3,7 @@ import { isCapacitorNative } from "../lib/capacitorPlatform";
 import { refreshNativePushRegistration } from "../lib/nativePush";
 import { getSharedRealtimeSocket } from "../lib/realtimeSocket";
 import { useNotificationsStore } from "../store/notificationsStore";
+import { reportNativeRecovery } from "../lib/nativeCrashReporting";
 
 const RESUME_DEBOUNCE_MS = 650;
 
@@ -21,13 +22,20 @@ export function useAppResumeSync(enabled = true) {
       if (runningRef.current) return;
       runningRef.current = true;
       try {
+        const wasOffline = typeof navigator !== "undefined" && !navigator.onLine;
         const socket = getSharedRealtimeSocket();
         if (socket && !socket.connected) socket.connect();
         useNotificationsStore.getState().scheduleRefresh();
         if (isCapacitorNative()) {
-          await refreshNativePushRegistration();
+          const push = await refreshNativePushRegistration();
+          if (!push.ok && push.reason === "permission_denied") {
+            reportNativeRecovery("push_permission_denied_on_resume");
+          }
         }
         document.dispatchEvent(new CustomEvent("ccweb:soft-resume"));
+        if (wasOffline && navigator.onLine) {
+          reportNativeRecovery("offline_to_online", { path: window.location?.pathname });
+        }
       } finally {
         runningRef.current = false;
       }

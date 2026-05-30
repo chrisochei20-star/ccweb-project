@@ -19,8 +19,8 @@ const checks = [
   () => {
     const g = read("android/app/build.gradle");
     if (!g) return { ok: false, message: "build.gradle missing" };
-    if (!/versionCode\s+3/.test(g)) return { ok: false, message: "Expected versionCode 3 for release track" };
-    if (!/versionName\s+"1\.2\.0"/.test(g)) return { ok: false, message: "Expected versionName 1.2.0" };
+    if (!/versionCode\s+4/.test(g)) return { ok: false, message: "Expected versionCode 4 for internal Play testing track" };
+    if (!/versionName\s+"1\.2\.1"/.test(g)) return { ok: false, message: "Expected versionName 1.2.1" };
     if (/minifyEnabled\s+true/.test(g)) return { ok: false, message: "minifyEnabled true without release QA sign-off" };
     return { ok: true };
   },
@@ -51,6 +51,36 @@ const checks = [
   },
   () => {
     if (!read("docs/ANDROID_RELEASE_QA.md")) return { ok: false, message: "ANDROID_RELEASE_QA.md missing" };
+    return { ok: true };
+  },
+  () => {
+    if (!read("docs/ANDROID_PRODUCTION_FINAL_QA.md")) return { ok: false, message: "ANDROID_PRODUCTION_FINAL_QA.md missing" };
+    return { ok: true };
+  },
+  () => {
+    if (!read("src/components/settings/NativePermissionsRationale.jsx")) {
+      return { ok: false, message: "NativePermissionsRationale.jsx missing" };
+    }
+    return { ok: true };
+  },
+  () => {
+    const main = read("android/app/src/main/java/io/chrisccweb/app/MainActivity.java");
+    if (!main?.includes("SplashScreen.installSplashScreen")) {
+      return { ok: false, message: "MainActivity must install SplashScreen API" };
+    }
+    return { ok: true };
+  },
+  () => {
+    const router = read("src/lib/deepLinkRouter.js");
+    if (!router?.includes("invalidAppUrlReason")) {
+      return { ok: false, message: "deepLinkRouter invalidAppUrlReason missing" };
+    }
+    return { ok: true };
+  },
+  () => {
+    if (!read("android/app/google-services.json.example")) {
+      return { ok: false, message: "google-services.json.example missing" };
+    }
     return { ok: true };
   },
 ];

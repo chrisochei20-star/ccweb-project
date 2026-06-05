@@ -16,6 +16,11 @@ function newId() {
   return `pd_${crypto.randomBytes(8).toString("hex")}`;
 }
 
+async function ensureCcwebUser(userId) {
+  if (!enabled() || !userId) return;
+  await query(`INSERT INTO ccweb_users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING`, [userId]);
+}
+
 async function upsertDeviceToken({
   userId,
   token,
@@ -25,6 +30,7 @@ async function upsertDeviceToken({
   appVersion = null,
 }) {
   if (!enabled() || !userId || !token) return null;
+  await ensureCcwebUser(userId);
   const tokenHash = hashToken(token);
   const { ciphertext, encrypted } = encryptToken(token);
 
@@ -190,6 +196,7 @@ async function listDevicesForUser(userId) {
 
 module.exports = {
   enabled,
+  ensureCcwebUser,
   upsertDeviceToken,
   listActiveTokensForUser,
   revokeTokenForUser,

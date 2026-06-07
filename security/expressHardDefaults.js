@@ -9,6 +9,9 @@ const vary = require("vary");
 const { logger } = require("../logging/logger");
 const { trimOrigin } = require("../services/deploymentOrigins");
 
+/** Capacitor WebView origins (Android `androidScheme: https` + iOS default). Always allowed in list mode. */
+const CAPACITOR_NATIVE_ORIGINS = ["https://localhost", "capacitor://localhost"];
+
 /** Normalize allowlist entries so `https://spa.vercel.app/` matches browser `Origin: https://spa.vercel.app`. */
 function normalizeOriginEntry(entry) {
   const s = String(entry || "").trim();
@@ -38,7 +41,7 @@ function parseAllowedOrigins() {
       return { mode: "all" };
     }
     const pub = publicAppOriginOrNull();
-    return { mode: "list", origins: pub ? [pub] : [] };
+    return { mode: "list", origins: mergeCapacitorNativeOrigins(pub ? [pub] : []) };
   }
   const fromEnv = (process.env.CCWEB_DEV_CORS_ORIGINS || "")
     .split(",")
@@ -57,12 +60,21 @@ function parseAllowedOrigins() {
 }
 
 /** @param {string[]} origins */
+function mergeCapacitorNativeOrigins(origins) {
+  const out = [...origins];
+  for (const cap of CAPACITOR_NATIVE_ORIGINS) {
+    if (!out.includes(cap)) out.push(cap);
+  }
+  return out;
+}
+
+/** @param {string[]} origins */
 function mergePublicAppOrigin(origins) {
   const normalized = origins.map((o) => normalizeOriginEntry(o)).filter(Boolean);
   const pub = publicAppOriginOrNull();
-  if (!pub) return normalized;
-  if (normalized.includes(pub)) return normalized;
-  return [...normalized, pub];
+  const withPub =
+    pub && !normalized.includes(pub) ? [...normalized, pub] : normalized;
+  return mergeCapacitorNativeOrigins(withPub);
 }
 
 function publicAppOriginOrNull() {
@@ -240,6 +252,8 @@ module.exports = {
   applyExpressSecurity,
   parseAllowedOrigins,
   normalizeOriginEntry,
+  mergeCapacitorNativeOrigins,
+  CAPACITOR_NATIVE_ORIGINS,
   setRawCorsHeaders,
   writeRawOptions,
 };

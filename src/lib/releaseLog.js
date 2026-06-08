@@ -1,4 +1,4 @@
-import { isCapacitorNative } from "./capacitorPlatform";
+import { Capacitor } from "@capacitor/core";
 
 /** True in Vite production builds (release APK ships PROD bundle). */
 export function isReleaseBuild() {
@@ -20,7 +20,7 @@ export function releaseDiag(label, data = {}) {
   if (!isReleaseBuild() || import.meta.env.VITE_CCWEB_DEBUG) {
     releaseLog(`[ccweb-diag] ${label}`, data);
   }
-  if (typeof document !== "undefined" && isCapacitorNative()) {
+  if (typeof document !== "undefined" && Capacitor.isNativePlatform()) {
     document.dispatchEvent(
       new CustomEvent("ccweb:release-diag", { detail: { label, data, at: Date.now() } })
     );

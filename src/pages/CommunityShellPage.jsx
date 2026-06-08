@@ -547,7 +547,19 @@ export function CommunityShellPage() {
             ))}
           </div>
           <div className="flex max-h-[420px] min-h-[220px] flex-col-reverse overflow-y-auto bg-[#070b14] px-3 py-3">
-            {loadingChats && <p className="text-center text-sm text-ccweb-muted">Loading messages…</p>}
+            {loadingChats && (
+              <div className="space-y-3 py-2" role="status" aria-label="Loading messages">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="flex gap-2">
+                    <Skeleton className="h-8 w-8 shrink-0 rounded-md" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-3 w-24 rounded-md" />
+                      <Skeleton className="h-10 w-full rounded-2xl" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             {!loadingChats &&
               [...chats].reverse().map((m) => (
                 <div key={m.id} className="mb-2 flex gap-2">

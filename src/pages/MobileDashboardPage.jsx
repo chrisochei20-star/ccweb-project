@@ -20,7 +20,9 @@ import { Link, useOutletContext } from "react-router-dom";
 import { useCachedFetch } from "../hooks/useCachedFetch";
 import { http } from "../api/http";
 import { fetchMe, getSessionToken } from "../session";
+import { HomeFeedSection } from "../components/home/HomeFeedSection";
 import { Skeleton } from "../components/ui/Skeleton";
+import { formatUserFacingError } from "../lib/userFacingError";
 
 function timeGreeting() {
   const h = new Date().getHours();
@@ -247,30 +249,14 @@ export function MobileDashboardPage() {
         </div>
       </header>
 
-      <section className="ccweb-glass ccweb-card-premium rounded-2xl border border-ccweb-cyan/15 p-4 sm:rounded-3xl sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="ccweb-kicker text-[10px]">Feed-first</p>
-            <h2 className="mt-1 text-base font-bold tracking-tight text-white sm:text-lg">Community</h2>
-            <p className="mt-1 text-xs leading-snug text-ccweb-muted sm:text-sm">Catch up on the timeline and live channels.</p>
-          </div>
-          <Link
-            to="/community"
-            className="ccweb-gradient-btn inline-flex min-h-[var(--ccweb-touch-min,44px)] shrink-0 items-center gap-2 px-4 py-2.5 text-sm font-semibold"
-          >
-            Open <ArrowRight className="h-4 w-4" aria-hidden />
-          </Link>
-        </div>
-      </section>
+      {user && <HomeFeedSection user={user} />}
 
       {user && (
         <section className="ccweb-glass ccweb-card-premium rounded-3xl p-6 md:p-7">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold tracking-tight text-white md:text-xl">Your snapshot</h2>
-              <p className="mt-1 font-mono text-[11px] text-ccweb-muted/90">
-                <span className="text-ccweb-cyan/90">GET</span> /api/v1/analytics/user
-              </p>
+              <p className="mt-1 text-sm text-ccweb-muted">Credits, learning, AI usage, and social reach.</p>
             </div>
             <button
               type="button"
@@ -295,7 +281,7 @@ export function MobileDashboardPage() {
 
           {error && (
             <p className="mt-4 text-sm text-rose-300">
-              {error}{" "}
+              {formatUserFacingError(error, "Could not load your snapshot.")}{" "}
               <button type="button" className="font-medium underline underline-offset-2" onClick={() => refresh()}>
                 Retry
               </button>
@@ -304,8 +290,7 @@ export function MobileDashboardPage() {
 
           {!loading && !error && analytics && !analytics.postgres && (
             <p className="mt-4 rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/95">
-              Enable <code className="rounded-md bg-black/40 px-1.5 py-0.5 font-mono text-ccweb-cyan">DATABASE_URL</code>{" "}
-              on the API for credits, XP, and order history.
+              Live balances and order history will appear when your account is fully connected to the platform database.
             </p>
           )}
 

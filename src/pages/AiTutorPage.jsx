@@ -26,6 +26,9 @@ import { AiLoadingState } from "../components/ai/AiLoadingState";
 import { AiUnavailablePanel } from "../components/ai/AiUnavailablePanel";
 import { composerPaddingBottom, useKeyboardInset } from "../hooks/useKeyboardInset";
 import { getSessionToken } from "../session";
+import { formatUserFacingError } from "../lib/userFacingError";
+import { showAiStreamingDemo } from "../lib/featureFlags";
+import { EmptyState } from "../components/ui/EmptyState";
 
 const MODES = [
   { id: "general", label: "General", icon: BookOpen },
@@ -62,7 +65,7 @@ export function AiTutorPage() {
       setConversations(list);
       setListErr(null);
     } catch (e) {
-      setListErr(e.message || "Could not load conversations.");
+      setListErr(formatUserFacingError(e, "Could not load conversations."));
     }
   }
 
@@ -108,7 +111,7 @@ export function AiTutorPage() {
       setMessages(data.messages || []);
       await refreshList();
     } catch (e) {
-      setErr(e.message || String(e));
+      setErr(formatUserFacingError(e, "Something went wrong with the AI tutor."));
     } finally {
       setLoading(false);
     }
@@ -188,7 +191,7 @@ export function AiTutorPage() {
         if (replyId) {
           setMessages((prev) => prev.filter((m) => m.id !== replyId));
         }
-        setErr(e.message || String(e));
+        setErr(formatUserFacingError(e, "Something went wrong with the AI tutor."));
         setAiUnavailable(Boolean(e.unavailable));
       }
     } finally {
@@ -208,7 +211,7 @@ export function AiTutorPage() {
       setMessages([]);
       await refreshList();
     } catch (e) {
-      setErr(e.message || String(e));
+      setErr(formatUserFacingError(e, "Something went wrong with the AI tutor."));
     } finally {
       setLoading(false);
     }
@@ -225,7 +228,7 @@ export function AiTutorPage() {
       }
       await refreshList();
     } catch (err2) {
-      setErr(err2.message);
+      setErr(formatUserFacingError(err2, "Could not delete conversation."));
     }
   }
 
@@ -325,9 +328,9 @@ export function AiTutorPage() {
       </aside>
 
       <section className="flex min-h-[60vh] flex-1 flex-col rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/90 to-black/50">
-        {aiMockMode && (
+        {aiMockMode && showAiStreamingDemo() && (
           <p className="border-b border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
-            Demo mode — live AI is not configured on the server. Responses are deterministic previews.
+            Demo mode — live AI is not configured. Responses are previews only.
           </p>
         )}
         <header className="flex flex-wrap items-center gap-2 border-b border-white/10 px-3 py-3">
@@ -369,10 +372,9 @@ export function AiTutorPage() {
           </button>
         </header>
 
-        {memoryOpen && (
+        {memoryOpen && memoryNote && (
           <div className="border-b border-white/10 bg-black/40 px-3 py-2 text-xs text-ccweb-muted">
-            Long-term notes inform personalization. Facts accumulate server-side when OpenAI key is set.
-            {memoryNote && <p className="mt-2 whitespace-pre-wrap text-white/80">{memoryNote}</p>}
+            <p className="whitespace-pre-wrap text-white/80">{memoryNote}</p>
           </div>
         )}
 
@@ -402,10 +404,14 @@ export function AiTutorPage() {
         <div className="ccweb-scroll-momentum flex-1 space-y-3 overflow-y-auto px-3 py-4">
           {loading && messages.length === 0 ? <AiLoadingState label="Loading conversation…" /> : null}
           {messages.length === 0 && !loading && (
-            <p className="text-center text-sm text-ccweb-muted">
-              Pick a mode, then <strong className="text-white">Open mode thread</strong> or <strong className="text-white">New</strong>
-              . Streaming uses thread history and learner memory when PostgreSQL and OpenAI are configured.
-            </p>
+            <EmptyState
+              icon={BookOpen}
+              title="Start a tutoring session"
+              description="Pick a mode above, then tap New or Open mode thread to begin."
+              onAction={openOrCreateConversation}
+              actionLabel="Open mode thread"
+              className="border-0 bg-transparent"
+            />
           )}
           {messages.map((m) => (
             <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -451,11 +457,12 @@ export function AiTutorPage() {
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
             </button>
           </div>
-          <p className="mt-2 text-[10px] text-ccweb-muted">
-            {aiMockMode
-              ? "Connect OpenAI on the server for live tutoring. Your threads are saved when signed in."
-              : "Powered by CCWEB AI — General, Startup, Web3, and Proposal modes."}
-          </p>
+          {busy && (
+            <p className="mt-2 flex items-center gap-1.5 text-[10px] text-ccweb-cyan">
+              <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+              Streaming response…
+            </p>
+          )}
         </form>
       </section>
     </div>

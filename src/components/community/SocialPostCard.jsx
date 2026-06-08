@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 import { createPostReaction, fetchPostReactions } from "../../api/communityApi";
 import { getSessionToken } from "../../session";
 import { toast } from "../../lib/toastBus";
+import { timeAgo } from "../../lib/timeFormat";
+import { formatUserFacingError } from "../../lib/userFacingError";
 import { SkeletonText } from "../ui/Skeleton";
 
 function initials(name) {
@@ -79,7 +81,7 @@ export function SocialPostCard({
     } catch (e) {
       if (!hadList) setLikeBump((b) => Math.max(0, b - 1));
       else setLocalReactions(prevReactions);
-      toast.error(e.message || "Could not like");
+      toast.error(formatUserFacingError(e, "Could not like"));
     } finally {
       setLikeBusy(false);
     }
@@ -114,7 +116,7 @@ export function SocialPostCard({
     } catch (e) {
       if (!hadList) setRepostBump((b) => Math.max(0, b - 1));
       else setLocalReactions(prevReactions);
-      toast.error(e.message || "Could not repost");
+      toast.error(formatUserFacingError(e, "Could not repost"));
     } finally {
       setRepostBusy(false);
     }
@@ -123,6 +125,13 @@ export function SocialPostCard({
   const repostsFromList = localReactions?.filter((x) => x.reaction === "repost").length;
   const repostCount =
     repostsFromList != null ? repostsFromList : repostBump > 0 ? repostBump : null;
+
+  const userLiked = Boolean(
+    user?.id && localReactions?.some((x) => x.reaction === "like" && x.authorUserId === user.id)
+  );
+  const userReposted = Boolean(
+    user?.id && localReactions?.some((x) => x.reaction === "repost" && x.authorUserId === user.id)
+  );
 
   return (
     <article className="ccweb-social-post group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-br from-white/[0.06] to-transparent p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition hover:border-ccweb-cyan/25 hover:shadow-[0_12px_40px_-18px_rgba(34,211,238,0.35)]">
@@ -134,7 +143,7 @@ export function SocialPostCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span className="font-semibold text-white">{post.authorDisplayName || "Member"}</span>
-            <span className="text-xs text-ccweb-muted">· {new Date(post.createdAt).toLocaleString()}</span>
+            <span className="text-xs text-ccweb-muted">· {timeAgo(post.createdAt)}</span>
           </div>
           <h3 className="mt-1 text-[15px] font-semibold leading-snug text-white">{post.title}</h3>
           <p className="mt-1.5 whitespace-pre-wrap text-[14px] leading-relaxed text-slate-300/95">{post.content}</p>
@@ -144,16 +153,20 @@ export function SocialPostCard({
               type="button"
               disabled={!canInteract || likeBusy}
               onClick={handleLike}
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-ccweb-muted transition hover:bg-rose-500/10 hover:text-rose-200 disabled:opacity-40"
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition disabled:opacity-40 ${
+                userLiked ? "bg-rose-500/15 text-rose-300" : "text-ccweb-muted hover:bg-rose-500/10 hover:text-rose-200"
+              }`}
             >
-              <Heart className="h-3.5 w-3.5" strokeWidth={2} />
+              <Heart className={`h-3.5 w-3.5 ${userLiked ? "fill-rose-400 text-rose-400" : ""}`} strokeWidth={2} />
               {likeCount != null ? likeCount : "—"}
             </button>
             <button
               type="button"
               disabled={!canInteract || repostBusy}
               onClick={handleRepost}
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-ccweb-muted transition hover:bg-ccweb-green/10 hover:text-ccweb-green disabled:opacity-40"
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition disabled:opacity-40 ${
+                userReposted ? "bg-ccweb-green/15 text-ccweb-green" : "text-ccweb-muted hover:bg-ccweb-green/10 hover:text-ccweb-green"
+              }`}
             >
               <Repeat2 className="h-3.5 w-3.5" strokeWidth={2} />
               {repostCount != null ? repostCount : "Boost"}
@@ -183,7 +196,7 @@ export function SocialPostCard({
                   {(comments || []).map((c) => (
                     <li key={c.id} className="border-b border-white/5 pb-2 last:border-0">
                       <span className="font-medium text-ccweb-cyan">{c.authorDisplayName}</span>
-                      <span className="text-xs text-ccweb-muted"> · {new Date(c.createdAt).toLocaleString()}</span>
+                      <span className="text-xs text-ccweb-muted"> · {timeAgo(c.createdAt)}</span>
                       <p className="mt-0.5 text-white/90">{c.body}</p>
                     </li>
                   ))}

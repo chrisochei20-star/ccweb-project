@@ -20,6 +20,9 @@ import { PullToRefreshContainer } from "../components/mobile/PullToRefreshContai
 import { isCapacitorNative } from "../lib/capacitorPlatform";
 import { toast } from "../lib/toastBus";
 import { getSessionToken } from "../session";
+import { formatUserFacingError } from "../lib/userFacingError";
+import { EmptyState } from "../components/ui/EmptyState";
+import { timeAgo } from "../lib/timeFormat";
 
 const CHANNELS = ["general", "trading", "builders"];
 
@@ -62,7 +65,7 @@ export function CommunityShellPage() {
       setPosts(dedupeById(list));
       setVisibleCount(12);
     } catch (e) {
-      const m = e.message || "Failed to load";
+      const m = formatUserFacingError(e, "Could not load the feed.");
       setErr(m);
       toast.error(m);
     } finally {
@@ -77,7 +80,7 @@ export function CommunityShellPage() {
       const list = await fetchCommunityChats(channel);
       setChats(list);
     } catch (e) {
-      const m = e.message || "Failed to load";
+      const m = formatUserFacingError(e, "Could not load channel messages.");
       setErr(m);
       toast.error(m);
     } finally {
@@ -495,9 +498,13 @@ export function CommunityShellPage() {
             )}
 
             {!loadingPosts && posts.length === 0 && (
-              <p className="rounded-2xl border border-dashed border-white/15 bg-black/20 px-4 py-8 text-center text-sm text-ccweb-muted">
-                No posts yet — start the thread.
-              </p>
+              <EmptyState
+                icon={Newspaper}
+                title="No posts yet"
+                description="Be the first to share — post a win, ask a question, or drop alpha."
+                actionLabel={user ? undefined : "Sign in to post"}
+                actionTo={user ? undefined : "/login"}
+              />
             )}
 
             <ul className="space-y-3">
@@ -527,10 +534,13 @@ export function CommunityShellPage() {
       )}
 
       {tab === "chat" && (
-        <section className="ccweb-card-premium overflow-hidden rounded-2xl border border-white/10">
-          <div className="flex items-center gap-2 border-b border-white/10 bg-black/30 px-4 py-3">
-            <Hash className="h-4 w-4 text-ccweb-violet" />
-            <span className="text-sm font-semibold text-white">Channels</span>
+        <section className="ccweb-card-premium overflow-hidden rounded-2xl border border-white/10 shadow-[0_0_40px_-16px_rgba(167,139,250,0.35)]">
+          <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-gradient-to-r from-ccweb-violet/15 to-transparent px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Hash className="h-4 w-4 text-ccweb-violet" />
+              <span className="text-sm font-semibold text-white">Channels</span>
+            </div>
+            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Live</span>
           </div>
           <div className="flex flex-wrap gap-2 border-b border-white/5 px-4 py-3">
             {CHANNELS.map((c) => (
@@ -567,9 +577,7 @@ export function CommunityShellPage() {
                   <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-white/8 bg-white/[0.04] px-3 py-2">
                     <div className="flex flex-wrap items-baseline gap-2">
                       <span className="text-sm font-semibold text-ccweb-cyan">{m.authorDisplayName}</span>
-                      <span className="text-[10px] uppercase tracking-wide text-ccweb-muted">
-                        {new Date(m.createdAt).toLocaleTimeString()}
-                      </span>
+                      <span className="text-[10px] text-ccweb-muted">{timeAgo(m.createdAt)}</span>
                     </div>
                     <p className="mt-1 text-sm leading-relaxed text-slate-200">{m.message}</p>
                   </div>

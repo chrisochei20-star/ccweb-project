@@ -1,4 +1,4 @@
-import { ArrowLeft, Circle, ImagePlus, Loader2, RefreshCw, Send, Smile, WifiOff } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Circle, ImagePlus, Loader2, Mic, RefreshCw, Send, Smile, WifiOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiUrl, assetsUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
@@ -22,6 +22,9 @@ import { getSessionToken } from "../session";
 import { CCWEB_UI_LOAD_TIMEOUT_MS } from "../constants/loadTimeout";
 import { useAppShellContext } from "../hooks/useAppShellContext";
 import { useAuthGateRecovery } from "../hooks/useAuthGateRecovery";
+import { formatDateSeparator, formatMessageTime, shouldShowDateSeparator } from "../lib/timeFormat";
+import { formatUserFacingError } from "../lib/userFacingError";
+import { EmptyState } from "../components/ui/EmptyState";
 
 const QUICK_EMOJIS = ["😀", "🙂", "😂", "🔥", "❤️", "👍", "🎉", "⚡", "📈", "🚀", "💎", "✨", "🙏", "👀", "💬"];
 
@@ -121,7 +124,7 @@ export function ChatPage() {
     const token = getSessionToken();
     if (!token) {
       setLoading(false);
-      setErr("No access token in session. Sign in again.");
+      setErr("Your session expired. Please sign in again.");
       return;
     }
     let cancelled = false;
@@ -139,7 +142,7 @@ export function ChatPage() {
           }),
         ]);
       } catch (e) {
-        if (!cancelled) setErr(e.message || String(e));
+        if (!cancelled) setErr(formatUserFacingError(e, "Could not load chats."));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -266,7 +269,7 @@ export function ChatPage() {
           }),
         ]);
       } catch (e) {
-        if (!cancelled) setErr(e.message || String(e));
+        if (!cancelled) setErr(formatUserFacingError(e, "Could not load chats."));
       }
     })();
     return () => {
@@ -331,7 +334,7 @@ export function ChatPage() {
     } catch (e) {
       setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, _status: "failed" } : m)));
       if (!retryText) setDraft(text);
-      const m = e.message || "Send failed.";
+      const m = formatUserFacingError(e, "Message could not be sent.");
       setErr(m);
       toast.error(m);
     }
@@ -401,7 +404,7 @@ export function ChatPage() {
       setActiveId(data.chatId);
       await loadConversations();
     } catch (e) {
-      const m = e.message || "Could not start chat.";
+      const m = formatUserFacingError(e, "Could not start chat.");
       setErr(m);
       toast.error(m);
     }
@@ -500,11 +503,11 @@ export function ChatPage() {
       >
         <div className="border-b border-white/10 p-3">
           <h1 className="text-lg font-bold text-white">Messages</h1>
-          <p className="text-xs text-ccweb-muted">Real-time direct chats · Socket.IO</p>
+          <p className="text-xs text-ccweb-muted">Private chats with read receipts and live delivery</p>
           <form onSubmit={startDm} className="mt-3 flex gap-2">
             <input
-              className="ccweb-input flex-1 py-2 font-mono text-xs"
-              placeholder="Start DM — paste user ID"
+              className="ccweb-input flex-1 py-2 text-sm"
+              placeholder="Start chat — member ID"
               value={newDmId}
               onChange={(e) => setNewDmId(e.target.value)}
             />
@@ -516,7 +519,14 @@ export function ChatPage() {
         <PullToRefreshContainer pulling={pulling} refreshing={refreshing}>
           <ul ref={listRefreshRef} className="ccweb-native-scroll max-h-[55vh] overflow-y-auto md:max-h-[calc(100vh-14rem)]">
           {conversations.length === 0 ? (
-            <li className="px-4 py-8 text-center text-sm text-ccweb-muted">No conversations yet.</li>
+            <li className="px-4 py-6">
+              <EmptyState
+                icon={Circle}
+                title="No chats yet"
+                description="Start a direct message to connect with other members."
+                className="border-0 bg-transparent py-6"
+              />
+            </li>
           ) : (
             conversations.map((c) => (
               <li key={c.chatId}>
@@ -605,60 +615,89 @@ export function ChatPage() {
               </div>
             </header>
 
-            <div ref={scrollContainerRef} onScroll={onMessagesScroll} className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-4">
-              {messages.map((m) => {
+            <div ref={scrollContainerRef} onScroll={onMessagesScroll} className="ccweb-native-scroll flex-1 space-y-1 overflow-y-auto overscroll-contain px-3 py-4">
+              {messages.map((m, idx) => {
                 const mine = m.authorUserId === user.id;
                 const img = m.isImage && (m.imageUrl || m.metadata?.url);
+                const isVoice = m.metadata?.type === "voice" || (m.body || "").startsWith("🎤");
                 const failed = m._status === "failed";
                 const pending = m._status === "pending";
+                const prev = messages[idx - 1];
+                const showDate = shouldShowDateSeparator(prev?.createdAt, m.createdAt);
+                const read = mine && !pending && !failed && (m.readAt || m.metadata?.read);
                 return (
-                  <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                    <div
-                      className={
-                        "max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-lg " +
-                        (mine
-                          ? failed
-                            ? "border border-rose-400/50 bg-rose-900/40 text-white"
-                            : "bg-gradient-to-r from-ccweb-cyan/80 to-ccweb-violet/70 text-white"
-                          : "border border-white/10 bg-white/5 text-white/95") +
-                        (pending ? " opacity-80" : "")
-                      }
-                    >
-                      {!mine && (
-                        <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-ccweb-muted">
-                          {m.authorDisplayName}
-                        </p>
-                      )}
-                      {img ? (
-                        <button type="button" className="block w-full text-left" onClick={() => setViewerImage(assetsUrl(img))}>
-                          <MediaImage
-                            src={assetsUrl(img)}
-                            alt="Chat attachment"
-                            wrapperClassName="max-h-56 w-full rounded-lg"
-                            className="max-h-56 w-full rounded-lg object-cover"
-                          />
-                        </button>
-                      ) : (
-                        <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                      )}
-                      <div className={`mt-1 flex items-center gap-2 text-[10px] ${mine ? "text-white/70" : "text-ccweb-muted"}`}>
-                        <span>
-                          {m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
-                        </span>
-                        {pending && <span>Sending…</span>}
-                        {failed && mine && (
-                          <button
-                            type="button"
-                            className="inline-flex min-h-[44px] min-w-[44px] items-center gap-1 text-rose-200"
-                            onClick={() => {
-                              setMessages((prev) => prev.filter((x) => x.id !== m.id));
-                              void sendText(null, m.body);
-                            }}
-                          >
-                            <RefreshCw className="h-3 w-3" />
-                            Retry
-                          </button>
+                  <div key={m.id}>
+                    {showDate && (
+                      <p className="my-3 text-center text-[10px] font-semibold uppercase tracking-wider text-ccweb-muted">
+                        {formatDateSeparator(m.createdAt)}
+                      </p>
+                    )}
+                    <div className={`flex ${mine ? "justify-end" : "justify-start"} py-0.5`}>
+                      <div
+                        className={
+                          "relative max-w-[85%] px-3 py-2 text-sm shadow-md " +
+                          (mine
+                            ? failed
+                              ? "rounded-2xl rounded-br-sm border border-rose-400/50 bg-rose-900/40 text-white"
+                              : "rounded-2xl rounded-br-sm bg-gradient-to-r from-ccweb-cyan/85 to-ccweb-violet/75 text-white"
+                            : "rounded-2xl rounded-bl-sm border border-white/10 bg-[#1a2332] text-white/95") +
+                          (pending ? " opacity-75" : "")
+                        }
+                      >
+                        {!mine && (
+                          <p className="mb-1 text-[10px] font-semibold text-ccweb-cyan/90">
+                            {m.authorDisplayName}
+                          </p>
                         )}
+                        {img ? (
+                          <button type="button" className="block w-full text-left" onClick={() => setViewerImage(assetsUrl(img))}>
+                            <MediaImage
+                              src={assetsUrl(img)}
+                              alt="Chat attachment"
+                              wrapperClassName="max-h-56 w-full rounded-lg"
+                              className="max-h-56 w-full rounded-lg object-cover"
+                            />
+                          </button>
+                        ) : isVoice ? (
+                          <div className="flex min-w-[140px] items-center gap-2 py-1">
+                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15">
+                              <Mic className="h-4 w-4" aria-hidden />
+                            </span>
+                            <div className="flex-1">
+                              <div className="h-1 overflow-hidden rounded-full bg-white/20">
+                                <div className="h-full w-2/3 rounded-full bg-white/60" />
+                              </div>
+                              <p className="mt-1 text-[10px] opacity-80">Voice message</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                        )}
+                        <div className={`mt-1 flex items-center justify-end gap-1.5 text-[10px] ${mine ? "text-white/75" : "text-ccweb-muted"}`}>
+                          <span>{formatMessageTime(m.createdAt)}</span>
+                          {pending && <span>·</span>}
+                          {pending && <span>Sending</span>}
+                          {mine && !failed && !pending && (
+                            read ? (
+                              <CheckCheck className="h-3.5 w-3.5 text-sky-200" aria-label="Read" />
+                            ) : (
+                              <Check className="h-3.5 w-3.5 opacity-70" aria-label="Delivered" />
+                            )
+                          )}
+                          {failed && mine && (
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 text-rose-200 underline"
+                              onClick={() => {
+                                setMessages((prev) => prev.filter((x) => x.id !== m.id));
+                                void sendText(null, m.body);
+                              }}
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              Retry
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -708,7 +747,7 @@ export function ChatPage() {
 
             <form
               onSubmit={sendText}
-              className="sticky bottom-0 z-10 border-t border-white/10 bg-slate-950/95 p-3 backdrop-blur-md"
+              className="sticky bottom-0 z-10 border-t border-white/10 bg-slate-950/98 p-3"
               style={{ paddingBottom: composerPaddingBottom(keyboardInset) }}
             >
               <div className="flex items-end gap-2">

@@ -5,6 +5,8 @@ import { ApiErrorPanel } from "../components/ui/ApiErrorPanel";
 import { apiUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
 import { logScannerClient } from "../lib/aiDiagnostics";
+import { formatUserFacingError } from "../lib/userFacingError";
+import { Skeleton } from "../components/ui/Skeleton";
 
 function fmtProbPct(value) {
   const n = Number(value);
@@ -119,7 +121,7 @@ export function FindPage({ initialTab = "scanner" }) {
       setSignals(data.signals || []);
       logScannerClient("signals_ok", { count: (data.signals || []).length });
     } catch (e) {
-      setSignalsErr(e.message || "Could not load signals.");
+      setSignalsErr(formatUserFacingError(e, "Could not load signals."));
       logScannerClient("signals_error", { message: e.message });
     }
     setLoadingSignals(false);
@@ -135,7 +137,7 @@ export function FindPage({ initialTab = "scanner" }) {
       setSmartMoney(data);
       logScannerClient("smart_money_ok", { wallets: data?.wallets?.length || 0 });
     } catch (e) {
-      setSmErr(e.message || "Could not load smart money data.");
+      setSmErr(formatUserFacingError(e, "Could not load smart money data."));
       logScannerClient("smart_money_error", { message: e.message });
     }
     setLoadingSm(false);
@@ -151,7 +153,7 @@ export function FindPage({ initialTab = "scanner" }) {
       setDiscover(data);
       logScannerClient("discover_ok", { tokens: data?.tokens?.length || 0 });
     } catch (e) {
-      setDiscoverErr(e.message || "Could not load discovery feed.");
+      setDiscoverErr(formatUserFacingError(e, "Could not load discovery feed."));
       logScannerClient("discover_error", { message: e.message });
     }
     setLoadingDiscover(false);
@@ -167,7 +169,7 @@ export function FindPage({ initialTab = "scanner" }) {
       setAlerts(data);
       logScannerClient("alerts_ok", { count: data?.alerts?.length || 0 });
     } catch (e) {
-      setAlertsErr(e.message || "Could not load alerts.");
+      setAlertsErr(formatUserFacingError(e, "Could not load alerts."));
       logScannerClient("alerts_error", { message: e.message });
     }
     setLoadingAlerts(false);
@@ -192,7 +194,7 @@ export function FindPage({ initialTab = "scanner" }) {
       setWalletScan(data);
       logScannerClient("wallet_scan_ok", { address: walletInput.trim().slice(0, 10) });
     } catch (e) {
-      setWalletErr(e.message || "Wallet scan failed.");
+      setWalletErr(formatUserFacingError(e, "Wallet scan failed."));
       logScannerClient("wallet_scan_error", { message: e.message });
     }
     setWalletLoading(false);
@@ -520,7 +522,13 @@ export function FindPage({ initialTab = "scanner" }) {
               Refresh
             </button>
           </div>
-          {loadingSignals && <p className="muted">Loading signals…</p>}
+          {loadingSignals && (
+            <div className="space-y-3 py-2">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-16 w-full rounded-xl" />
+              ))}
+            </div>
+          )}
           {signalsErr ? <ApiErrorPanel message={signalsErr} onRetry={loadSignals} className="mb-3" /> : null}
           {!loadingSignals && !signalsErr && signals.length === 0 && (
             <p className="muted">No early signals available right now. Try refreshing in a moment.</p>

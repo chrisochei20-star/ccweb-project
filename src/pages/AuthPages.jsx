@@ -3,13 +3,23 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 import { BrowserProvider, getAddress } from "ethers";
 import { setSession } from "../session";
+import { CcwebBrandMark } from "../components/brand/CcwebBrandMark";
 import { apiUrl, getApiBaseUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
+import { isCapacitorNative } from "../lib/capacitorPlatform";
 
 function mapNetworkError(err) {
   const msg = err?.message || String(err);
+  if (err?.name === "AbortError" || /request cancelled/i.test(msg)) {
+    return "Request timed out. Check your connection and try again.";
+  }
   if (msg === "Failed to fetch" || msg === "Load failed" || /network/i.test(msg)) {
     const base = getApiBaseUrl();
+    if (isCapacitorNative()) {
+      return base
+        ? `Cannot reach ${base}. Check mobile data or Wi‑Fi, confirm the API is online, then try again.`
+        : "API URL is not configured in this build. Rebuild the APK with VITE_API_BASE_URL set to your Railway API.";
+    }
     if (base) {
       return (
         `Cannot reach ${base}. If the API is up, this is usually a CORS or browser-network block: set CCWEB_ALLOWED_ORIGINS on Railway to include your exact Vercel origin (https://…vercel.app), redeploy the API, and confirm VITE_API_BASE_URL matches your Railway public URL.`
@@ -315,9 +325,20 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
     }
   }
 
+  const nativeAuth = isCapacitorNative();
+
   return (
-    <div className="mx-auto max-w-md px-3 pb-28 pt-8 md:pb-12">
-      <div className="ccweb-glass rounded-2xl p-6 md:p-8">
+    <div className="mx-auto max-w-md px-3 pb-28 pt-6 md:pb-12 md:pt-8">
+      {nativeAuth && (
+        <div className="mb-8 flex flex-col items-center text-center">
+          <CcwebBrandMark size={72} showGlow className="mb-4" />
+          <p className="text-lg font-bold tracking-tight text-white">CCWEB</p>
+          <p className="mt-1 max-w-xs text-xs text-ccweb-muted">
+            Learn Web3, ship products, and grow your business.
+          </p>
+        </div>
+      )}
+      <div className={`rounded-2xl p-6 md:p-8 ${nativeAuth ? "border border-white/10 bg-[#070b14]" : "ccweb-glass"}`}>
         <h1 className="text-2xl font-bold text-white">{title}</h1>
         <p className="mt-2 text-sm text-ccweb-muted">{subtitle}</p>
 

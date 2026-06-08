@@ -108,6 +108,27 @@ html.ccweb-capacitor-native .ccweb-pull-indicator.active {
   height: 2.75rem;
 }
 
+/* Android WebView: backdrop-filter often renders as a stuck blur layer — use opaque surfaces. */
+html.ccweb-capacitor-native .ccweb-glass,
+html.ccweb-capacitor-native .ccweb-floating-dock,
+html.ccweb-capacitor-native .ccweb-top-bar,
+html.ccweb-capacitor-native [class*="backdrop-blur"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.ccweb-capacitor-native .ccweb-glass {
+  background: rgba(7, 11, 20, 0.96) !important;
+}
+
+html.ccweb-capacitor-native .ccweb-floating-dock {
+  background: rgba(7, 11, 20, 0.98) !important;
+}
+
+html.ccweb-capacitor-native .ccweb-top-bar {
+  background: rgba(3, 7, 18, 0.98) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html.ccweb-capacitor-native .ccweb-page-enter {
     animation: none;

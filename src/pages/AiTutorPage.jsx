@@ -45,6 +45,7 @@ export function AiTutorPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [aiUnavailable, setAiUnavailable] = useState(false);
+  const [aiMockMode, setAiMockMode] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [memoryNote, setMemoryNote] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -173,6 +174,7 @@ export function AiTutorPage() {
       });
 
       if (out.conversationId && out.conversationId !== cid) setActiveId(out.conversationId);
+      setAiMockMode(Boolean(out.mock));
       if (assistantText.trim()) {
         setMessages((prev) =>
           prev.map((m) => (m.id === replyId ? { ...m, content: assistantText, id: `saved_${Date.now()}` } : m))
@@ -323,6 +325,11 @@ export function AiTutorPage() {
       </aside>
 
       <section className="flex min-h-[60vh] flex-1 flex-col rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/90 to-black/50">
+        {aiMockMode && (
+          <p className="border-b border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
+            Demo mode — live AI is not configured on the server. Responses are deterministic previews.
+          </p>
+        )}
         <header className="flex flex-wrap items-center gap-2 border-b border-white/10 px-3 py-3">
           <button
             type="button"
@@ -445,7 +452,9 @@ export function AiTutorPage() {
             </button>
           </div>
           <p className="mt-2 text-[10px] text-ccweb-muted">
-            Requires <code className="text-ccweb-cyan">OPENAI_API_KEY</code> on the API for live models; conversations persist in PostgreSQL.
+            {aiMockMode
+              ? "Connect OpenAI on the server for live tutoring. Your threads are saved when signed in."
+              : "Powered by CCWEB AI — General, Startup, Web3, and Proposal modes."}
           </p>
         </form>
       </section>

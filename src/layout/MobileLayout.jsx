@@ -18,6 +18,8 @@ import { PageMeta, ROUTE_META } from "../components/seo/PageMeta";
 import { useNativePushRouting } from "../hooks/useNativePushRouting";
 import { useDeepLinkRouting } from "../hooks/useDeepLinkRouting";
 import { useAppResumeSync } from "../hooks/useAppResume";
+import { NativeAppAuthGate } from "../components/auth/NativeAppAuthGate";
+import { isNativePublicPath } from "../lib/nativeAuthPaths";
 import { isCapacitorNative, signalNativeShellReady } from "../lib/capacitorPlatform";
 
 const bottomTabs = [
@@ -167,6 +169,9 @@ export function MobileLayout() {
 
   const path = location.pathname;
   const routeMeta = ROUTE_META[path] || (path.startsWith("/u/") ? { title: "Profile", description: "Public CCWEB creator profile." } : null);
+  const sessionToken = getSessionToken();
+  const nativeAuthed = !nativeShell || (authHydrated && Boolean(sessionToken));
+  const showPrimaryNav = nativeAuthed && !isNativePublicPath(path);
 
   return (
     <div className={`ccweb-app-root ccweb-app-pattern min-h-screen font-sans antialiased${nativeShell ? " ccweb-mobile-shell" : ""}`}>
@@ -242,6 +247,7 @@ export function MobileLayout() {
         </div>
       </header>
 
+      {showPrimaryNav && (
       <nav className="hidden border-b border-white/5 bg-slate-950/40 backdrop-blur-md lg:block" aria-label="Primary">
         <div className="mx-auto max-w-3xl px-4 py-3 md:max-w-5xl">
           <div className="ccweb-desktop-nav-inner flex flex-wrap items-center justify-center gap-0.5">
@@ -273,13 +279,17 @@ export function MobileLayout() {
           </div>
         </div>
       </nav>
+      )}
 
       <main id="ccweb-main" className="ccweb-main-pad ccweb-native-scroll mx-auto max-w-3xl md:max-w-5xl" tabIndex={-1}>
-        <div key={path} className={nativeShell ? "ccweb-page-enter" : undefined}>
-          <Outlet context={{ user, setUser, authHydrated, refreshSession }} />
-        </div>
+        <NativeAppAuthGate authHydrated={authHydrated}>
+          <div key={path} className={nativeShell ? "ccweb-page-enter" : undefined}>
+            <Outlet context={{ user, setUser, authHydrated, refreshSession }} />
+          </div>
+        </NativeAppAuthGate>
       </main>
 
+      {showPrimaryNav && (
       <div className="ccweb-floating-shell lg:hidden" aria-hidden={false}>
         <nav className="ccweb-floating-dock" aria-label="Primary">
           <div className="ccweb-floating-dock-inner">
@@ -301,6 +311,7 @@ export function MobileLayout() {
           </div>
         </nav>
       </div>
+      )}
 
       <MoreMenuSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
     </div>

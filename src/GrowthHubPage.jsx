@@ -1,12 +1,14 @@
 import { Link, useOutletContext } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShoppingBag } from "lucide-react";
 import { http } from "./api/http";
 import { prepareEscrowCheckout } from "./api/paymentsApi";
 import { apiUrl } from "./config/env";
 import { apiFetch } from "./lib/apiClient";
 import { useFlutterwaveCheckout } from "./hooks/useFlutterwaveCheckout";
 import { getSessionToken } from "./session";
+import { formatUserFacingError } from "./lib/userFacingError";
+import { EmptyState } from "./components/ui/EmptyState";
 
 async function j(path, opts = {}) {
   const res = await apiFetch(apiUrl(`/api/growth${path}`), opts);
@@ -80,7 +82,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
         setLeads([]);
       }
     } catch (e) {
-      setErr(e.message);
+      setErr(formatUserFacingError(e, "Could not load marketplace data."));
     } finally {
       setHubLoading(false);
     }
@@ -246,7 +248,14 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
         </p>
       )}
 
-      {err && <p className="text-sm text-rose-400">{err}</p>}
+      {err && (
+        <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          {formatUserFacingError(err, "Something went wrong.")}
+          <button type="button" className="ml-2 text-ccweb-cyan underline" onClick={() => loadAll()}>
+            Retry
+          </button>
+        </p>
+      )}
       {fwCheckout.error && (
         <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
           <p>{fwCheckout.error}</p>
@@ -303,14 +312,15 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
             <h2 className="text-lg font-semibold text-white">Discover</h2>
             <ul className="mt-4 space-y-3">
               {listings.map((l) => (
-                <li key={l.id} className="rounded-xl border border-white/10 bg-black/30 p-3">
+                <li key={l.id} className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-transparent p-4 transition hover:border-ccweb-cyan/25">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <p className="font-medium text-white">{l.title}</p>
-                      <p className="text-xs text-ccweb-muted">
-                        {l.type} · {l.industry} · ${l.priceUsd}
+                      <p className="font-semibold text-white">{l.title}</p>
+                      <p className="mt-1 text-xs text-ccweb-muted">
+                        {l.type} · {l.industry}
                       </p>
-                      <p className="mt-1 text-xs text-ccweb-muted">Seller: {l.sellerName}</p>
+                      <p className="mt-2 text-lg font-bold text-ccweb-cyan">${l.priceUsd}</p>
+                      <p className="mt-1 text-xs text-ccweb-muted">by {l.sellerName}</p>
                     </div>
                     <button
                       type="button"
@@ -326,12 +336,17 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
               ))}
             </ul>
             {!fwPublicKey && (
-              <p className="mt-4 text-xs text-amber-200/90">
-                Card checkout is not available in this build. Listings can still be browsed; contact the seller to arrange payment.
+              <p className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                Card checkout is not available right now. Browse listings and contact sellers to arrange payment.
               </p>
             )}
             {listings.length === 0 && !hubLoading && (
-              <p className="mt-4 text-sm text-ccweb-muted">No listings yet. Be the first to publish a product or service.</p>
+              <EmptyState
+                icon={ShoppingBag}
+                title="No listings yet"
+                description="Publish your first product or service using the form on the right."
+                className="mt-4 border-white/10"
+              />
             )}
           </section>
           <section className="rounded-2xl border border-ccweb-border bg-ccweb-card p-5 backdrop-blur-xl">
@@ -484,9 +499,8 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
       )}
 
       <p className="text-center text-xs text-ccweb-muted">
-        API: <code className="text-ccweb-cyan">/api/growth/*</code> ·{" "}
         <Link to="/earn" className="text-ccweb-cyan underline">
-          Earn pillar
+          Open Earn hub
         </Link>
       </p>
     </div>

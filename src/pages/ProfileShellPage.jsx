@@ -18,6 +18,7 @@ import { CCWEB_UI_LOAD_TIMEOUT_MS } from "../constants/loadTimeout";
 import { useAppShellContext } from "../hooks/useAppShellContext";
 import { useAuthGateRecovery } from "../hooks/useAuthGateRecovery";
 import { useProfileStore, syncProfileFromUpload } from "../store/profileStore";
+import { formatUserFacingError } from "../lib/userFacingError";
 
 export function ProfileShellPage() {
   const { user: shellUser, setUser, authHydrated, refreshSession } = useAppShellContext();
@@ -125,7 +126,7 @@ export function ProfileShellPage() {
       const data = await fetchProfileFeed(user.id, activeTab);
       setFeedItems(data.items || []);
     } catch (e) {
-      setFeedError(e.message || "Could not load tab.");
+      setFeedError(formatUserFacingError(e, "Could not load tab."));
       setFeedItems([]);
     } finally {
       setFeedLoading(false);
@@ -462,7 +463,11 @@ export function ProfileShellPage() {
         )}
       </section>
 
-      {err && <p className="text-sm text-rose-300">{err}</p>}
+      {err && (
+        <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          {formatUserFacingError(err, "Could not save profile.")}
+        </p>
+      )}
       {msg && <p className="text-sm text-emerald-300">{msg}</p>}
 
       <button
@@ -475,14 +480,16 @@ export function ProfileShellPage() {
       </button>
 
       <ProfileBottomSheet open={editOpen} title="Edit profile" onClose={() => setEditOpen(false)}>
-        <div className="space-y-4">
+        <div className="space-y-5">
+          <p className="text-xs text-ccweb-muted">Update how others see you on CCWEB.</p>
           <div>
-            <label className="text-xs font-medium text-ccweb-muted">Display name</label>
-            <input className="ccweb-input mt-1" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+            <label className="text-xs font-semibold uppercase tracking-wider text-ccweb-muted">Display name</label>
+            <input className="ccweb-input mt-1.5 min-h-[44px]" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           </div>
           <div>
-            <label className="text-xs font-medium text-ccweb-muted">Bio</label>
-            <textarea className="ccweb-input mt-1 min-h-[88px] resize-y" maxLength={500} value={bio} onChange={(e) => setBio(e.target.value)} />
+            <label className="text-xs font-semibold uppercase tracking-wider text-ccweb-muted">Bio</label>
+            <textarea className="ccweb-input mt-1.5 min-h-[100px] resize-y" maxLength={500} placeholder="Tell the community about yourself…" value={bio} onChange={(e) => setBio(e.target.value)} />
+            <p className="mt-1 text-[10px] text-ccweb-muted">{bio.length}/500 · use #tags for interests</p>
           </div>
           <div>
             <label className="text-xs font-medium text-ccweb-muted">Location</label>

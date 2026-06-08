@@ -9,6 +9,22 @@ import { CreatorStatsCard } from "./CreatorStatsCard";
 import { ProfileMediaUpload } from "./ProfileMediaUpload";
 import { CcwebBrandAvatarFallback } from "../brand/CcwebBrandMark";
 
+function deriveInterestChips(user, creator, monetization) {
+  const chips = [];
+  if (creator?.badge) chips.push(String(creator.badge).replace(/_/g, " "));
+  const tier = monetization?.tier || creator?.tier;
+  if (tier && tier !== "free") chips.push(String(tier).replace(/_/g, " "));
+  const bio = user?.bio || "";
+  const tags = bio.match(/#[\w-]+/g);
+  if (tags) chips.push(...tags.map((t) => t.slice(1)));
+  if (Array.isArray(user?.socialLinks)) {
+    for (const link of user.socialLinks.slice(0, 3)) {
+      if (link?.label) chips.push(link.label);
+    }
+  }
+  return [...new Set(chips)].slice(0, 8);
+}
+
 function formatJoined(iso) {
   if (!iso) return null;
   try {
@@ -60,6 +76,7 @@ export function ProfileHeader({
   if (loading && !user) return <ProfileHeaderSkeleton />;
 
   const joined = formatJoined(user?.createdAt);
+  const interestChips = deriveInterestChips(user, creator, monetization);
   const bannerStyle = user?.bannerUrl
     ? { backgroundImage: `url(${assetsUrl(user.bannerUrl)})` }
     : { backgroundImage: "linear-gradient(120deg, rgba(34,211,238,0.45), rgba(167,139,250,0.45))" };
@@ -129,32 +146,27 @@ export function ProfileHeader({
               <CreatorBadge tier={creator?.tier || monetization?.tier} badge={creator?.badge} />
             </div>
             {isSelf && user?.email ? <p className="mt-0.5 text-sm text-ccweb-muted">{user.email}</p> : null}
-            {user?.bio ? <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/90">{user.bio}</p> : null}
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ccweb-muted">
-              {user?.location ? (
-                <span className="inline-flex items-center gap-1">
-                  <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                  {user.location}
-                </span>
-              ) : null}
-              {user?.website ? (
-                <a
-                  href={user.website.startsWith("http") ? user.website : `https://${user.website}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-ccweb-cyan hover:underline"
-                >
-                  <Link2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                  {user.website.replace(/^https?:\/\//, "").slice(0, 40)}
-                </a>
-              ) : null}
-              {joined ? (
-                <span className="inline-flex items-center gap-1">
-                  <Calendar className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                  Joined {joined}
-                </span>
-              ) : null}
-            </div>
+            {user?.bio ? (
+              <div className="mt-3 max-w-xl rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-ccweb-muted">Bio</p>
+                <p className="mt-1 text-sm leading-relaxed text-white/90">{user.bio}</p>
+              </div>
+            ) : null}
+            {interestChips.length > 0 && (
+              <div className="mt-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-ccweb-muted">Skills &amp; interests</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {interestChips.map((chip) => (
+                    <span
+                      key={chip}
+                      className="rounded-full border border-ccweb-cyan/25 bg-ccweb-cyan/10 px-3 py-1 text-xs font-medium capitalize text-ccweb-cyan"
+                    >
+                      {chip}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             {Array.isArray(user?.socialLinks) && user.socialLinks.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {user.socialLinks.map((link) => (
@@ -172,15 +184,51 @@ export function ProfileHeader({
               </div>
             )}
             {social && (
-              <div className="mt-3 flex flex-wrap gap-4 text-sm">
-                <span>
-                  <strong className="text-white">{formatCount(social.followers)}</strong>{" "}
-                  <span className="text-ccweb-muted">Followers</span>
-                </span>
-                <span>
-                  <strong className="text-white">{formatCount(social.following)}</strong>{" "}
-                  <span className="text-ccweb-muted">Following</span>
-                </span>
+              <div className="mt-4 flex flex-wrap gap-6 border-t border-white/10 pt-4 text-sm">
+                <button type="button" className="group text-left">
+                  <p className="text-lg font-bold text-white group-hover:text-ccweb-cyan">{formatCount(social.followers)}</p>
+                  <p className="text-ccweb-muted">Followers</p>
+                </button>
+                <button type="button" className="group text-left">
+                  <p className="text-lg font-bold text-white group-hover:text-ccweb-cyan">{formatCount(social.following)}</p>
+                  <p className="text-ccweb-muted">Following</p>
+                </button>
+                {typeof stats?.postCount === "number" && (
+                  <div>
+                    <p className="text-lg font-bold text-white">{formatCount(stats.postCount)}</p>
+                    <p className="text-ccweb-muted">Posts</p>
+                  </div>
+                )}
+              </div>
+            )}
+            {(user?.location || user?.website || joined) && (
+              <div className="mt-4 rounded-2xl border border-white/10 bg-black/30 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-ccweb-muted">About</p>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ccweb-muted">
+                  {user?.location ? (
+                    <span className="inline-flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      {user.location}
+                    </span>
+                  ) : null}
+                  {user?.website ? (
+                    <a
+                      href={user.website.startsWith("http") ? user.website : `https://${user.website}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-ccweb-cyan hover:underline"
+                    >
+                      <Link2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      {user.website.replace(/^https?:\/\//, "").slice(0, 40)}
+                    </a>
+                  ) : null}
+                  {joined ? (
+                    <span className="inline-flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      Joined {joined}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             )}
           </div>

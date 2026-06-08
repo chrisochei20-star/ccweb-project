@@ -25,6 +25,9 @@ import { Skeleton } from "../ui/Skeleton";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { PullToRefreshContainer } from "../mobile/PullToRefreshContainer";
 import { isCapacitorNative } from "../../lib/capacitorPlatform";
+import { timeAgo } from "../../lib/timeFormat";
+import { formatUserFacingError } from "../../lib/userFacingError";
+import { EmptyState } from "../ui/EmptyState";
 
 function hrefForNotification(n) {
   const p = n.payload || {};
@@ -129,7 +132,7 @@ export function NotificationCenterPage() {
       await markReadOptimistic({ markAll: true });
       await loadPage({ grouped: showGrouped });
     } catch (e) {
-      toast.error(e.message || "Could not mark read");
+      toast.error(formatUserFacingError(e, "Could not mark read"));
     }
   }
 
@@ -137,7 +140,7 @@ export function NotificationCenterPage() {
     try {
       await markReadOptimistic({ ids: [id] });
     } catch (e) {
-      toast.error(e.message || "Could not update");
+      toast.error(formatUserFacingError(e, "Could not update"));
     }
   }
 
@@ -200,7 +203,10 @@ export function NotificationCenterPage() {
 
       {err && (
         <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-          {err}
+          {formatUserFacingError(err, "Could not load notifications.")}
+          <button type="button" className="ml-2 text-ccweb-cyan underline" onClick={() => loadPage({ grouped: showGrouped })}>
+            Retry
+          </button>
         </div>
       )}
 
@@ -240,9 +246,13 @@ export function NotificationCenterPage() {
       )}
 
       {!loading && items.length === 0 && (
-        <div className="ccweb-card-premium rounded-2xl border border-white/10 p-8 text-center text-sm text-ccweb-muted">
-          You are all caught up. Interact on Community, Learn, or Chats to see notifications here.
-        </div>
+        <EmptyState
+          icon={Bell}
+          title="All caught up"
+          description="Likes, replies, mentions, and messages will appear here as they happen."
+          actionLabel="Open Community"
+          actionTo="/community"
+        />
       )}
 
       {!loading && items.length > 0 && (
@@ -251,36 +261,33 @@ export function NotificationCenterPage() {
             const Icon = kindIcon(n.kind);
             const href = hrefForNotification(n);
             return (
-              <li
-                key={n.id}
-                className={`ccweb-card-premium rounded-2xl border px-4 py-3 transition ${
-                  n.read ? "border-white/5 opacity-75" : "border-ccweb-cyan/25 shadow-[0_0_28px_-12px_rgba(34,211,238,0.35)]"
-                }`}
-              >
-                <div className="flex gap-3">
+              <li key={n.id}>
+                <Link
+                  to={href}
+                  onClick={() => {
+                    if (!n.read) void markOne(n.id);
+                  }}
+                  className={`ccweb-card-premium flex gap-3 rounded-2xl border px-4 py-3 transition hover:bg-white/[0.03] ${
+                    n.read ? "border-white/5 opacity-75" : "border-ccweb-cyan/25 shadow-[0_0_28px_-12px_rgba(34,211,238,0.35)]"
+                  }`}
+                >
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/6 text-ccweb-cyan">
                     <Icon className="h-5 w-5" strokeWidth={2} aria-hidden />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-semibold uppercase tracking-wide text-ccweb-muted">{n.kind}</span>
-                      {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-ccweb-cyan" aria-label="Unread" />}
+                      {!n.read && (
+                        <span className="rounded-full bg-ccweb-cyan/20 px-2 py-0.5 text-[10px] font-bold text-ccweb-cyan">
+                          New
+                        </span>
+                      )}
                     </div>
                     <p className="mt-0.5 text-sm font-semibold text-white">{n.title}</p>
                     <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-slate-300/95">{n.message || n.body}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-ccweb-muted">
-                      <span>{new Date(n.createdAt).toLocaleString()}</span>
-                      <Link to={href} className="text-ccweb-cyan underline-offset-2 hover:underline">
-                        Open
-                      </Link>
-                      {!n.read && (
-                        <button type="button" className="text-white/80 hover:text-white" onClick={() => markOne(n.id)}>
-                          Mark read
-                        </button>
-                      )}
-                    </div>
+                    <p className="mt-2 text-[11px] text-ccweb-muted">{timeAgo(n.createdAt)}</p>
                   </div>
-                </div>
+                </Link>
               </li>
             );
           })}
@@ -405,7 +412,11 @@ export function NotificationBell({ user, authHydrated = true }) {
                   <Skeleton className="h-10 w-full rounded-lg" />
                 </div>
               )}
-              {err && !loading && <p className="px-3 py-4 text-center text-xs text-rose-300">{err}</p>}
+              {err && !loading && (
+                <p className="px-3 py-4 text-center text-xs text-rose-300">
+                  {formatUserFacingError(err, "Could not load notifications.")}
+                </p>
+              )}
               {!loading && !err && preview.length === 0 && (
                 <p className="px-3 py-6 text-center text-xs text-ccweb-muted">No notifications yet.</p>
               )}

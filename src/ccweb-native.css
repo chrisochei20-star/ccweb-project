@@ -37,6 +37,25 @@ html.ccweb-capacitor-native .ccweb-page-enter {
   }
 }
 
+@keyframes ccwebSplashLogoIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+html.ccweb-capacitor-native .ccweb-native-splash {
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(34, 211, 238, 0.12), transparent 55%), #050810;
+}
+
+html.ccweb-capacitor-native .ccweb-splash-logo {
+  animation: ccwebSplashLogoIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 html.ccweb-capacitor-native .ccweb-nav-item {
   position: relative;
   overflow: hidden;

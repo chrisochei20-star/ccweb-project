@@ -22,6 +22,9 @@ import { apiUrl } from "./config/env";
 import { apiFetch } from "./lib/apiClient";
 import { ApiErrorPanel } from "./components/ui/ApiErrorPanel";
 import { useStaleLoadingGuard } from "./hooks/useStaleLoadingGuard";
+import { showBuilderBetaPanels } from "./lib/featureFlags";
+import { formatUserFacingError } from "./lib/userFacingError";
+import { EmptyState } from "./components/ui/EmptyState";
 
 const CommunityShellPage = lazy(() => import("./pages/CommunityShellPage").then((m) => ({ default: m.CommunityShellPage })));
 const ChatPage = lazy(() => import("./pages/ChatPage").then((m) => ({ default: m.ChatPage })));
@@ -1214,7 +1217,11 @@ function AiAgentsPage() {
         setAgents(d.agents || []);
       } catch (e) {
         if (!cancelled) {
-          setLoadErr(e?.name === "AbortError" ? "Loading timed out. Try again." : e.message || "Could not load agents");
+          setLoadErr(
+            e?.name === "AbortError"
+              ? "Loading timed out. Try again."
+              : formatUserFacingError(e, "Could not load agents.")
+          );
           setAgents([]);
         }
       } finally {
@@ -1236,9 +1243,25 @@ function AiAgentsPage() {
         </p>
       </header>
 
-      {loading && <p className="muted">Loading agents...</p>}
+      {loading && (
+        <div className="space-y-3 py-4">
+          {[1, 2].map((i) => (
+            <Skeleton key={i} className="h-32 w-full rounded-2xl" />
+          ))}
+        </div>
+      )}
       {loadErr && !loading && (
         <ApiErrorPanel message={loadErr} onRetry={() => window.location.reload()} className="mb-4" />
+      )}
+
+      {!loading && !loadErr && agents.length === 0 && (
+        <EmptyState
+          title="No agents yet"
+          description="AI agents will appear here when configured on your workspace."
+          onAction={() => window.location.reload()}
+          actionLabel="Refresh"
+          className="mb-4"
+        />
       )}
 
       <div className="agents-grid">
@@ -1260,16 +1283,18 @@ function AiAgentsPage() {
         ))}
       </div>
 
-      <section className="panel" style={{ marginTop: "1.5rem" }}>
-        <h3>Workflow Operator System</h3>
-        <p className="muted">The Agent Operator designs workflows, connects tools and data, translates problems into execution, and monitors performance continuously.</p>
-        <div className="card-grid" style={{ marginTop: "0.8rem" }}>
-          <div className="panel"><h4>Design</h4><p className="muted">Visual workflow builder for complex multi-step automations.</p></div>
-          <div className="panel"><h4>Connect</h4><p className="muted">Integrates APIs, data sources, and external tools seamlessly.</p></div>
-          <div className="panel"><h4>Execute</h4><p className="muted">Runs workflows autonomously with error handling and retries.</p></div>
-          <div className="panel"><h4>Optimize</h4><p className="muted">Monitors performance metrics and improves over time.</p></div>
-        </div>
-      </section>
+      {showBuilderBetaPanels() && (
+        <section className="panel" style={{ marginTop: "1.5rem" }}>
+          <h3>Workflow Operator</h3>
+          <p className="muted">Design, connect, execute, and optimize multi-step automations.</p>
+          <div className="card-grid" style={{ marginTop: "0.8rem" }}>
+            <div className="panel"><h4>Design</h4><p className="muted">Visual workflow builder.</p></div>
+            <div className="panel"><h4>Connect</h4><p className="muted">API and data integrations.</p></div>
+            <div className="panel"><h4>Execute</h4><p className="muted">Autonomous runs with retries.</p></div>
+            <div className="panel"><h4>Optimize</h4><p className="muted">Performance monitoring.</p></div>
+          </div>
+        </section>
+      )}
     </section>
   );
 }
@@ -1280,11 +1305,13 @@ function DappDashboardPage() {
   const [transactions, setTransactions] = useState([]);
   const [tab, setTab] = useState("overview");
   const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState(null);
   const loadStalled = useStaleLoadingGuard(loading);
   const [expandedDeploy, setExpandedDeploy] = useState(null);
 
   async function loadAll() {
     setLoading(true);
+    setLoadErr(null);
     try {
       const [statsRes, deploymentsRes, txRes] = await Promise.all([
         apiFetch(apiUrl("/api/dapp/dashboard"), {}, { timeoutMs: 8000 }).then((r) => r.json()),
@@ -1294,8 +1321,8 @@ function DappDashboardPage() {
       setStats(statsRes);
       setDeployments(deploymentsRes.deployments || []);
       setTransactions(txRes.transactions || []);
-    } catch {
-      /* ignore */
+    } catch (e) {
+      setLoadErr(formatUserFacingError(e, "Could not load dashboard."));
     }
     setLoading(false);
   }
@@ -1334,12 +1361,18 @@ function DappDashboardPage() {
         </p>
       )}
       {loading && !loadStalled && (
-        <p className="muted" style={{ textAlign: "center", padding: "2rem" }}>
-          Loading dashboard...
-        </p>
+        <div className="space-y-3 px-4 py-6">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-20 w-full rounded-xl" />
+          ))}
+        </div>
       )}
 
-      {!loading && tab === "overview" && stats && (
+      {loadErr && !loading && (
+        <ApiErrorPanel message={loadErr} onRetry={loadAll} className="mx-4 mb-4" />
+      )}
+
+      {!loading && !loadErr && tab === "overview" && stats && (
         <>
           <div className="dash-kpi-grid">
             <div className="dash-kpi-card">

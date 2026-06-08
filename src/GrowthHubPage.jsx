@@ -23,6 +23,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
     setTab(initialTab);
   }, [initialTab]);
 
+  const [hubLoading, setHubLoading] = useState(true);
   const [overview, setOverview] = useState(null);
   const [listings, setListings] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -64,6 +65,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
 
   const loadAll = useCallback(async () => {
     setErr(null);
+    setHubLoading(true);
     try {
       const [o, l, cmp] = await Promise.all([j("/overview"), j("/listings"), j("/campaigns")]);
       setOverview(o);
@@ -79,6 +81,8 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
       }
     } catch (e) {
       setErr(e.message);
+    } finally {
+      setHubLoading(false);
     }
   }, [user?.id, loadOrders]);
 
@@ -264,7 +268,14 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
       )}
       {msg && <p className="text-sm text-emerald-300">{msg}</p>}
 
-      {tab === "overview" && overview && (
+      {hubLoading && tab === "overview" && (
+        <div className="flex min-h-[12rem] items-center justify-center gap-2 text-sm text-ccweb-muted" role="status">
+          <Loader2 className="h-5 w-5 animate-spin text-ccweb-cyan" aria-hidden />
+          Loading growth hub…
+        </div>
+      )}
+
+      {tab === "overview" && !hubLoading && overview && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
             ["Leads generated", overview.metrics.leadsGenerated],
@@ -314,10 +325,14 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
                 </li>
               ))}
             </ul>
-            <p className="mt-4 text-xs text-ccweb-muted">
-              Requires <code className="text-ccweb-cyan">DATABASE_URL</code>, <code className="text-ccweb-cyan">FLUTTERWAVE_SECRET_KEY</code> on the API,{" "}
-              <code className="text-ccweb-cyan">VITE_FLUTTERWAVE_PUBLIC_KEY</code> on the app, and a signed-in buyer.
-            </p>
+            {!fwPublicKey && (
+              <p className="mt-4 text-xs text-amber-200/90">
+                Card checkout is not available in this build. Listings can still be browsed; contact the seller to arrange payment.
+              </p>
+            )}
+            {listings.length === 0 && !hubLoading && (
+              <p className="mt-4 text-sm text-ccweb-muted">No listings yet. Be the first to publish a product or service.</p>
+            )}
           </section>
           <section className="rounded-2xl border border-ccweb-border bg-ccweb-card p-5 backdrop-blur-xl">
             <h2 className="text-lg font-semibold text-white">List a product or service</h2>

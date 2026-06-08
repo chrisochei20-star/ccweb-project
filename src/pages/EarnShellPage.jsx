@@ -127,7 +127,7 @@ export function EarnShellPage() {
           {error && <p className="mt-3 text-sm text-rose-300">{error}</p>}
           {!loading && analytics && !analytics.postgres && (
             <p className="mt-3 text-sm text-amber-200/90">
-              Connect <code className="rounded bg-black/30 px-1">DATABASE_URL</code> to sync credits, subscriptions, referral codes, and order lines.
+              Sign in to sync credits, subscriptions, referral codes, and order history.
             </p>
           )}
           {summary && (

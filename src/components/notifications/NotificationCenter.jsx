@@ -182,7 +182,7 @@ export function NotificationCenterPage() {
           <p className="ccweb-kicker text-xs font-semibold uppercase tracking-widest text-ccweb-cyan">Activity</p>
           <h1 className="ccweb-display-heading mt-1 text-2xl font-bold tracking-tight text-white md:text-3xl">Notifications</h1>
           <p className="mt-1 max-w-md text-sm text-ccweb-muted">
-            Likes, replies, mentions, follows, chat, learning, and rewards — synced in real time when you use PostgreSQL.
+            Likes, replies, mentions, follows, chat, learning, and rewards — synced in real time.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

@@ -4,7 +4,7 @@
  */
 
 import { postBetaClientEvent } from "./betaTelemetry";
-import { isCapacitorNative } from "./capacitorPlatform";
+import { isCapacitorNative } from "./platformDetect";
 import { releaseLog } from "./releaseLog";
 
 let initialized = false;

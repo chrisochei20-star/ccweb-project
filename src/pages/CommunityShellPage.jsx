@@ -359,7 +359,7 @@ export function CommunityShellPage() {
         </p>
         <h1 className="ccweb-display-heading mt-2 text-2xl font-bold tracking-tight text-white md:text-3xl">Community</h1>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-ccweb-muted">
-          X-style feed for builders and learners. Discord-style rooms for quick vibes. Everything syncs to your Render API.
+          Community feed and live rooms for builders and learners — stay connected in one place.
         </p>
       </header>
 

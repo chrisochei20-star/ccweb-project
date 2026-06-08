@@ -11,7 +11,7 @@ export function formatPaymentError(err) {
     return "Card checkout is not enabled on the server yet. Try again later or contact support.";
   }
   if (/NO_DATABASE|PostgreSQL required/i.test(msg)) {
-    return "Payments need PostgreSQL on the API. Contact support if this persists.";
+    return "Payments are temporarily unavailable. Please try again later.";
   }
   if (err?.response?.status === 401 || /sign in required/i.test(msg)) {
     return "Sign in again, then retry checkout.";

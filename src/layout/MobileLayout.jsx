@@ -172,6 +172,7 @@ export function MobileLayout() {
   const sessionToken = getSessionToken();
   const nativeAuthed = !nativeShell || (authHydrated && Boolean(sessionToken));
   const showPrimaryNav = nativeAuthed && !isNativePublicPath(path);
+  const showAppChrome = !nativeShell || !isNativePublicPath(path);
 
   return (
     <div className={`ccweb-app-root ccweb-app-pattern min-h-screen font-sans antialiased${nativeShell ? " ccweb-mobile-shell" : ""}`}>
@@ -181,6 +182,7 @@ export function MobileLayout() {
       <PageMeta title={routeMeta?.title} description={routeMeta?.description} path={path} />
       <OfflineBanner onSoftRecover={refreshSession} />
       <InstallPrompt />
+      {showAppChrome && (
       <header className="ccweb-top-bar">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3.5 md:max-w-5xl">
           <NavLink
@@ -246,6 +248,7 @@ export function MobileLayout() {
           </div>
         </div>
       </header>
+      )}
 
       {showPrimaryNav && (
       <nav className="hidden border-b border-white/5 bg-slate-950/40 backdrop-blur-md lg:block" aria-label="Primary">

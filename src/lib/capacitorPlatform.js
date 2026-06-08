@@ -1,6 +1,12 @@
 import { Capacitor } from "@capacitor/core";
 import { runNativeBackHandler } from "./nativeBackStack";
-import { releaseDiag } from "./releaseLog";
+
+/** Lazy diag — avoids static import of releaseLog during shell bootstrap (TDZ hardening). */
+function releaseDiag(label, data = {}) {
+  void import("./releaseLog.js")
+    .then(({ releaseDiag: rd }) => rd(label, data))
+    .catch(() => {});
+}
 
 /** @type {string | null} */
 let pendingDeepLinkUrl = null;

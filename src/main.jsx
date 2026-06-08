@@ -23,8 +23,15 @@ try {
 }
 
 logCcwebApiRuntimeDebug();
-initProductionAnalytics();
-initNativeCrashReporting();
+if (typeof window !== "undefined") {
+  window.addEventListener("DOMContentLoaded", () => {
+    initProductionAnalytics();
+    initNativeCrashReporting();
+  });
+} else {
+  initProductionAnalytics();
+  initNativeCrashReporting();
+}
 void initCapacitorShell().then(() => initNativePushNotifications());
 registerServiceWorker();
 

@@ -4,7 +4,7 @@ import { getApiBaseUrl } from "./config/env";
 import { authStorageGetItem, authStorageRemoveItem, authStorageSetItem } from "./lib/authStorage";
 import { apiFetch } from "./lib/apiClient";
 import { revokeNativeDeviceToken } from "./lib/nativePush";
-import { isCapacitorNative } from "./lib/capacitorPlatform";
+import { isCapacitorNative } from "./lib/platformDetect";
 
 /** Max wait for /me + refresh during shell hydration (avoids infinite spinner). */
 const SESSION_HYDRATION_TIMEOUT_MS = CCWEB_AUTH_HYDRATION_TIMEOUT_MS;

@@ -27,6 +27,7 @@ import { formatUserFacingError } from "../lib/userFacingError";
 import { EmptyState } from "../components/ui/EmptyState";
 
 const QUICK_EMOJIS = ["😀", "🙂", "😂", "🔥", "❤️", "👍", "🎉", "⚡", "📈", "🚀", "💎", "✨", "🙏", "👀", "💬"];
+const MSG_REACTIONS = ["👍", "❤️", "😂", "🔥"];
 
 const CHAT_LOAD_TIMEOUT_MS = CCWEB_UI_LOAD_TIMEOUT_MS;
 
@@ -47,7 +48,7 @@ export function ChatPage() {
   const keyboardInset = useKeyboardInset();
   const [chatUploadProgress, setChatUploadProgress] = useState(null);
   const [viewerImage, setViewerImage] = useState(null);
-  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [reactionTarget, setReactionTarget] = useState(null);
   const uploadAbortRef = useRef(null);
   const [connectionState, setConnectionState] = useState(() => getRealtimeConnectionState());
   const typingTimer = useRef(null);
@@ -672,6 +673,53 @@ export function ChatPage() {
                           </div>
                         ) : (
                           <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                        )}
+                        {Array.isArray(m.metadata?.reactions) && m.metadata.reactions.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {m.metadata.reactions.map((r) => (
+                              <span key={r} className="rounded-full bg-black/25 px-1.5 py-0.5 text-xs">
+                                {r}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {!pending && !failed && (
+                          <div className="mt-1 flex items-center gap-1">
+                            <button
+                              type="button"
+                              className="rounded-full px-1.5 py-0.5 text-[10px] text-white/60 hover:bg-white/10"
+                              aria-label="React"
+                              onClick={() => setReactionTarget((cur) => (cur === m.id ? null : m.id))}
+                            >
+                              +
+                            </button>
+                            {reactionTarget === m.id &&
+                              MSG_REACTIONS.map((em) => (
+                                <button
+                                  key={em}
+                                  type="button"
+                                  className="rounded-full bg-black/30 px-1.5 py-0.5 text-sm hover:bg-black/50"
+                                  onClick={() => {
+                                    setMessages((prev) =>
+                                      prev.map((row) =>
+                                        row.id === m.id
+                                          ? {
+                                              ...row,
+                                              metadata: {
+                                                ...(row.metadata || {}),
+                                                reactions: [...new Set([...(row.metadata?.reactions || []), em])],
+                                              },
+                                            }
+                                          : row
+                                      )
+                                    );
+                                    setReactionTarget(null);
+                                  }}
+                                >
+                                  {em}
+                                </button>
+                              ))}
+                          </div>
                         )}
                         <div className={`mt-1 flex items-center justify-end gap-1.5 text-[10px] ${mine ? "text-white/75" : "text-ccweb-muted"}`}>
                           <span>{formatMessageTime(m.createdAt)}</span>

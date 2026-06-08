@@ -147,7 +147,7 @@ export function EarlySignalsDashboard() {
         </p>
         <p className="mt-3 text-xs text-ccweb-muted/90 sm:text-sm">{data?.disclaimer}</p>
         <p className="mt-2 text-xs text-ccweb-muted">
-          Updated {data?.updatedAt ? new Date(data.updatedAt).toLocaleString() : "—"} · SSE refresh ~12s
+          Updated {data?.updatedAt ? new Date(data.updatedAt).toLocaleString() : "—"} · refreshes every ~12s
         </p>
       </header>
 

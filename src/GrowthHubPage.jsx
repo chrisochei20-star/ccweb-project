@@ -213,7 +213,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
         <p className="text-xs font-semibold uppercase tracking-widest text-ccweb-cyan">Build · Business Automation</p>
         <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">Global Marketing Agent &amp; Growth Hub</h1>
         <p className="mt-2 max-w-3xl text-sm text-ccweb-muted">
-          Organic-first workspace: listings, Flutterwave-backed escrow when PostgreSQL and payment keys are configured, campaigns, and lead scoring.
+          Organic-first workspace: listings, secure card checkout, campaigns, and lead scoring.
           Follow each network&apos;s rules — agent outputs need human approval before publish.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -244,7 +244,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
           <Link to="/login" className="font-medium text-ccweb-cyan underline">
             Sign in
           </Link>{" "}
-          to publish listings, purchase with card escrow (Flutterwave), and manage your orders.
+          to publish listings, purchase with card escrow, and manage your orders.
         </p>
       )}
 
@@ -399,7 +399,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
           <h2 className="text-lg font-semibold text-white">Escrow</h2>
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-ccweb-muted">
             <li>
-              Buyer pays via Flutterwave → order moves to <code className="text-ccweb-cyan">escrow_funded</code> when payment is verified
+              Buyer pays by card → order moves to escrow when payment is verified
             </li>
             <li>Seller delivers → Mark delivered</li>
             <li>Buyer confirms → Release payment (platform fee retained)</li>

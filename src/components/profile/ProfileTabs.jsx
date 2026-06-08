@@ -2,6 +2,7 @@ import { cn } from "../../lib/cn";
 
 export const PROFILE_TABS = [
   { id: "posts", label: "Posts" },
+  { id: "pinned", label: "Pinned" },
   { id: "replies", label: "Replies" },
   { id: "media", label: "Media" },
   { id: "likes", label: "Likes", selfOnly: true },

@@ -1,5 +1,6 @@
 import { apiUrl } from "../config/env";
 import { getApiBearerToken } from "../lib/apiClient";
+import { formatUserFacingError } from "../lib/userFacingError";
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -14,22 +15,15 @@ function shouldRetryHttpStatus(status) {
  * @param {Error & { status?: number; code?: string }} err
  */
 export function formatUploadError(err) {
-  const code = err?.code;
   const status = err?.status;
   const msg = String(err?.message || err || "");
-  if (code === "NO_DATABASE" || /NO_DATABASE|PostgreSQL required/i.test(msg)) {
-    return "Profile photos need PostgreSQL on the API (DATABASE_URL). Contact support if this persists.";
-  }
   if (status === 401 || /401|unauthoriz/i.test(msg)) {
     return "Session expired. Sign in again, then retry the upload.";
   }
   if (status === 413 || /too large|entity too large/i.test(msg)) {
     return "Image is too large. Try a smaller file or a lower-resolution photo.";
   }
-  if (status === 400 && msg.length > 0 && msg.length < 200) return msg;
-  if (/timed out|timeout/i.test(msg)) return "Upload timed out. Check your connection or try a smaller image.";
-  if (/network error|failed to fetch|abort/i.test(msg)) return "Network error during upload. Check your connection and try again.";
-  return msg.length < 220 ? msg : "Upload failed. Please try again.";
+  return formatUserFacingError(err, "Upload failed. Please try again.");
 }
 
 /**

@@ -6,30 +6,11 @@ import { setSession } from "../session";
 import { CcwebBrandMark } from "../components/brand/CcwebBrandMark";
 import { apiUrl, getApiBaseUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
-import { isCapacitorNative } from "../lib/capacitorPlatform";
+import { formatUserFacingError } from "../lib/userFacingError";
+import { isCapacitorNative } from "../lib/platformDetect";
 
 function mapNetworkError(err) {
-  const msg = err?.message || String(err);
-  if (err?.name === "AbortError" || /request cancelled/i.test(msg)) {
-    return "Request timed out. Check your connection and try again.";
-  }
-  if (msg === "Failed to fetch" || msg === "Load failed" || /network/i.test(msg)) {
-    const base = getApiBaseUrl();
-    if (isCapacitorNative()) {
-      return base
-        ? `Cannot reach ${base}. Check mobile data or Wi‑Fi, confirm the API is online, then try again.`
-        : "API URL is not configured in this build. Rebuild the APK with VITE_API_BASE_URL set to your Railway API.";
-    }
-    if (base) {
-      return (
-        `Cannot reach ${base}. If the API is up, this is usually a CORS or browser-network block: set CCWEB_ALLOWED_ORIGINS on Railway to include your exact Vercel origin (https://…vercel.app), redeploy the API, and confirm VITE_API_BASE_URL matches your Railway public URL.`
-      );
-    }
-    return (
-      "API URL is not configured. Set VITE_API_BASE_URL at build time on Vercel (and optionally VITE_CCWEB_PRODUCTION_API_FALLBACK), redeploy the SPA, and set CCWEB_ALLOWED_ORIGINS on the API."
-    );
-  }
-  return msg;
+  return formatUserFacingError(err, "Network error. Check your connection and try again.");
 }
 
 function loadGoogleScript() {
@@ -176,9 +157,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
         });
       }
       if (!getApiBaseUrl()) {
-        throw new Error(
-        "API URL is not configured. Production builds use repo `.env.production` or set VITE_API_BASE_URL in the host build environment (Vercel, Railway, etc.); optional `<meta name=\"ccweb-api-base-url\">` fallback."
-        );
+        throw new Error("Service is temporarily unavailable. Please try again later.");
       }
       if (mode === "signup") {
         const reg = await apiFetch(

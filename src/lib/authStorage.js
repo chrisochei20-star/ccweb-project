@@ -1,4 +1,4 @@
-import { isCapacitorNative } from "./capacitorPlatform";
+import { isCapacitorNative } from "./platformDetect";
 
 const MIGRATION_FLAG = "ccweb_auth_migrated_to_persistent";
 

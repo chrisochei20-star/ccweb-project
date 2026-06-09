@@ -157,7 +157,8 @@ function createIntelligenceRouter() {
       const isTracked = await intelligenceDb.isTokenTracked(key);
       res.json({ ...data, tracking: { isTracked, key } });
     } catch (err) {
-      res.status(500).json({ error: err.message || "Token detail failed" });
+      const status = err.status && err.status >= 400 && err.status < 600 ? err.status : 500;
+      res.status(status).json({ error: err.message || "Token detail failed" });
     }
   });
 

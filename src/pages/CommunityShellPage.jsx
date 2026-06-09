@@ -1,6 +1,6 @@
 import { Hash, Loader2, MessagesSquare, Newspaper, Radio, Sparkles, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useOutletContext } from "react-router-dom";
+import { Link, useOutletContext, useSearchParams } from "react-router-dom";
 import {
   createCommunityChat,
   createCommunityPost,
@@ -28,6 +28,7 @@ const CHANNELS = ["general", "trading", "builders"];
 
 export function CommunityShellPage() {
   const { user, authHydrated } = useOutletContext() || {};
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState("feed");
   const [posts, setPosts] = useState([]);
   const [feedMode, setFeedMode] = useState("latest");
@@ -56,6 +57,14 @@ export function CommunityShellPage() {
   const [commentSubmittingId, setCommentSubmittingId] = useState(null);
   const [chatSending, setChatSending] = useState(false);
   const keyboardInset = useKeyboardInset();
+
+  useEffect(() => {
+    const postId = (searchParams.get("post") || "").trim();
+    if (!postId) return;
+    setTab("feed");
+    setExpandedPost(postId);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const loadPosts = useCallback(async () => {
     setLoadingPosts(true);

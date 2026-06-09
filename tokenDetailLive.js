@@ -48,8 +48,18 @@ async function buildTokenDetail(slug) {
   let addr = addrIn || solMint;
   const symbol = symIn;
 
+  if (!addr && symbol) {
+    addr = await liveIntel.resolveSymbolToAddress(symbol);
+  }
+
   if (!addr) {
-    throw new Error("Token detail requires a contract address or Solana mint in the URL path.");
+    const err = new Error(
+      symbol
+        ? `No on-chain match found for symbol "${symbol}". Try a contract address or Solana mint.`
+        : "Token detail requires a contract address, Solana mint, or known symbol in the URL path."
+    );
+    err.status = 404;
+    throw err;
   }
 
   const scan = await liveIntel.buildTokenScan(symbol, addr);

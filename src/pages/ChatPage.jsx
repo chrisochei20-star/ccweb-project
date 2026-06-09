@@ -48,6 +48,7 @@ export function ChatPage() {
   const keyboardInset = useKeyboardInset();
   const [chatUploadProgress, setChatUploadProgress] = useState(null);
   const [viewerImage, setViewerImage] = useState(null);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [reactionTarget, setReactionTarget] = useState(null);
   const uploadAbortRef = useRef(null);
   const [connectionState, setConnectionState] = useState(() => getRealtimeConnectionState());

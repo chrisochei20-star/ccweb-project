@@ -537,7 +537,7 @@ export function FindPage({ initialTab = "scanner" }) {
             {signals.map((sig) => (
               <article key={sig.id} className="find-signal-card panel glass-panel">
                 <div className="find-signal-header">
-                  <span className="badge">{sig.type.replace(/_/g, " ")}</span>
+                  <span className="badge">{(sig.type || "signal").replace(/_/g, " ")}</span>
                   <span className="find-confidence">{sig.confidence}% signal</span>
                 </div>
                 <h4>{sig.title}</h4>
@@ -548,7 +548,7 @@ export function FindPage({ initialTab = "scanner" }) {
                   className="mt-2"
                 />
                 <div className="pill-row">
-                  {sig.tokens.map((t) => (
+                  {(sig.tokens || []).map((t) => (
                     <span key={t} className="tiny-pill">
                       {t}
                     </span>
@@ -593,7 +593,7 @@ export function FindPage({ initialTab = "scanner" }) {
                       <li>Signal strength {t.signalStrength}/100</li>
                     </ul>
                     <div className="pill-row">
-                      {t.narrativeKeywords.map((k) => (
+                      {(t.narrativeKeywords || []).map((k) => (
                         <span key={k} className="tiny-pill">
                           {k}
                         </span>
@@ -618,7 +618,7 @@ export function FindPage({ initialTab = "scanner" }) {
             <>
               <h3 style={{ marginTop: "1.5rem" }}>Whale flow trends (sample)</h3>
               <div className="find-trends-grid">
-                {smartMoney.trends.map((t) => (
+                {(smartMoney.trends || []).map((t) => (
                   <div key={t.token} className="find-trend-card panel glass-panel">
                     <strong>{t.token}</strong>
                     <div className={t.direction === "accumulation" ? "find-trend-up" : "find-trend-down"}>
@@ -704,7 +704,7 @@ export function FindPage({ initialTab = "scanner" }) {
               </div>
               {smDisclosure && smartMoney.disclaimer && <p className="find-disclaimer glass-panel">{smartMoney.disclaimer}</p>}
               <div className="find-wallets-list">
-                {smartMoney.wallets.map((w) => (
+                {(smartMoney.wallets || []).map((w) => (
                   <div key={w.address} className="find-wallet-card panel glass-panel">
                     <div className="find-wallet-header">
                       <strong>{w.label}</strong>
@@ -716,7 +716,7 @@ export function FindPage({ initialTab = "scanner" }) {
                       <span>Not predictive — labels illustrative</span>
                     </div>
                     <div className="find-wallet-moves">
-                      {w.recentMoves.map((m, i) => (
+                      {(w.recentMoves || []).map((m, i) => (
                         <span key={i} className={`find-move ${m.action === "buy" ? "move-buy" : "move-sell"}`}>
                           {m.action.toUpperCase()} {m.token} · ${(m.amountUsd / 1e6).toFixed(1)}M
                         </span>

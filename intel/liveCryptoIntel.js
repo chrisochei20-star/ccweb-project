@@ -503,6 +503,66 @@ async function buildWalletScan(address) {
   };
 }
 
+function shortTokenAddr(addr) {
+  const a = String(addr || "").trim();
+  if (!a) return null;
+  if (a.length <= 12) return a;
+  return `${a.slice(0, 6)}…${a.slice(-4)}`;
+}
+
+function symbolFromBoostEntry(b) {
+  if (b.symbol) return String(b.symbol).slice(0, 16);
+  const desc = String(b.description || "").trim();
+  const first = desc.split(/\s+/)[0];
+  if (first && first.length <= 16 && /^[A-Za-z0-9$]+$/.test(first)) return first.toUpperCase();
+  return shortTokenAddr(b.tokenAddress) || "Token";
+}
+
+function mapTokenBoostEntry(b, i) {
+  const addr = b.tokenAddress || "";
+  return {
+    id: `boost-${addr || i}`,
+    symbol: symbolFromBoostEntry(b),
+    name: b.name || String(b.description || "").slice(0, 64) || shortTokenAddr(addr) || "Token",
+    network: String(b.chainId || "unknown"),
+    contractAddress: addr,
+    deployedHoursAgo: null,
+    liquidityUsd: Number(b.liquidityUsd || 0),
+    holderCount: null,
+    txCount24h: null,
+    volumeUsd24h: Number(b.volumeUsd24h || 0),
+    narrativeKeywords: [],
+    signalStrength: Math.min(100, Math.round(Math.log10(Math.max(Number(b.volumeUsd24h || 1), 1)) * 22)),
+    dataSourceNote: "DexScreener token boosts — verify contracts independently.",
+    earlySignalProbability: null,
+    pairUrl: b.url || null,
+  };
+}
+
+function mapDexPairEntry(p, i) {
+  const addr = p.baseToken?.address || p.token?.address || "";
+  return {
+    id: `pair-${p.pairAddress || p.pair?.pairAddress || i}`,
+    symbol: p.baseToken?.symbol || p.token?.symbol || shortTokenAddr(addr) || "Token",
+    name: p.baseToken?.name || p.token?.name || shortTokenAddr(addr) || "Token",
+    network: String(p.chainId || p.pair?.chainId || "unknown"),
+    contractAddress: addr,
+    deployedHoursAgo: null,
+    liquidityUsd: Number(p.liquidity?.usd || p.pair?.liquidity?.usd || 0),
+    holderCount: null,
+    txCount24h: null,
+    volumeUsd24h: Number(p.volume?.h24 || p.pair?.volume?.h24 || 0),
+    narrativeKeywords: [],
+    signalStrength: Math.min(
+      100,
+      Math.round(Math.log10(Math.max(Number(p.volume?.h24 || p.pair?.volume?.h24 || 1), 1)) * 22)
+    ),
+    dataSourceNote: "DexScreener API — verify contracts independently.",
+    earlySignalProbability: null,
+    pairUrl: p.url || p.pair?.url || null,
+  };
+}
+
 async function discoverTokens(query) {
   const chain = (query.chain || "").toLowerCase();
   const minSignal =
@@ -525,37 +585,29 @@ async function discoverTokens(query) {
     await cacheSetJson(ck, hit, 45);
   }
 
-  let pairs = [];
-  if (Array.isArray(hit)) {
-    pairs = hit;
-  } else if (hit.pairs) {
-    pairs = hit.pairs;
+  const isBoostFeed = Array.isArray(hit) && hit.length > 0 && hit[0]?.tokenAddress && !hit[0]?.baseToken;
+
+  let entries = [];
+  if (isBoostFeed) {
+    entries = hit;
+  } else if (Array.isArray(hit)) {
+    entries = hit;
+  } else if (hit?.pairs) {
+    entries = hit.pairs;
   }
 
   const filtered = chain
-    ? pairs.filter((p) => String(p.chainId || "").toLowerCase().includes(chain) || String(p.chainId) === chain)
-    : pairs;
+    ? entries.filter(
+        (p) =>
+          String(p.chainId || p.pair?.chainId || "")
+            .toLowerCase()
+            .includes(chain) || String(p.chainId || p.pair?.chainId) === chain
+      )
+    : entries;
 
-  let mapped = filtered.slice(0, 40).map((p, i) => ({
-    id: `pair-${p.pairAddress || p.pair?.pairAddress || i}`,
-    symbol: p.baseToken?.symbol || p.token?.symbol || "?",
-    name: p.baseToken?.name || p.token?.name || "?",
-    network: String(p.chainId || p.pair?.chainId || "unknown"),
-    contractAddress: p.baseToken?.address || p.token?.address || "",
-    deployedHoursAgo: null,
-    liquidityUsd: Number(p.liquidity?.usd || p.pair?.liquidity?.usd || 0),
-    holderCount: null,
-    txCount24h: null,
-    volumeUsd24h: Number(p.volume?.h24 || p.pair?.volume?.h24 || 0),
-    narrativeKeywords: [],
-    signalStrength: Math.min(
-      100,
-      Math.round(Math.log10(Math.max(Number(p.volume?.h24 || p.pair?.volume?.h24 || 1), 1)) * 22)
-    ),
-    dataSourceNote: "DexScreener API — verify contracts independently.",
-    earlySignalProbability: null,
-    pairUrl: p.url || p.pair?.url || null,
-  }));
+  let mapped = filtered
+    .slice(0, 40)
+    .map((p, i) => (isBoostFeed || (p.tokenAddress && !p.baseToken) ? mapTokenBoostEntry(p, i) : mapDexPairEntry(p, i)));
 
   const filteredStrength =
     Number.isFinite(minSignal) && minSignal > 0 ? mapped.filter((t) => (t.signalStrength || 0) >= minSignal) : mapped;

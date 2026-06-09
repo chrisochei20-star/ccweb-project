@@ -212,20 +212,22 @@ export function EarlySignalsDashboard() {
                     </div>
                   </div>
                 </div>
-                <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
-                  <div className="rounded-lg bg-black/20 px-3 py-2 text-ccweb-muted">
-                    Vol spike p ≈ {(t.signalProbabilities.volumeSpike * 100).toFixed(0)}%
+                {t.signalProbabilities && (
+                  <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
+                    <div className="rounded-lg bg-black/20 px-3 py-2 text-ccweb-muted">
+                      Vol spike p ≈ {((t.signalProbabilities.volumeSpike ?? 0) * 100).toFixed(0)}%
+                    </div>
+                    <div className="rounded-lg bg-black/20 px-3 py-2 text-ccweb-muted">
+                      Holder growth p ≈ {((t.signalProbabilities.holderGrowth ?? 0) * 100).toFixed(0)}%
+                    </div>
+                    <div className="rounded-lg bg-black/20 px-3 py-2 text-ccweb-muted">
+                      Social buzz p ≈ {((t.signalProbabilities.socialBuzz ?? 0) * 100).toFixed(0)}%
+                    </div>
+                    <div className="rounded-lg bg-black/20 px-3 py-2 text-ccweb-muted">
+                      Whale activity p ≈ {((t.signalProbabilities.whaleActivity ?? 0) * 100).toFixed(0)}%
+                    </div>
                   </div>
-                  <div className="rounded-lg bg-black/20 px-3 py-2 text-ccweb-muted">
-                    Holder growth p ≈ {(t.signalProbabilities.holderGrowth * 100).toFixed(0)}%
-                  </div>
-                  <div className="rounded-lg bg-black/20 px-3 py-2 text-ccweb-muted">
-                    Social buzz p ≈ {(t.signalProbabilities.socialBuzz * 100).toFixed(0)}%
-                  </div>
-                  <div className="rounded-lg bg-black/20 px-3 py-2 text-ccweb-muted">
-                    Whale activity p ≈ {(t.signalProbabilities.whaleActivity * 100).toFixed(0)}%
-                  </div>
-                </div>
+                )}
                 {t.warnings?.length > 0 && (
                   <ul className="mt-3 space-y-1 border-t border-white/10 pt-3 text-xs text-amber-100/95">
                     {t.warnings.map((w) => (

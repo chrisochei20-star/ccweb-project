@@ -23,9 +23,11 @@ function fmtUsd(n) {
 }
 
 function fmtPrice(n) {
-  if (n >= 1) return `$${n.toFixed(4)}`;
-  if (n >= 0.0001) return `$${n.toFixed(6)}`;
-  return `$${n.toPrecision(4)}`;
+  const v = Number(n);
+  if (!Number.isFinite(v) || v <= 0) return "—";
+  if (v >= 1) return `$${v.toFixed(4)}`;
+  if (v >= 0.0001) return `$${v.toFixed(6)}`;
+  return `$${v.toPrecision(4)}`;
 }
 
 function Badge({ children, tone }) {

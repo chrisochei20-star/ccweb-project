@@ -190,7 +190,7 @@ export function EarnShellPage() {
                 {(lb.topXp || []).slice(0, 8).map((r, i) => (
                   <li key={r.userId} className="flex justify-between gap-2">
                     <span>
-                      #{i + 1} {r.userId.slice(0, 10)}…
+                      #{i + 1} {(r.userId || "member").slice(0, 10)}…
                     </span>
                     <span className="text-white">{r.xp}</span>
                   </li>
@@ -203,7 +203,7 @@ export function EarnShellPage() {
                 {(lb.topCredits || []).slice(0, 8).map((r, i) => (
                   <li key={r.userId} className="flex justify-between gap-2">
                     <span>
-                      #{i + 1} {r.userId.slice(0, 10)}…
+                      #{i + 1} {(r.userId || "member").slice(0, 10)}…
                     </span>
                     <span className="text-white">${(r.creditsCents / 100).toFixed(2)}</span>
                   </li>
@@ -216,7 +216,7 @@ export function EarnShellPage() {
                 {(lb.topReferrers || []).slice(0, 8).map((r, i) => (
                   <li key={r.userId} className="flex justify-between gap-2">
                     <span>
-                      #{i + 1} {r.userId.slice(0, 10)}…
+                      #{i + 1} {(r.userId || "member").slice(0, 10)}…
                     </span>
                     <span className="text-white">{r.referrals}</span>
                   </li>

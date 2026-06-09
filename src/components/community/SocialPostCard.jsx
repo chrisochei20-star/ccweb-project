@@ -174,7 +174,7 @@ export function SocialPostCard({
             <button
               type="button"
               onClick={() => {
-                onToggleThread(post.id);
+                if (typeof onToggleThread === "function") onToggleThread(post.id);
                 if (!expanded) void loadReactions();
               }}
               className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-ccweb-muted transition hover:bg-white/8 hover:text-ccweb-cyan"

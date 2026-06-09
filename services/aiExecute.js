@@ -90,6 +90,29 @@ function openAIMockFallbackFromError(err, userPayload) {
   return mockChatResultForQuotaFallback(userPayload);
 }
 
+/** Stream path: degrade to the same mock copy as /tutor/chat for quota, abort, or timeout. */
+function isStreamDegradableError(err) {
+  if (!err) return false;
+  if (isOpenAIQuotaOrBillingError(err)) return true;
+  const code = err?.code;
+  return code === "AI_ABORTED" || code === "AI_TIMEOUT";
+}
+
+function degradedStreamFallback(err, userPayload) {
+  if (isOpenAIQuotaOrBillingError(err)) {
+    try {
+      return openAIMockFallbackFromError(err, userPayload);
+    } catch {
+      return mockChatResultForQuotaFallback(userPayload);
+    }
+  }
+  if (err?.code === "AI_ABORTED" || err?.code === "AI_TIMEOUT") {
+    logAiWarn("tutor_stream_degraded_fallback", { code: err.code, message: String(err?.message || err) });
+    return mockChatResultForQuotaFallback(userPayload);
+  }
+  throw err;
+}
+
 function logAiDiag(event, fields = {}) {
   logger.info({ msg: event, subsystem: "ai", ...fields });
 }
@@ -336,14 +359,13 @@ async function* streamChatComplete(systemPrompt, userMessage, opts = {}) {
 
     yield* readOpenAIStream(res.body, opts.signal);
   } catch (e) {
-    const mock = openAIMockFallbackFromError(e, userContent);
+    const mock = degradedStreamFallback(e, userContent);
     if (opts.meta) {
       opts.meta.mock = true;
       opts.meta.degradedReason = mock.degradedReason || null;
     }
     const parts = mock.text.split(/(\s+)/);
     for (const p of parts) {
-      if (opts.signal?.aborted) return;
       if (p) yield p;
     }
   }
@@ -501,14 +523,13 @@ async function* streamChatCompleteMessages(messages, opts = {}) {
 
     yield* readOpenAIStream(res.body, opts.signal);
   } catch (e) {
-    const mock = openAIMockFallbackFromError(e, userPayload);
+    const mock = degradedStreamFallback(e, userPayload);
     if (opts.meta) {
       opts.meta.mock = true;
       opts.meta.degradedReason = mock.degradedReason || null;
     }
     const parts = mock.text.split(/(\s+)/);
     for (const p of parts) {
-      if (opts.signal?.aborted) return;
       if (p) yield p;
     }
   }
@@ -567,5 +588,7 @@ module.exports = {
   clampMaxTokens,
   isRetryableOpenAIStatus,
   isOpenAIQuotaOrBillingError,
+  isStreamDegradableError,
+  degradedStreamFallback,
   shouldRetryOpenAIError,
 };

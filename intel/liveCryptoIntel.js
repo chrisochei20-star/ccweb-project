@@ -539,6 +539,60 @@ function mapTokenBoostEntry(b, i) {
   };
 }
 
+/** Well-known symbols → canonical on-chain identifiers (wrapped/native majors). */
+const CANONICAL_SYMBOLS = {
+  ETH: { address: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2" },
+  WETH: { address: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2" },
+  BTC: { address: "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599" },
+  WBTC: { address: "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599" },
+  SOL: { solMint: "So11111111111111111111111111111111111111112" },
+  WSOL: { solMint: "So11111111111111111111111111111111111111112" },
+};
+
+/**
+ * Resolve a ticker symbol to a canonical contract address or Solana mint.
+ * Uses a static map for majors, then DexScreener search by liquidity.
+ */
+async function resolveSymbolToAddress(symbol) {
+  const sym = String(symbol || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+  if (!sym) return null;
+
+  const canon = CANONICAL_SYMBOLS[sym];
+  if (canon?.address) return canon.address;
+  if (canon?.solMint) return canon.solMint;
+
+  const ck = cacheKey("dexsym", [sym]);
+  const hit = await cacheGetJson(ck);
+  if (hit) return hit;
+
+  try {
+    const data = await fetchJson(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(sym)}`);
+    const pairs = (data?.pairs || []).filter((p) => Number(p?.liquidity?.usd || 0) > 5000);
+    const exact = pairs.find((p) => (p.baseToken?.symbol || "").toUpperCase() === sym);
+    const best =
+      exact ||
+      pairs.reduce(
+        (a, b) => (Number(a?.liquidity?.usd || 0) >= Number(b?.liquidity?.usd || 0) ? a : b),
+        pairs[0]
+      );
+    const addr = best?.baseToken?.address || "";
+    if (isEvmAddress(addr)) {
+      const out = addr.toLowerCase();
+      await cacheSetJson(ck, out, 300);
+      return out;
+    }
+    if (isSolMint(addr)) {
+      await cacheSetJson(ck, addr, 300);
+      return addr;
+    }
+  } catch {
+    /* DexScreener search unavailable */
+  }
+  return null;
+}
+
 function mapDexPairEntry(p, i) {
   const addr = p.baseToken?.address || p.token?.address || "";
   return {
@@ -674,4 +728,6 @@ module.exports = {
   discoverTokens,
   getIntelligenceFeed,
   getAlertsSnapshot,
+  resolveSymbolToAddress,
+  CANONICAL_SYMBOLS,
 };

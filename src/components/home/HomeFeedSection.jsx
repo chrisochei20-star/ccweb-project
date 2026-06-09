@@ -1,6 +1,6 @@
 import { Loader2, PenLine, Sparkles, TrendingUp, UserPlus, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { fetchCommunityPosts } from "../../api/communityApi";
 import { SocialPostCard } from "../community/SocialPostCard";
 import { Skeleton } from "../ui/Skeleton";
@@ -51,6 +51,7 @@ function uniqueAuthors(posts, excludeId) {
  * X-style home timeline — For You / Following, stories, trending, suggested accounts.
  */
 export function HomeFeedSection({ user }) {
+  const navigate = useNavigate();
   const [tab, setTab] = useState("for-you");
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -247,7 +248,7 @@ export function HomeFeedSection({ user }) {
                 post={post}
                 user={user}
                 expanded={false}
-                onToggleThread={() => {}}
+                onToggleThread={(postId) => navigate(`/community?post=${encodeURIComponent(postId)}`)}
               />
             ))}
 

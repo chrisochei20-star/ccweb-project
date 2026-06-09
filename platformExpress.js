@@ -793,6 +793,7 @@ function createPlatformApp(deps) {
         model: ai.model,
         usage: ai.usage,
         mock: Boolean(ai.mock),
+        degradedReason: ai.degradedReason || null,
         monetization: gate.payPerUse ? { chargedCreditsCents: gate.chargedCreditsCents } : { included: true },
         finishedAt: new Date().toISOString(),
       };

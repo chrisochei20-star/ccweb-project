@@ -1274,10 +1274,16 @@ function AiAgentsPage() {
             <h3>{agent.name}</h3>
             <p className="muted">{agent.description}</p>
             <div className="agent-stats">
-              <span className="agent-stat">{agent.tasksCompleted.toLocaleString()} tasks completed</span>
+              <span className="agent-stat">
+                {(agent.tasksCompleted ?? 0).toLocaleString()} tasks completed
+              </span>
             </div>
             <div className="pill-row">
-              {agent.capabilities.map((cap) => (<span key={cap} className="dapp-feature-tag">{cap}</span>))}
+              {(agent.capabilities || []).map((cap) => (
+                <span key={cap} className="dapp-feature-tag">
+                  {cap}
+                </span>
+              ))}
             </div>
           </article>
         ))}

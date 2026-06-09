@@ -1,6 +1,7 @@
 import { apiFetch } from "../lib/apiClient";
 import { apiUrl } from "../config/env";
 import { formatAiError, logAiClient } from "../lib/aiDiagnostics";
+import { isCapacitorNative } from "../lib/platformDetect";
 
 /** @type {AbortController | null} */
 let activeTutorStream = null;
@@ -103,6 +104,30 @@ export async function fetchMyBookmarks() {
 
 const TUTOR_STREAM_TIMEOUT_MS = 120_000;
 
+async function postTutorChat({ message, courseSlug, lessonId, mode, conversationId }) {
+  const res = await apiFetch(
+    apiUrl("/api/v1/courses/tutor/chat"),
+    {
+      method: "POST",
+      body: JSON.stringify({ message, courseSlug, lessonId, mode, conversationId }),
+    },
+    { timeoutMs: TUTOR_STREAM_TIMEOUT_MS, networkRetries: 0 }
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error || "Chat failed");
+    err.code = data.code || (res.status === 503 ? "AI_NOT_CONFIGURED" : undefined);
+    err.status = res.status;
+    throw err;
+  }
+  return {
+    text: data.reply || "",
+    conversationId: data.conversationId,
+    provider: data.provider || "unknown",
+    mock: Boolean(data.mock),
+  };
+}
+
 /**
  * Stream tutor reply. Cancels any in-flight tutor stream before starting a new one.
  * @param {{ signal?: AbortSignal }} opts
@@ -134,6 +159,21 @@ export async function streamTutor({
   logAiClient("tutor_stream_start", { mode, hasConversation: Boolean(conversationId) });
 
   try {
+    // Capacitor WebView often lacks reliable fetch streaming bodies — use buffered chat.
+    if (isCapacitorNative()) {
+      const out = await postTutorChat({ message, courseSlug, lessonId, mode, conversationId });
+      if (out.text) onDelta?.(out.text, out.text);
+      logAiClient("tutor_stream_ok", {
+        mode,
+        provider: out.provider,
+        mock: out.mock,
+        chars: out.text.length,
+        durationMs: Date.now() - started,
+        buffered: true,
+      });
+      return out;
+    }
+
     const res = await apiFetch(
       apiUrl("/api/v1/courses/tutor/stream"),
       {
@@ -150,7 +190,7 @@ export async function streamTutor({
       { timeoutMs, networkRetries: 0 }
     );
 
-    if (!res.ok || !res.body) {
+    if (!res.ok) {
       let errBody = {};
       try {
         errBody = await res.json();
@@ -161,6 +201,20 @@ export async function streamTutor({
       err.code = errBody.code || (res.status === 503 ? "AI_NOT_CONFIGURED" : undefined);
       err.status = res.status;
       throw err;
+    }
+
+    if (!res.body || typeof res.body.getReader !== "function") {
+      const out = await postTutorChat({ message, courseSlug, lessonId, mode, conversationId });
+      if (out.text) onDelta?.(out.text, out.text);
+      logAiClient("tutor_stream_ok", {
+        mode,
+        provider: out.provider,
+        mock: out.mock,
+        chars: out.text.length,
+        durationMs: Date.now() - started,
+        buffered: true,
+      });
+      return out;
     }
 
     const cid = res.headers.get("X-CCWEB-Conversation-Id");

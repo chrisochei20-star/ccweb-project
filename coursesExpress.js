@@ -15,6 +15,39 @@ const { imageMulter } = require("./uploadsExpress");
 const persistenceNotifications = require("./db/persistenceNotifications");
 const { broadcastNotificationUpdate } = require("./server/realtime/chatSocket");
 
+function isTutorStreamDegradableError(err) {
+  return aiExecute.isStreamDegradableError(err) || aiExecute.isOpenAIQuotaOrBillingError(err);
+}
+
+async function persistTutorAssistantTurn({ conv, message, userId, mode, history, text }) {
+  if (!text?.trim()) return;
+  await tutorPg.appendMessage(conv.id, "assistant", text, { mode });
+  const facts = await aiExecute.extractLearnerFactsFromExchange(message, text);
+  if (facts.length) await tutorPg.appendMemoryFacts(userId, facts);
+  if (text.length > 80 && ((history?.length || 0) + 2) % 4 === 0) {
+    await tutorPg.mergeRollingAssistantSnippet(userId, text);
+  }
+}
+
+/** Buffered /tutor/chat equivalent body for stream clients when live stream cannot complete. */
+async function writeTutorStreamFromBuffered(res, { conv, messages, message, userId, mode, history, headersStarted }) {
+  const out = await aiExecute.chatCompleteMessages(messages, { maxTokens: 2200 });
+  if (!headersStarted && !res.headersSent) {
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.setHeader("X-CCWEB-Conversation-Id", conv.id);
+    res.setHeader("X-CCWEB-AI-Provider", out.provider || "mock");
+  }
+  if (out.mock) res.setHeader("X-CCWEB-AI-Mock", "1");
+  if (out.degradedReason) res.setHeader("X-CCWEB-AI-Degraded", out.degradedReason);
+  const text = out.text || "";
+  if (text && !res.writableEnded) res.write(text);
+  if (!res.writableEnded) res.end();
+  await persistTutorAssistantTurn({ conv, message, userId, mode, history, text });
+  return { text, out };
+}
+
 function requireAdmin(req, res, next) {
   const key = (req.headers["x-ccweb-admin"] || "").toString().trim();
   const adminKey = (process.env.CCWEB_ADMIN_KEY || "").trim();
@@ -322,34 +355,40 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
 
   router.post("/tutor/stream", authJwtMiddleware, async (req, res, next) => {
     let clientDisconnected = false;
-    const abortCtrl = new AbortController();
     const onClose = () => {
       clientDisconnected = true;
-      abortCtrl.abort();
     };
     req.on("close", onClose);
 
+    let conv;
+    let message;
+    let userId;
+    let mode;
+    let history;
+    let messages;
+    let headersStarted = false;
+
     try {
-      const message = (req.body?.message || "").toString().slice(0, 12000);
+      message = (req.body?.message || "").toString().slice(0, 12000);
       if (!message.trim()) return res.status(400).json({ error: "message required." });
-      const userId = req.ccwebUserId;
+      userId = req.ccwebUserId;
       const ctx = await coursesPg.getTutorContext(req.body?.courseSlug, req.body?.lessonId || null);
       const profile = await pgUserProfile.findByUserId(userId);
       const memory = await tutorPg.getUserMemory(userId);
-      const mode = normalizeMode(req.body?.mode);
-      const conv = await resolveConversation(userId, req.body);
+      mode = normalizeMode(req.body?.mode);
+      conv = await resolveConversation(userId, req.body);
       const system = buildTutorSystemPrompt({
         mode,
         ctx,
         profile: mapProfileRow(profile),
         memory,
       });
-      const history = await tutorPg.listMessages(conv.id, { limit: 24 });
+      history = await tutorPg.listMessages(conv.id, { limit: 24 });
       const histMsgs = history.map((m) => ({
         role: m.role === "assistant" ? "assistant" : "user",
         content: m.content,
       }));
-      const messages = [{ role: "system", content: system }, ...histMsgs, { role: "user", content: message }];
+      messages = [{ role: "system", content: system }, ...histMsgs, { role: "user", content: message }];
       await tutorPg.appendMessage(conv.id, "user", message, { mode });
 
       const provider = aiExecute.getApiKey() ? "openai" : "mock";
@@ -359,17 +398,45 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
       res.setHeader("X-CCWEB-Conversation-Id", conv.id);
       res.setHeader("X-CCWEB-AI-Provider", provider);
       if (provider === "mock") res.setHeader("X-CCWEB-AI-Mock", "1");
+      headersStarted = true;
 
       let full = "";
+      const streamMeta = { mock: provider === "mock", degradedReason: null };
       for await (const chunk of aiExecute.streamChatCompleteMessages(messages, {
         maxTokens: 2200,
-        signal: abortCtrl.signal,
+        meta: streamMeta,
       })) {
         if (clientDisconnected) break;
         full += chunk;
         res.write(chunk);
       }
-      if (!clientDisconnected) res.end();
+
+      if (streamMeta.mock && provider !== "mock") {
+        res.setHeader("X-CCWEB-AI-Mock", "1");
+      }
+      if (streamMeta.degradedReason) {
+        res.setHeader("X-CCWEB-AI-Degraded", streamMeta.degradedReason);
+      }
+
+      if (!full.trim() && !clientDisconnected) {
+        logger.warn({
+          msg: "tutor_stream_empty_fallback_buffered",
+          conversationId: conv.id,
+          userId,
+        });
+        await writeTutorStreamFromBuffered(res, {
+          conv,
+          messages,
+          message,
+          userId,
+          mode,
+          history,
+          headersStarted: true,
+        });
+        return;
+      }
+
+      if (!res.writableEnded) res.end();
 
       if (clientDisconnected) {
         logger.info({
@@ -378,27 +445,46 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
           userId,
           chars: full.length,
         });
+        if (full.trim()) {
+          await persistTutorAssistantTurn({ conv, message, userId, mode, history, text: full });
+        }
         return;
       }
 
       if (full.trim()) {
-        await tutorPg.appendMessage(conv.id, "assistant", full, { mode });
-        const facts = await aiExecute.extractLearnerFactsFromExchange(message, full, { signal: abortCtrl.signal });
-        if (facts.length) await tutorPg.appendMemoryFacts(userId, facts);
-        if (full.length > 80 && ((history?.length || 0) + 2) % 4 === 0) {
-          await tutorPg.mergeRollingAssistantSnippet(userId, full);
-        }
+        await persistTutorAssistantTurn({ conv, message, userId, mode, history, text: full });
       }
     } catch (e) {
+      if (isTutorStreamDegradableError(e) && conv && messages) {
+        logger.warn({
+          msg: "tutor_stream_degraded_to_buffered",
+          conversationId: conv.id,
+          code: e.code,
+          message: String(e.message || e),
+        });
+        try {
+          await writeTutorStreamFromBuffered(res, {
+            conv,
+            messages,
+            message,
+            userId,
+            mode,
+            history,
+            headersStarted,
+          });
+          return;
+        } catch (fallbackErr) {
+          next(fallbackErr);
+          return;
+        }
+      }
       if (!res.headersSent) {
         if (e.code === "AI_NOT_CONFIGURED") return res.status(503).json({ error: e.message, code: e.code });
-        if (e.code === "AI_TIMEOUT") return res.status(504).json({ error: e.message, code: e.code });
-        if (e.code === "AI_ABORTED") return res.status(499).json({ error: e.message, code: e.code });
         if (e.status === 404) return res.status(404).json({ error: e.message });
         next(e);
       } else {
         try {
-          res.end();
+          if (!res.writableEnded) res.end();
         } catch {
           /* ignore */
         }

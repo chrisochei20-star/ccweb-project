@@ -428,23 +428,11 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
         meta: streamMeta,
       })) {
         full += chunk;
-        if (res.writableEnded) break;
-        try {
-          res.write(chunk);
-        } catch (writeErr) {
-          clientAborted = true;
-          logger.warn({
-            msg: "tutor_stream_res_write_failed",
-            conversationId: conv.id,
-            err: String(writeErr?.message || writeErr),
-            chars: full.length,
-          });
-          break;
-        }
       }
 
       if (streamMeta.mock && provider !== "mock") {
         res.setHeader("X-CCWEB-AI-Mock", "1");
+        res.setHeader("X-CCWEB-AI-Provider", "mock");
       }
       if (streamMeta.degradedReason) {
         res.setHeader("X-CCWEB-AI-Degraded", streamMeta.degradedReason);
@@ -469,6 +457,20 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
           headersStarted: true,
         });
         return;
+      }
+
+      if (!res.writableEnded) {
+        try {
+          res.write(full);
+        } catch (writeErr) {
+          clientAborted = true;
+          logger.warn({
+            msg: "tutor_stream_res_write_failed",
+            conversationId: conv.id,
+            err: String(writeErr?.message || writeErr),
+            chars: full.length,
+          });
+        }
       }
 
       if (!res.writableEnded) res.end();

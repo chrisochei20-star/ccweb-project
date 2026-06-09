@@ -42,6 +42,54 @@ function isRetryableOpenAIStatus(status) {
   return status === 429 || status === 502 || status === 503 || status === 504;
 }
 
+/** Billing/quota 429s must not retry — only transient rate limits. */
+function isOpenAIQuotaOrBillingError(err) {
+  const msg = String(err?.message || "").toLowerCase();
+  const status = err?.openaiStatus ?? err?.status;
+  if (status === 402) return true;
+  if (/insufficient_quota|exceeded your current quota|billing details|payment required|account deactivated/.test(msg)) {
+    return true;
+  }
+  return status === 429 && /quota|billing|exceeded/.test(msg);
+}
+
+function shouldRetryOpenAIError(status, message) {
+  if (isOpenAIQuotaOrBillingError({ status, openaiStatus: status, message })) return false;
+  return isRetryableOpenAIStatus(status);
+}
+
+function mockChatResultForQuotaFallback(userPayload) {
+  const preview =
+    typeof userPayload === "string"
+      ? userPayload.slice(0, 280)
+      : JSON.stringify(userPayload, null, 2).slice(0, 280);
+  const text = [
+    "Live AI is temporarily unavailable because the OpenAI account has hit its billing or usage limit.",
+    "You are seeing a local assistant response so the app keeps working.",
+    "",
+    `Your question: ${preview || "(empty)"}`,
+    "",
+    "Restore OpenAI billing to get live ChatGPT-style answers again.",
+  ].join("\n");
+  return {
+    text,
+    model: "mock",
+    usage: null,
+    provider: "mock",
+    mock: true,
+    degradedReason: "openai_quota",
+    rawId: null,
+  };
+}
+
+function openAIMockFallbackFromError(err, userPayload) {
+  if (requireOpenAI()) throw err;
+  if (!getApiKey()) throw err;
+  if (!isOpenAIQuotaOrBillingError(err)) throw err;
+  logAiWarn("openai_quota_fallback_mock", { message: String(err?.message || err) });
+  return mockChatResultForQuotaFallback(userPayload);
+}
+
 function logAiDiag(event, fields = {}) {
   logger.info({ msg: event, subsystem: "ai", ...fields });
 }
@@ -129,7 +177,7 @@ async function fetchOpenAI(body, opts = {}) {
           attempt: attempt + 1,
         });
 
-        if (attempt < maxRetries && isRetryableOpenAIStatus(res.status)) {
+        if (attempt < maxRetries && shouldRetryOpenAIError(res.status, msg)) {
           await sleep(400 * (attempt + 1));
           continue;
         }
@@ -205,16 +253,21 @@ async function chatComplete(systemPrompt, userPayload, opts = {}) {
     ],
   };
 
-  const res = await fetchOpenAI(body, { ...opts, operation: "chat_complete" });
-  const data = await res.json().catch(() => ({}));
-  const text = data.choices?.[0]?.message?.content?.trim() || "";
-  return {
-    text,
-    model,
-    usage: data.usage || null,
-    provider: "openai",
-    rawId: data.id,
-  };
+  try {
+    const res = await fetchOpenAI(body, { ...opts, operation: "chat_complete" });
+    const data = await res.json().catch(() => ({}));
+    const text = data.choices?.[0]?.message?.content?.trim() || "";
+    return {
+      text,
+      model,
+      usage: data.usage || null,
+      provider: "openai",
+      mock: false,
+      rawId: data.id,
+    };
+  } catch (e) {
+    return openAIMockFallbackFromError(e, userPayload);
+  }
 }
 
 async function runAgent(agentMeta, input) {
@@ -262,25 +315,34 @@ async function* streamChatComplete(systemPrompt, userMessage, opts = {}) {
     return;
   }
 
-  const res = await fetchOpenAI(
-    {
-      model,
-      temperature: opts.temperature ?? 0.35,
-      max_tokens: clampMaxTokens(opts.maxTokens, 1800),
-      stream: true,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent },
-      ],
-    },
-    { ...opts, operation: "stream_chat" }
-  );
+  try {
+    const res = await fetchOpenAI(
+      {
+        model,
+        temperature: opts.temperature ?? 0.35,
+        max_tokens: clampMaxTokens(opts.maxTokens, 1800),
+        stream: true,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userContent },
+        ],
+      },
+      { ...opts, operation: "stream_chat" }
+    );
 
-  if (!res.body) {
-    throw Object.assign(new Error("OpenAI stream body missing."), { status: 502 });
+    if (!res.body) {
+      throw Object.assign(new Error("OpenAI stream body missing."), { status: 502 });
+    }
+
+    yield* readOpenAIStream(res.body, opts.signal);
+  } catch (e) {
+    const mock = openAIMockFallbackFromError(e, userContent);
+    const parts = mock.text.split(/(\s+)/);
+    for (const p of parts) {
+      if (opts.signal?.aborted) return;
+      if (p) yield p;
+    }
   }
-
-  yield* readOpenAIStream(res.body, opts.signal);
 }
 
 function normalizeChatMessages(messages) {
@@ -323,25 +385,33 @@ async function chatCompleteMessages(messages, opts = {}) {
     };
   }
 
-  const res = await fetchOpenAI(
-    {
-      model,
-      temperature: opts.temperature ?? 0.35,
-      max_tokens: clampMaxTokens(opts.maxTokens, 2200),
-      messages: msgs,
-    },
-    { ...opts, operation: "chat_messages" }
-  );
+  const lastUser = [...msgs].reverse().find((m) => m.role === "user");
+  const userPayload = lastUser?.content || "";
 
-  const data = await res.json().catch(() => ({}));
-  const text = data.choices?.[0]?.message?.content?.trim() || "";
-  return {
-    text,
-    model,
-    usage: data.usage || null,
-    provider: "openai",
-    rawId: data.id,
-  };
+  try {
+    const res = await fetchOpenAI(
+      {
+        model,
+        temperature: opts.temperature ?? 0.35,
+        max_tokens: clampMaxTokens(opts.maxTokens, 2200),
+        messages: msgs,
+      },
+      { ...opts, operation: "chat_messages" }
+    );
+
+    const data = await res.json().catch(() => ({}));
+    const text = data.choices?.[0]?.message?.content?.trim() || "";
+    return {
+      text,
+      model,
+      usage: data.usage || null,
+      provider: "openai",
+      mock: false,
+      rawId: data.id,
+    };
+  } catch (e) {
+    return openAIMockFallbackFromError(e, userPayload);
+  }
 }
 
 async function* readOpenAIStream(body, signal) {
@@ -406,22 +476,34 @@ async function* streamChatCompleteMessages(messages, opts = {}) {
     return;
   }
 
-  const res = await fetchOpenAI(
-    {
-      model,
-      temperature: opts.temperature ?? 0.35,
-      max_tokens: clampMaxTokens(opts.maxTokens, 2200),
-      stream: true,
-      messages: msgs,
-    },
-    { ...opts, operation: "stream_messages" }
-  );
+  const lastUser = [...msgs].reverse().find((m) => m.role === "user");
+  const userPayload = lastUser?.content || "";
 
-  if (!res.body) {
-    throw Object.assign(new Error("OpenAI stream body missing."), { status: 502 });
+  try {
+    const res = await fetchOpenAI(
+      {
+        model,
+        temperature: opts.temperature ?? 0.35,
+        max_tokens: clampMaxTokens(opts.maxTokens, 2200),
+        stream: true,
+        messages: msgs,
+      },
+      { ...opts, operation: "stream_messages" }
+    );
+
+    if (!res.body) {
+      throw Object.assign(new Error("OpenAI stream body missing."), { status: 502 });
+    }
+
+    yield* readOpenAIStream(res.body, opts.signal);
+  } catch (e) {
+    const mock = openAIMockFallbackFromError(e, userPayload);
+    const parts = mock.text.split(/(\s+)/);
+    for (const p of parts) {
+      if (opts.signal?.aborted) return;
+      if (p) yield p;
+    }
   }
-
-  yield* readOpenAIStream(res.body, opts.signal);
 }
 
 /**
@@ -472,7 +554,10 @@ module.exports = {
   runWorkflowSteps,
   getApiKey,
   mockChatResult,
+  mockChatResultForQuotaFallback,
   fetchOpenAI,
   clampMaxTokens,
   isRetryableOpenAIStatus,
+  isOpenAIQuotaOrBillingError,
+  shouldRetryOpenAIError,
 };

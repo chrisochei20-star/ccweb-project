@@ -354,11 +354,32 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
   });
 
   router.post("/tutor/stream", authJwtMiddleware, async (req, res, next) => {
-    let clientDisconnected = false;
-    const onClose = () => {
-      clientDisconnected = true;
+    let clientAborted = false;
+    const streamStartedAt = Date.now();
+
+    const onAborted = () => {
+      clientAborted = true;
+      logger.info({
+        msg: "tutor_stream_req_aborted",
+        aborted: Boolean(req.aborted),
+        complete: Boolean(req.complete),
+        msSinceStart: Date.now() - streamStartedAt,
+      });
     };
-    req.on("close", onClose);
+    req.on("aborted", onAborted);
+
+    // req "close" fires when the request body is fully read — NOT a client disconnect on Node/Railway.
+    req.on("close", () => {
+      logger.info({
+        msg: "tutor_stream_req_close",
+        aborted: Boolean(req.aborted),
+        complete: Boolean(req.complete),
+        clientAborted,
+        resWritableEnded: Boolean(res.writableEnded),
+        resHeadersSent: Boolean(res.headersSent),
+        msSinceStart: Date.now() - streamStartedAt,
+      });
+    });
 
     let conv;
     let message;
@@ -406,9 +427,20 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
         maxTokens: 2200,
         meta: streamMeta,
       })) {
-        if (clientDisconnected) break;
         full += chunk;
-        res.write(chunk);
+        if (res.writableEnded) break;
+        try {
+          res.write(chunk);
+        } catch (writeErr) {
+          clientAborted = true;
+          logger.warn({
+            msg: "tutor_stream_res_write_failed",
+            conversationId: conv.id,
+            err: String(writeErr?.message || writeErr),
+            chars: full.length,
+          });
+          break;
+        }
       }
 
       if (streamMeta.mock && provider !== "mock") {
@@ -418,11 +450,14 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
         res.setHeader("X-CCWEB-AI-Degraded", streamMeta.degradedReason);
       }
 
-      if (!full.trim() && !clientDisconnected) {
+      if (!full.trim()) {
         logger.warn({
           msg: "tutor_stream_empty_fallback_buffered",
           conversationId: conv.id,
           userId,
+          clientAborted,
+          streamMetaMock: streamMeta.mock,
+          streamMetaDegraded: streamMeta.degradedReason,
         });
         await writeTutorStreamFromBuffered(res, {
           conv,
@@ -438,9 +473,9 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
 
       if (!res.writableEnded) res.end();
 
-      if (clientDisconnected) {
+      if (clientAborted) {
         logger.info({
-          msg: "tutor_stream_client_disconnect",
+          msg: "tutor_stream_client_abort_after_body",
           conversationId: conv.id,
           userId,
           chars: full.length,
@@ -490,7 +525,7 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
         }
       }
     } finally {
-      req.off("close", onClose);
+      req.off("aborted", onAborted);
     }
   });
 

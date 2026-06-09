@@ -68,6 +68,9 @@ export function formatUserFacingError(err, fallback = "Something went wrong. Ple
   if (/OpenAI|OPENAI_API_KEY|ai unavailable|503/i.test(raw) && /key|configured|unavailable/i.test(raw)) {
     return "AI is temporarily unavailable. Please try again shortly.";
   }
+  if (/exceeded your current quota|insufficient_quota|billing details|usage limit/i.test(raw)) {
+    return "Live AI is temporarily limited. A fallback response was used — try again after billing is restored.";
+  }
 
   const msg = stripSensitive(raw);
   if (!msg || msg.length > 180) return fallback;

@@ -328,10 +328,24 @@ export function AiTutorPage() {
       </aside>
 
       <section className="flex min-h-[60vh] flex-1 flex-col rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/90 to-black/50">
-        {aiMockMode && showAiStreamingDemo() && (
-          <p className="border-b border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
-            Demo mode — live AI is not configured. Responses are previews only.
-          </p>
+        {aiMockMode && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
+            <p>
+              {showAiStreamingDemo()
+                ? "Demo mode — live AI is not configured. Responses are previews only."
+                : "Fallback mode — live OpenAI is unavailable. You still get a local assistant reply; restore billing for ChatGPT-style answers."}
+            </p>
+            <button
+              type="button"
+              className="shrink-0 rounded-lg border border-amber-400/30 px-2 py-1 text-[11px] font-medium text-amber-50 hover:bg-amber-500/20"
+              onClick={() => {
+                setAiMockMode(false);
+                setErr(null);
+              }}
+            >
+              Try live again
+            </button>
+          </div>
         )}
         <header className="flex flex-wrap items-center gap-2 border-b border-white/10 px-3 py-3">
           <button

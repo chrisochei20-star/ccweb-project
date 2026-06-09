@@ -125,6 +125,7 @@ async function postTutorChat({ message, courseSlug, lessonId, mode, conversation
     conversationId: data.conversationId,
     provider: data.provider || "unknown",
     mock: Boolean(data.mock),
+    degradedReason: data.degradedReason || null,
   };
 }
 
@@ -219,7 +220,7 @@ export async function streamTutor({
 
     const cid = res.headers.get("X-CCWEB-Conversation-Id");
     const provider = res.headers.get("X-CCWEB-AI-Provider") || "unknown";
-    const isMock = res.headers.get("X-CCWEB-AI-Mock") === "1";
+    const degraded = res.headers.get("X-CCWEB-AI-Degraded") || "";
 
     const reader = res.body.getReader();
     const dec = new TextDecoder();
@@ -244,6 +245,11 @@ export async function streamTutor({
       }
     }
 
+    const isMock =
+      res.headers.get("X-CCWEB-AI-Mock") === "1" ||
+      degraded === "openai_quota" ||
+      /Live AI is temporarily unavailable because the OpenAI account/i.test(full);
+
     logAiClient("tutor_stream_ok", {
       mode,
       provider,
@@ -252,7 +258,13 @@ export async function streamTutor({
       durationMs: Date.now() - started,
     });
 
-    return { text: full, conversationId: cid, provider, mock: isMock };
+    return {
+      text: full,
+      conversationId: cid,
+      provider: isMock ? "mock" : provider,
+      mock: isMock,
+      degradedReason: degraded === "openai_quota" ? "openai_quota" : isMock ? "mock" : null,
+    };
   } catch (e) {
     const formatted = formatAiError(e);
     logAiClient("tutor_stream_error", {

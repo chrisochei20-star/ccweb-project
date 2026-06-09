@@ -337,6 +337,10 @@ async function* streamChatComplete(systemPrompt, userMessage, opts = {}) {
     yield* readOpenAIStream(res.body, opts.signal);
   } catch (e) {
     const mock = openAIMockFallbackFromError(e, userContent);
+    if (opts.meta) {
+      opts.meta.mock = true;
+      opts.meta.degradedReason = mock.degradedReason || null;
+    }
     const parts = mock.text.split(/(\s+)/);
     for (const p of parts) {
       if (opts.signal?.aborted) return;
@@ -498,6 +502,10 @@ async function* streamChatCompleteMessages(messages, opts = {}) {
     yield* readOpenAIStream(res.body, opts.signal);
   } catch (e) {
     const mock = openAIMockFallbackFromError(e, userPayload);
+    if (opts.meta) {
+      opts.meta.mock = true;
+      opts.meta.degradedReason = mock.degradedReason || null;
+    }
     const parts = mock.text.split(/(\s+)/);
     for (const p of parts) {
       if (opts.signal?.aborted) return;

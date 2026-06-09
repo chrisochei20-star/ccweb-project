@@ -303,12 +303,15 @@ function createCoursesRouter({ authJwtMiddleware, optionalJwt }) {
       if (out.text.length > 80 && ((history?.length || 0) + 2) % 4 === 0) {
         await tutorPg.mergeRollingAssistantSnippet(userId, out.text);
       }
+      if (out.mock) res.setHeader("X-CCWEB-AI-Mock", "1");
+      if (out.degradedReason) res.setHeader("X-CCWEB-AI-Degraded", out.degradedReason);
       res.json({
         reply: out.text,
         conversationId: conv.id,
         provider: out.provider,
         model: out.model,
         mock: Boolean(out.mock),
+        degradedReason: out.degradedReason || null,
       });
     } catch (e) {
       if (e.code === "AI_NOT_CONFIGURED") return res.status(503).json({ error: e.message, code: e.code });

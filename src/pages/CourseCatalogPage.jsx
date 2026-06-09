@@ -12,8 +12,8 @@ export function CourseCatalogPage({ compact = false }) {
   const [filter, setFilter] = useState("");
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
-  const initialLoadStalled = useStaleLoadingGuard(loading && !courses.length && !err);
   const [err, setErr] = useState(null);
+  const initialLoadStalled = useStaleLoadingGuard(loading && !courses.length && !err);
 
   useEffect(() => {
     let c = false;

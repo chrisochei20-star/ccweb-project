@@ -242,7 +242,13 @@ export function HomeFeedSection({ user }) {
 
           {!loading &&
             visible.map((post) => (
-              <SocialPostCard key={post.id} post={post} user={user} expanded={false} />
+              <SocialPostCard
+                key={post.id}
+                post={post}
+                user={user}
+                expanded={false}
+                onToggleThread={() => {}}
+              />
             ))}
 
           {loadingMore && (

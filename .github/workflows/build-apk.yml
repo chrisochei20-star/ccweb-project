@@ -21,7 +21,9 @@ jobs:
         
       - name: Build Vite
         run: npx vite build
-        
+        env:
+          VITE_API_BASE_URL: https://ccweb-api-production-a92c.up.railway.app
+          
       - name: Sync Capacitor
         run: npx cap sync android
         

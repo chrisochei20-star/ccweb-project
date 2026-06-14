@@ -104,7 +104,7 @@ function applyRequestTimeout(init, timeoutMs) {
  * @returns {Promise<RequestInit>}
  */
 async function mergeInitWithApiDefaults(input, init = {}) {
-  const merged = { credentials: "include", ...init };
+  const merged = { credentials: "same-origin", ...init };
   const headers = new Headers(init.headers || {});
   const urlStr =
     typeof input === "string" ? input : input instanceof Request ? input.url : input?.url || "";

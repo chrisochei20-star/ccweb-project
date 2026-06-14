@@ -1,5 +1,11 @@
 {
   "buildCommand": "npx vite build",
   "outputDirectory": "dist",
-  "framework": "vite"
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://ccweb-api-production-a92c.up.railway.app/api/:path*"
+    }
+  ]
 }

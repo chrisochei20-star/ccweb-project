@@ -79,3 +79,4 @@ Global marketing workspace, marketplace, and simulated escrow: **`/growth-hub`**
 
 - `GET /api/streaming/curriculum` is **not** implemented; curriculum context is embedded in room creation responses (see AGENTS.md).
 - Crypto / intelligence outputs are **signals and probabilities**, not financial advice.
+# Redeploy trigger

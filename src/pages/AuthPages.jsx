@@ -156,7 +156,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
           mode,
         });
       }
-      if (!getApiBaseUrl()) {
+      if (getApiBaseUrl() === null || getApiBaseUrl() === undefined) {
         throw new Error("Service is temporarily unavailable. Please try again later.");
       }
       if (mode === "signup") {

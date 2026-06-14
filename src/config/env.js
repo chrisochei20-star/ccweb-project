@@ -101,6 +101,7 @@ export function isUnsafeProductionApiBase(url) {
 }
 
 export function getApiBaseUrl() {
+  if (typeof window !== "undefined" && window.location.hostname.endsWith(".vercel.app")) return "";
   const isProd = import.meta.env.PROD === true;
   let raw = coerceConfiguredBase(import.meta.env.VITE_API_BASE_URL || "");
   if (!raw) raw = coerceConfiguredBase(readMetaApiBase());

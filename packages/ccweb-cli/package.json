@@ -1,8 +1,0 @@
-{
-  "name": "@ccweb/cli",
-  "version": "0.1.0",
-  "description": "CCWEB developer CLI (prototype)",
-  "type": "module",
-  "bin": { "ccweb": "bin.mjs" },
-  "license": "MIT"
-}

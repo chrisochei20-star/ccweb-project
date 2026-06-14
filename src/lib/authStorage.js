@@ -7,24 +7,23 @@ function getWindow() {
 }
 
 /**
- * Auth tokens in sessionStorage on web; localStorage on Capacitor so sessions survive app restarts.
+ * Auth tokens in localStorage on both web and Capacitor so sessions persist across reloads.
  */
 function primaryStore() {
   const w = getWindow();
   if (!w) return null;
-  if (isCapacitorNative()) return w.localStorage ?? null;
-  return w.sessionStorage ?? null;
+  return w.localStorage ?? null;
 }
 
 function secondaryStore() {
   const w = getWindow();
-  if (!w || !isCapacitorNative()) return null;
+  if (!w) return null;
   return w.sessionStorage ?? null;
 }
 
 function migrateSessionToLocalIfNeeded() {
   const w = getWindow();
-  if (!isCapacitorNative() || !w?.localStorage || !w?.sessionStorage) return;
+  if (!w?.localStorage || !w?.sessionStorage) return;
   try {
     if (w.localStorage.getItem(MIGRATION_FLAG) === "1") return;
     const keys = ["ccweb_session_token", "ccweb_user", "ccweb_refresh_token"];

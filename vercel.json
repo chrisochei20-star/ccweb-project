@@ -4,16 +4,16 @@
   "framework": "vite",
   "rewrites": [
     {
-      "source": "/api/v1/:path*",
-      "destination": "https://ccweb-api-production-a92c.up.railway.app/api/v1/:path*"
-    },
-    {
       "source": "/api/:path*",
       "destination": "https://ccweb-api-production-a92c.up.railway.app/api/:path*"
     },
     {
       "source": "/v1/:path*",
       "destination": "https://ccweb-api-production-a92c.up.railway.app/v1/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

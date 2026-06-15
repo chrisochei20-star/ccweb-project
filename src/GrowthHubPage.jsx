@@ -129,7 +129,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
         const fd = new FormData();
         fd.append("file", listingImage);
         const token = localStorage.getItem("ccweb_session_token") || sessionStorage.getItem("ccweb_session_token");
-        const up = await fetch("/api/v1/uploads/media?folder=marketplace", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+        const up = await fetch("https://ccweb-api-production-a92c.up.railway.app/api/v1/uploads/media?folder=marketplace", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
         const upData = await up.json();
         imageUrl = upData.url || null;
         setUploadingListing(false);

@@ -147,6 +147,11 @@ export function SocialPostCard({
           </div>
           <h3 className="mt-1 text-[15px] font-semibold leading-snug text-white">{post.title}</h3>
           <p className="mt-1.5 whitespace-pre-wrap text-[14px] leading-relaxed text-slate-300/95">{post.content}</p>
+          {post.imageUrl && (
+            <div className="mt-3 overflow-hidden rounded-2xl border border-white/10">
+              <img src={post.imageUrl} alt="Post media" className="w-full max-h-[400px] object-cover" loading="lazy" />
+            </div>
+          )}
 
           <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-white/5 pt-3">
             <button

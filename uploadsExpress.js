@@ -113,9 +113,10 @@ function createUploadsRouter(deps) {
   router.post("/media", authJwtMiddleware, upload.single("file"), async (req, res, next) => {
     try {
       if (!req.file) return res.status(400).json({ error: "No file uploaded." });
-      const { uploadToCloudinary } = require("./services/cloudinaryUpload");
+      const { uploadBuffer, configureOnce } = require("./services/cloudinaryUpload");
+      configureOnce();
       const folder = (req.query.folder || "media").toString().replace(/[^a-z0-9_-]/gi, "");
-      const result = await uploadToCloudinary(req.file.buffer, {
+      const result = await uploadBuffer(req.file.buffer, {
         folder: `ccweb/${folder}`,
         resource_type: "auto",
       });

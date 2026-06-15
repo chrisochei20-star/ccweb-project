@@ -54,6 +54,9 @@ export function CommunityShellPage() {
   const expandedPostRef = useRef(expandedPost);
   expandedPostRef.current = expandedPost;
   const [postingBusy, setPostingBusy] = useState(false);
+  const [postImage, setPostImage] = useState(null);
+  const [postImagePreview, setPostImagePreview] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [commentSubmittingId, setCommentSubmittingId] = useState(null);
   const [chatSending, setChatSending] = useState(false);
   const keyboardInset = useKeyboardInset();
@@ -214,11 +217,25 @@ export function CommunityShellPage() {
     setErr(null);
     setPostingBusy(true);
     try {
+      let imageUrl = null;
+      if (postImage) {
+        setUploadingImage(true);
+        const fd = new FormData();
+        fd.append("file", postImage);
+        const token = localStorage.getItem("ccweb_session_token") || sessionStorage.getItem("ccweb_session_token");
+        const up = await fetch("/api/v1/uploads/media?folder=posts", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+        const upData = await up.json();
+        imageUrl = upData.url || null;
+        setUploadingImage(false);
+      }
       const created = await createCommunityPost({
         title,
         content: bodyText,
         tags: [],
+        imageUrl,
       });
+      setPostImage(null);
+      setPostImagePreview(null);
       setPostTitle("");
       setPostBody("");
       if (created?.id) {
@@ -430,7 +447,14 @@ export function CommunityShellPage() {
                   onChange={(e) => setPostBody(e.target.value)}
                   disabled={postingBusy}
                 />
-                <button type="submit" className="ccweb-gradient-btn inline-flex min-h-[44px] items-center justify-center gap-2 text-sm disabled:opacity-50" disabled={postingBusy}>
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer flex items-center gap-1 text-xs text-ccweb-cyan border border-ccweb-cyan/30 rounded-lg px-3 py-2 hover:bg-ccweb-cyan/10">
+                    <span>📷 Photo</span>
+                    <input type="file" accept="image/*,video/*" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) { setPostImage(f); setPostImagePreview(URL.createObjectURL(f)); } }} />
+                  </label>
+                  {postImagePreview && <img src={postImagePreview} alt="preview" className="h-10 w-10 rounded-lg object-cover" />}
+                </div>
+                <button type="submit" className="ccweb-gradient-btn inline-flex min-h-[44px] items-center justify-center gap-2 text-sm disabled:opacity-50" disabled={postingBusy || uploadingImage}>
                   {postingBusy ? (
                     <>
                       <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />

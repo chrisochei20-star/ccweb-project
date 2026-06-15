@@ -4271,10 +4271,12 @@ async function handleTrackWallet(req, res) {
 
 function delegatePlatform(req, res) {
   const orig = req.url;
-  req.url = orig.replace(/^\/api\/v1/, "") || "/";
+  const stripped = orig.replace(/^\/api\/v1/, "") || "/";
+  req.url = stripped;
+  if (process.env.NODE_ENV !== 'production') console.log('[delegatePlatform] orig:', orig, '→ stripped:', stripped);
   platformApp(req, res, () => {
     req.url = orig;
-    sendJson(res, 404, { error: "API v1 route not found." });
+    sendJson(res, 404, { error: "API v1 route not found. orig=" + orig + " stripped=" + stripped });
   });
 }
 

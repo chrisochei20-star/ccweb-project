@@ -50,7 +50,7 @@ async function createPost(body) {
   const tags = Array.isArray(body.tags) ? body.tags.map((t) => t.toString()) : [];
   await query(
     `INSERT INTO community_posts (id, author_user_id, author_display_name, title, content, tags, image_url)
-     VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
+     VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7)`,
     [
       id,
       body.authorUserId,
@@ -58,6 +58,7 @@ async function createPost(body) {
       body.title,
       body.content,
       JSON.stringify(tags),
+      body.imageUrl || null,
     ]
   );
   const { rows } = await query("SELECT * FROM community_posts WHERE id = $1", [id]);
@@ -76,6 +77,8 @@ function mapPost(r, commentCount) {
     tags: tagArr,
     createdAt: new Date(r.created_at).toISOString(),
     commentCount: commentCount != null ? commentCount : r.comment_count != null ? Number(r.comment_count) : 0,
+    imageUrl: r.image_url || null,
+    videoUrl: r.video_url || null,
   };
 }
 

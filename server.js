@@ -1296,6 +1296,7 @@ async function handleCreateCommunityPost(req, res) {
         title,
         content,
         tags: Array.isArray(body.tags) ? body.tags.map((tag) => tag.toString()) : [],
+        imageUrl: body.imageUrl || body.image_url || null,
       });
       createNotification({
         type: "community_post_created",

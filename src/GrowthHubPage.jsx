@@ -35,6 +35,9 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
   const [err, setErr] = useState(null);
   const [msg, setMsg] = useState(null);
   const [checkoutListingId, setCheckoutListingId] = useState(null);
+  const [listingImage, setListingImage] = useState(null);
+  const [listingImagePreview, setListingImagePreview] = useState(null);
+  const [uploadingListing, setUploadingListing] = useState(false);
   const [newListing, setNewListing] = useState({
     title: "",
     type: "service",
@@ -120,11 +123,25 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
       return;
     }
     try {
+      let imageUrl = null;
+      if (listingImage) {
+        setUploadingListing(true);
+        const fd = new FormData();
+        fd.append("file", listingImage);
+        const token = localStorage.getItem("ccweb_session_token") || sessionStorage.getItem("ccweb_session_token");
+        const up = await fetch("/api/v1/uploads/media?folder=marketplace", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+        const upData = await up.json();
+        imageUrl = upData.url || null;
+        setUploadingListing(false);
+      }
       await http.post("/api/growth/listings", {
         ...newListing,
+        imageUrl,
         sellerName: user.displayName || "Seller",
       });
       setMsg("Listing published.");
+      setListingImage(null);
+      setListingImagePreview(null);
       loadAll();
     } catch (e) {
       setErr(e.response?.data?.error || e.message || "Failed");
@@ -382,12 +399,20 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
                 value={newListing.description}
                 onChange={(e) => setNewListing({ ...newListing, description: e.target.value })}
               />
+              <div className="flex items-center gap-3">
+                <label className="cursor-pointer flex items-center gap-1 text-xs text-ccweb-cyan border border-ccweb-cyan/30 rounded-lg px-3 py-2 hover:bg-ccweb-cyan/10">
+                  📷 Add photo
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) { setListingImage(f); setListingImagePreview(URL.createObjectURL(f)); } }} />
+                </label>
+                {listingImagePreview && <img src={listingImagePreview} alt="preview" className="h-12 w-12 rounded-lg object-cover border border-white/20" />}
+              </div>
               <button
                 type="button"
-                className="rounded-xl bg-gradient-to-r from-ccweb-cyan to-ccweb-violet px-4 py-2 text-sm font-semibold text-[#061329]"
+                className="rounded-xl bg-gradient-to-r from-ccweb-cyan to-ccweb-violet px-4 py-2 text-sm font-semibold text-[#061329] disabled:opacity-50"
                 onClick={createListing}
+                disabled={uploadingListing}
               >
-                Publish listing
+                {uploadingListing ? "Uploading..." : "Publish listing"}
               </button>
             </div>
           </section>

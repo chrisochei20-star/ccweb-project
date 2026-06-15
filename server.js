@@ -4270,10 +4270,14 @@ async function handleTrackWallet(req, res) {
 }
 
 function delegatePlatform(req, res) {
+  const orig = req.url;
+  req.url = orig.replace(/^\/api\/v1/, "") || "/";
   platformApp(req, res, () => {
+    req.url = orig;
     sendJson(res, 404, { error: "API v1 route not found." });
   });
 }
+
 
 function delegateAuth(req, res) {
   authApp(req, res, () => {

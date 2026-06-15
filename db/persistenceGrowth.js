@@ -138,10 +138,11 @@ async function createListing(body) {
   const sellerId = (body.sellerId || "biz-anon").toString();
   const sellerName = (body.sellerName || "Seller").toString().slice(0, 120);
   const description = (body.description || "").toString().slice(0, 2000);
+  const imageUrl = (body.imageUrl || body.image_url || "").toString().slice(0, 500) || null;
   await query(
-    `INSERT INTO growth_listings (id, title, type, industry, price_usd, seller_id, seller_name, description)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [id, title, type, industry, priceUsd, sellerId, sellerName, description]
+    `INSERT INTO growth_listings (id, title, type, industry, price_usd, seller_id, seller_name, description, image_url)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [id, title, type, industry, priceUsd, sellerId, sellerName, description, imageUrl]
   );
   return getListing(id);
 }

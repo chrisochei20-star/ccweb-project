@@ -49,7 +49,7 @@ async function createPost(body) {
   const id = newId("post");
   const tags = Array.isArray(body.tags) ? body.tags.map((t) => t.toString()) : [];
   await query(
-    `INSERT INTO community_posts (id, author_user_id, author_display_name, title, content, tags)
+    `INSERT INTO community_posts (id, author_user_id, author_display_name, title, content, tags, image_url)
      VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
     [
       id,

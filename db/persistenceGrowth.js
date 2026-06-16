@@ -32,6 +32,7 @@ function mapListingRow(r) {
     sellerName: r.seller_name,
     description: r.description,
     status: r.status,
+    imageUrl: r.image_url || null,
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : undefined,
   };
 }

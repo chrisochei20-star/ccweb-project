@@ -32,6 +32,7 @@ export function SocialPostCard({
 }) {
   const [likeBusy, setLikeBusy] = useState(false);
   const [repostBusy, setRepostBusy] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [localReactions, setLocalReactions] = useState(null);
   const [likeBump, setLikeBump] = useState(0);
   const [repostBump, setRepostBump] = useState(0);
@@ -153,7 +154,7 @@ export function SocialPostCard({
           <p className="mt-1.5 whitespace-pre-wrap text-[14px] leading-relaxed text-slate-300/95">{post.content}</p>
           {post.imageUrl && (
             <div className="mt-3 overflow-hidden rounded-2xl border border-white/10">
-              <img src={post.imageUrl} alt="Post media" className="w-full max-h-[400px] object-cover" loading="lazy" />
+              <img src={post.imageUrl} alt="Post media" className="w-full max-h-[400px] object-cover cursor-pointer" loading="lazy" onClick={() => setLightboxOpen(true)} />
             </div>
           )}
 
@@ -241,6 +242,21 @@ export function SocialPostCard({
           )}
         </div>
       </div>
+      {lightboxOpen && post.imageUrl && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <img src={post.imageUrl} alt="Post media full view" className="max-h-[90vh] max-w-full rounded-lg object-contain" />
+          <button
+            type="button"
+            className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+            onClick={() => setLightboxOpen(false)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </article>
   );
 }

@@ -137,8 +137,12 @@ export function SocialPostCard({
     <article className="ccweb-social-post group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-br from-white/[0.06] to-transparent p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition hover:border-ccweb-cyan/25 hover:shadow-[0_12px_40px_-18px_rgba(34,211,238,0.35)]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-ccweb-cyan/40 to-transparent opacity-0 transition group-hover:opacity-100" />
       <div className="flex gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ccweb-cyan/30 to-ccweb-violet/30 text-xs font-bold text-white ring-2 ring-white/10">
-          {initials(post.authorDisplayName)}
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-ccweb-cyan/30 to-ccweb-violet/30 text-xs font-bold text-white ring-2 ring-white/10">
+          {post.authorAvatarUrl ? (
+            <img src={post.authorAvatarUrl} alt={post.authorDisplayName || "Member"} className="h-full w-full object-cover" loading="lazy" />
+          ) : (
+            initials(post.authorDisplayName)
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">

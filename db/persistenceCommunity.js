@@ -13,9 +13,10 @@ async function listPosts(limit = 80, offset = 0) {
   const lim = Math.min(100, Math.max(1, Number(limit) || 80));
   const off = Math.max(0, Number(offset) || 0);
   const { rows } = await query(
-    `SELECT p.*, COALESCE(c.cnt, 0)::int AS comment_count
+    `SELECT p.*, COALESCE(c.cnt, 0)::int AS comment_count, up.avatar_url AS author_avatar_url
      FROM community_posts p
      LEFT JOIN (SELECT post_id, COUNT(*)::int AS cnt FROM community_post_comments GROUP BY post_id) c ON c.post_id = p.id
+     LEFT JOIN ccweb_user_profiles up ON up.user_id = p.author_user_id
      ORDER BY p.created_at DESC
      LIMIT $1 OFFSET $2`,
     [lim, off]
@@ -28,12 +29,14 @@ async function listTrendingPosts(limit = 30) {
   const { rows } = await query(
     `SELECT p.*,
             COALESCE(cc.cnt, 0)::int AS comment_count,
-            COALESCE(rr.cnt, 0)::int AS reaction_count
+            COALESCE(rr.cnt, 0)::int AS reaction_count,
+            up.avatar_url AS author_avatar_url
      FROM community_posts p
      LEFT JOIN (SELECT post_id, COUNT(*)::int AS cnt FROM community_post_comments GROUP BY post_id) cc ON cc.post_id = p.id
      LEFT JOIN (
        SELECT target_id, COUNT(*)::int AS cnt FROM community_reactions WHERE target_type = 'post' GROUP BY target_id
      ) rr ON rr.target_id = p.id
+     LEFT JOIN ccweb_user_profiles up ON up.user_id = p.author_user_id
      ORDER BY COALESCE(rr.cnt, 0) DESC, COALESCE(cc.cnt, 0) DESC, p.created_at DESC
      LIMIT $1`,
     [lim]
@@ -79,6 +82,7 @@ function mapPost(r, commentCount) {
     commentCount: commentCount != null ? commentCount : r.comment_count != null ? Number(r.comment_count) : 0,
     imageUrl: r.image_url || null,
     videoUrl: r.video_url || null,
+    authorAvatarUrl: r.author_avatar_url || null,
   };
 }
 

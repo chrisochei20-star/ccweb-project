@@ -327,31 +327,36 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="rounded-2xl border border-ccweb-border bg-ccweb-card p-5 backdrop-blur-xl">
             <h2 className="text-lg font-semibold text-white">Discover</h2>
-            <ul className="mt-4 space-y-3">
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
               {listings.map((l) => (
-                <li key={l.id} className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-transparent p-4 transition hover:border-ccweb-cyan/25">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <p className="font-semibold text-white">{l.title}</p>
-                      <p className="mt-1 text-xs text-ccweb-muted">
-                        {l.type} · {l.industry}
-                      </p>
-                      <p className="mt-2 text-lg font-bold text-ccweb-cyan">${l.priceUsd}</p>
-                      <p className="mt-1 text-xs text-ccweb-muted">by {l.sellerName}</p>
-                    </div>
+                <div key={l.id} className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-transparent transition hover:border-ccweb-cyan/25 hover:shadow-[0_8px_30px_-12px_rgba(34,211,238,0.35)]">
+                  <div className="relative aspect-square w-full overflow-hidden bg-white/5">
+                    {l.imageUrl ? (
+                      <img src={l.imageUrl} alt={l.title} className="h-full w-full object-cover" loading="lazy" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-3xl">📦</div>
+                    )}
+                    <span className="absolute top-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+                      {l.industry}
+                    </span>
+                  </div>
+                  <div className="p-3">
+                    <p className="line-clamp-2 text-sm font-semibold text-white">{l.title}</p>
+                    <p className="mt-1 text-base font-bold text-ccweb-cyan">${l.priceUsd}</p>
+                    <p className="mt-0.5 truncate text-[11px] text-ccweb-muted">by {l.sellerName}</p>
                     <button
                       type="button"
                       disabled={!user || fwCheckout.isBusy || checkoutListingId === l.id || l.sellerId === user?.id}
-                      className="rounded-lg bg-ccweb-green/90 px-3 py-1 text-xs font-semibold text-[#061329] disabled:opacity-40 min-h-[44px]"
+                      className="mt-2 w-full rounded-lg bg-ccweb-green/90 px-3 py-2 text-xs font-semibold text-[#061329] disabled:opacity-40 min-h-[40px]"
                       onClick={() => startEscrowCheckout(l.id)}
                       title={l.sellerId === user?.id ? "You cannot buy your own listing" : ""}
                     >
-                      {checkoutListingId === l.id || fwCheckout.isBusy ? "Opening checkout…" : "Pay with card"}
+                      {checkoutListingId === l.id || fwCheckout.isBusy ? "Opening…" : "Pay with card"}
                     </button>
                   </div>
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
             {!fwPublicKey && (
               <p className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
                 Card checkout is not available right now. Browse listings and contact sellers to arrange payment.

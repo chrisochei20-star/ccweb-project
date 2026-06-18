@@ -188,10 +188,8 @@ function wireSocket(socket) {
 }
 
 function createSocketInstance() {
-  const base = getApiBaseUrl();
-  if (base) return io(base, REALTIME_OPTS);
-  if (typeof window !== "undefined") return io(window.location.origin, REALTIME_OPTS);
-  return io(REALTIME_OPTS);
+  const base = getApiBaseUrl() || "https://ccweb-api-production-a92c.up.railway.app";
+  return io(base, REALTIME_OPTS);
 }
 
 function getSubscriberCounts() {

@@ -158,39 +158,54 @@ export function SocialPostCard({
             </div>
           )}
 
-          <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-white/5 pt-3">
-            <button
-              type="button"
-              disabled={!canInteract || likeBusy}
-              onClick={handleLike}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition disabled:opacity-40 ${
-                userLiked ? "bg-rose-500/15 text-rose-300" : "text-ccweb-muted hover:bg-rose-500/10 hover:text-rose-200"
-              }`}
-            >
-              <Heart className={`h-3.5 w-3.5 ${userLiked ? "fill-rose-400 text-rose-400" : ""}`} strokeWidth={2} />
-              {likeCount != null ? likeCount : "—"}
-            </button>
-            <button
-              type="button"
-              disabled={!canInteract || repostBusy}
-              onClick={handleRepost}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition disabled:opacity-40 ${
-                userReposted ? "bg-ccweb-green/15 text-ccweb-green" : "text-ccweb-muted hover:bg-ccweb-green/10 hover:text-ccweb-green"
-              }`}
-            >
-              <Repeat2 className="h-3.5 w-3.5" strokeWidth={2} />
-              {repostCount != null ? repostCount : "Boost"}
-            </button>
+          <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-3">
             <button
               type="button"
               onClick={() => {
                 if (typeof onToggleThread === "function") onToggleThread(post.id);
                 if (!expanded) void loadReactions();
               }}
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-ccweb-muted transition hover:bg-white/8 hover:text-ccweb-cyan"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-ccweb-muted transition hover:text-ccweb-cyan group"
             >
-              <MessageCircle className="h-3.5 w-3.5" strokeWidth={2} />
-              {expanded ? "Hide" : "Thread"} · {post.commentCount ?? 0}
+              <MessageCircle className="h-4 w-4 group-hover:text-ccweb-cyan" strokeWidth={2} />
+              <span>{post.commentCount ?? 0}</span>
+            </button>
+            <button
+              type="button"
+              disabled={!canInteract || repostBusy}
+              onClick={handleRepost}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium transition disabled:opacity-40 group ${
+                userReposted ? "text-ccweb-green" : "text-ccweb-muted hover:text-ccweb-green"
+              }`}
+            >
+              <Repeat2 className="h-4 w-4" strokeWidth={2} />
+              <span>{repostCount != null ? repostCount : 0}</span>
+            </button>
+            <button
+              type="button"
+              disabled={!canInteract || likeBusy}
+              onClick={handleLike}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium transition disabled:opacity-40 group ${
+                userLiked ? "text-rose-400" : "text-ccweb-muted hover:text-rose-400"
+              }`}
+            >
+              <Heart className={`h-4 w-4 ${userLiked ? "fill-rose-400" : ""}`} strokeWidth={2} />
+              <span>{likeCount != null ? likeCount : 0}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({ title: post.title, text: post.content, url: window.location.href });
+                } else {
+                  navigator.clipboard?.writeText(window.location.href);
+                }
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-ccweb-muted transition hover:text-ccweb-cyan"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
+              </svg>
             </button>
           </div>
 

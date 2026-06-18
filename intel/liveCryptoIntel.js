@@ -47,8 +47,8 @@ async function etherscanContract(address) {
   const ck = cacheKey("esc", ["contract", address.toLowerCase()]);
   const hit = await cacheGetJson(ck);
   if (hit) return hit;
-  const base = process.env.ETHERSCAN_API_URL || "https://api.etherscan.io/api";
-  const url = `${base}?module=contract&action=getsourcecode&address=${address}&apikey=${key}`;
+  const base = process.env.ETHERSCAN_API_URL || "https://api.etherscan.io/v2/api";
+  const url = `${base}?module=contract&action=getsourcecode&address=${address}&chainid=1&apikey=${key}`;
   const data = await fetchJson(url);
   await cacheSetJson(ck, data, 3600);
   return data;
@@ -57,8 +57,8 @@ async function etherscanContract(address) {
 async function etherscanTxCount(address) {
   const key = (process.env.ETHERSCAN_API_KEY || "").trim();
   if (!key) return null;
-  const base = process.env.ETHERSCAN_API_URL || "https://api.etherscan.io/api";
-  const url = `${base}?module=proxy&action=eth_getTransactionCount&address=${address}&tag=latest&apikey=${key}`;
+  const base = process.env.ETHERSCAN_API_URL || "https://api.etherscan.io/v2/api";
+  const url = `${base}?module=proxy&action=eth_getTransactionCount&address=${address}&tag=latest&chainid=1&apikey=${key}`;
   try {
     const data = await fetchJson(url);
     const hex = data.result;

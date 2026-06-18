@@ -210,47 +210,55 @@ export function SocialPostCard({
           </div>
 
           {expanded && (
-            <div className="mt-3 rounded-xl border border-white/10 bg-black/35 p-3">
+            <div className="mt-2 space-y-0 border-t border-white/5">
               {commentsLoading && (
-                <div className="py-1">
+                <div className="py-3 pl-4">
                   <SkeletonText lines={2} />
                 </div>
               )}
-              {!commentsLoading && (
-                <ul className="max-h-56 space-y-2.5 overflow-y-auto text-sm">
-                  {(comments || []).map((c) => (
-                    <li key={c.id} className="border-b border-white/5 pb-2 last:border-0">
-                      <span className="font-medium text-ccweb-cyan">{c.authorDisplayName}</span>
-                      <span className="text-xs text-ccweb-muted"> · {timeAgo(c.createdAt)}</span>
-                      <p className="mt-0.5 text-white/90">{c.body}</p>
-                    </li>
-                  ))}
-                </ul>
+              {!commentsLoading && (comments || []).map((c) => (
+                <div key={c.id} className="flex gap-3 border-b border-white/5 px-1 py-3 last:border-0">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ccweb-cyan/30 to-ccweb-violet/30 text-[10px] font-bold text-white">
+                    {initials(c.authorDisplayName)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-sm font-semibold text-white">{c.authorDisplayName}</span>
+                      <span className="text-[11px] text-ccweb-muted">{timeAgo(c.createdAt)}</span>
+                    </div>
+                    <p className="mt-0.5 text-sm text-white/85 leading-relaxed">{c.body}</p>
+                  </div>
+                </div>
+              ))}
+              {!commentsLoading && (comments || []).length === 0 && (
+                <p className="py-3 text-center text-xs text-ccweb-muted">No replies yet — be first!</p>
               )}
               {canInteract ? (
-                <div className="mt-3 flex gap-2">
-                  <input
-                    className="ccweb-input min-h-[44px] flex-1 text-sm"
-                    placeholder="Post your reply…"
-                    value={commentDraft || ""}
-                    onChange={(e) => onCommentDraft(post.id, e.target.value)}
-                    disabled={commentSubmitting}
-                  />
-                  <button
-                    type="button"
-                    className="ccweb-outline-btn inline-flex min-h-[44px] shrink-0 items-center justify-center px-3 text-sm disabled:opacity-50"
-                    onClick={() => onSubmitComment(post.id)}
-                    disabled={commentSubmitting}
-                  >
-                    {commentSubmitting ? "…" : "Reply"}
-                  </button>
+                <div className="flex gap-2 pt-2 pb-1">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ccweb-cyan/30 to-ccweb-violet/30 text-[10px] font-bold text-white">
+                    {initials(user?.displayName || "Me")}
+                  </div>
+                  <div className="flex flex-1 gap-2">
+                    <input
+                      className="ccweb-input min-h-[36px] flex-1 rounded-full px-4 text-sm"
+                      placeholder="Post your reply…"
+                      value={commentDraft || ""}
+                      onChange={(e) => onCommentDraft(post.id, e.target.value)}
+                      disabled={commentSubmitting}
+                    />
+                    <button
+                      type="button"
+                      className="rounded-full bg-ccweb-cyan px-4 py-1.5 text-xs font-bold text-[#061329] disabled:opacity-50"
+                      onClick={() => onSubmitComment(post.id)}
+                      disabled={commentSubmitting || !commentDraft?.trim()}
+                    >
+                      {commentSubmitting ? "…" : "Reply"}
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <p className="mt-3 text-xs text-ccweb-muted">
-                  <Link to="/login" className="text-ccweb-cyan underline">
-                    Sign in
-                  </Link>{" "}
-                  to reply.
+                <p className="py-2 text-xs text-ccweb-muted">
+                  <Link to="/login" className="text-ccweb-cyan underline">Sign in</Link> to reply.
                 </p>
               )}
             </div>

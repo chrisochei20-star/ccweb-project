@@ -287,6 +287,26 @@ function createPlatformApp(deps) {
     }
   });
 
+  usersRouter.get("/search", optionalJwt, async (req, res) => {
+    try {
+      const q = (req.query.q || "").toString().trim().slice(0, 50);
+      if (!q || q.length < 2) return res.json({ users: [] });
+      const { getPool } = require("./db/pool");
+      const pool = getPool();
+      if (!pool) return res.json({ users: [] });
+      const { rows } = await pool.query(
+        `SELECT user_id as id, display_name as "displayName", avatar_url as "avatarUrl"
+         FROM ccweb_user_profiles
+         WHERE LOWER(display_name) LIKE LOWER($1)
+         LIMIT 10`,
+        [`%${q}%`]
+      );
+      res.json({ users: rows });
+    } catch (e) {
+      res.json({ users: [] });
+    }
+  });
+
   usersRouter.get("/:id", optionalJwt, async (req, res, next) => {
     try {
       const { sanitizeUser } = deps;
@@ -314,25 +334,6 @@ function createPlatformApp(deps) {
   });
 
   // User search by display name
-  usersRouter.get("/search", optionalJwt, async (req, res) => {
-    try {
-      const q = (req.query.q || "").toString().trim().slice(0, 50);
-      if (!q || q.length < 2) return res.json({ users: [] });
-      const { getPool } = require("./db/pool");
-      const pool = getPool();
-      if (!pool) return res.json({ users: [] });
-      const { rows } = await pool.query(
-        `SELECT user_id as id, display_name as "displayName", avatar_url as "avatarUrl"
-         FROM ccweb_user_profiles
-         WHERE LOWER(display_name) LIKE LOWER($1)
-         LIMIT 10`,
-        [`%${q}%`]
-      );
-      res.json({ users: rows });
-    } catch (e) {
-      res.json({ users: [] });
-    }
-  });
 
   v1.use("/users", usersRouter);
 

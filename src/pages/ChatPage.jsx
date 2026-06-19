@@ -43,6 +43,7 @@ export function ChatPage() {
   const [typing, setTyping] = useState(false);
   const [peerTyping, setPeerTyping] = useState(false);
   const [newDmId, setNewDmId] = useState("");
+  const [userSearchResults, setUserSearchResults] = useState([]);
   const [showEmoji, setShowEmoji] = useState(false);
   const [gateTimedOut, setGateTimedOut] = useState(false);
   const keyboardInset = useKeyboardInset();
@@ -506,15 +507,48 @@ export function ChatPage() {
         <div className="border-b border-white/10 p-3">
           <h1 className="text-lg font-bold text-white">Messages</h1>
           <p className="text-xs text-ccweb-muted">Private chats with read receipts and live delivery</p>
-          <form onSubmit={startDm} className="mt-3 flex gap-2">
-            <input
-              className="ccweb-input flex-1 py-2 text-sm"
-              placeholder="Start chat — member ID"
-              value={newDmId}
-              onChange={(e) => setNewDmId(e.target.value)}
-            />
-            <button type="submit" className="ccweb-gradient-btn shrink-0 px-3 py-2 text-xs">
-              Go
+          <form onSubmit={startDm} className="mt-3 space-y-2">
+            <div className="relative">
+              <input
+                className="ccweb-input w-full py-2 text-sm"
+                placeholder="Search by name to start chat..."
+                value={newDmId}
+                onChange={async (e) => {
+                  setNewDmId(e.target.value);
+                  const q = e.target.value.trim();
+                  if (q.length >= 2) {
+                    try {
+                      const r = await apiFetch(apiUrl(`/api/v1/users/search?q=${encodeURIComponent(q)}`));
+                      const d = await r.json();
+                      setUserSearchResults(d.users || []);
+                    } catch { setUserSearchResults([]); }
+                  } else { setUserSearchResults([]); }
+                }}
+              />
+              {userSearchResults.length > 0 && (
+                <ul className="absolute top-full left-0 right-0 z-50 mt-1 rounded-xl border border-white/10 bg-[#0a0f1e] shadow-xl">
+                  {userSearchResults.map((u) => (
+                    <li key={u.id}>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-white/5"
+                        onClick={() => {
+                          setNewDmId(u.id);
+                          setUserSearchResults([]);
+                        }}
+                      >
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-ccweb-cyan/30 to-ccweb-violet/30 text-[10px] font-bold text-white">
+                          {u.avatarUrl ? <img src={u.avatarUrl} alt="" className="h-full w-full object-cover" /> : u.displayName?.[0]?.toUpperCase()}
+                        </div>
+                        <span className="font-medium text-white">{u.displayName}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <button type="submit" className="ccweb-gradient-btn w-full py-2 text-xs" disabled={!newDmId.trim()}>
+              Start conversation
             </button>
           </form>
         </div>

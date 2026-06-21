@@ -411,7 +411,6 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
                 className="mt-4 border-white/10"
               />
             )}
-          </section>
           {/* Listing Form Modal */}
           {showListingForm && (
             <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 p-4" onClick={() => setShowListingForm(false)}>

@@ -412,55 +412,6 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
               />
             )}
           </section>
-          <section className="rounded-2xl border border-ccweb-border bg-ccweb-card p-5 backdrop-blur-xl">
-            <h2 className="text-lg font-semibold text-white">List a product or service</h2>
-            <div className="mt-4 space-y-2">
-              <input
-                className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white"
-                placeholder="Title"
-                value={newListing.title}
-                onChange={(e) => setNewListing({ ...newListing, title: e.target.value })}
-              />
-              <select
-                className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white"
-                value={newListing.industry}
-                onChange={(e) => setNewListing({ ...newListing, industry: e.target.value })}
-              >
-                {["e-commerce", "real-estate", "services", "consulting", "saas", "local-retail"].map((i) => (
-                  <option key={i} value={i}>
-                    {i}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="number"
-                className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white"
-                value={newListing.priceUsd}
-                onChange={(e) => setNewListing({ ...newListing, priceUsd: Number(e.target.value) })}
-              />
-              <textarea
-                className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white"
-                rows={3}
-                placeholder="Description"
-                value={newListing.description}
-                onChange={(e) => setNewListing({ ...newListing, description: e.target.value })}
-              />
-              <div className="flex items-center gap-3">
-                <label className="cursor-pointer flex items-center gap-1 text-xs text-ccweb-cyan border border-ccweb-cyan/30 rounded-lg px-3 py-2 hover:bg-ccweb-cyan/10">
-                  📷 Add photo
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) { setListingImage(f); setListingImagePreview(URL.createObjectURL(f)); } }} />
-                </label>
-                {listingImagePreview && <img src={listingImagePreview} alt="preview" className="h-12 w-12 rounded-lg object-cover border border-white/20" />}
-              </div>
-              <button
-                type="button"
-                className="rounded-xl bg-gradient-to-r from-ccweb-cyan to-ccweb-violet px-4 py-2 text-sm font-semibold text-[#061329] disabled:opacity-50"
-                onClick={createListing}
-                disabled={uploadingListing}
-              >
-                {uploadingListing ? "Uploading..." : "Publish listing"}
-              </button>
-            </div>
           {/* Listing Form Modal */}
           {showListingForm && (
             <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 p-4" onClick={() => setShowListingForm(false)}>

@@ -38,6 +38,10 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
   const [listingImage, setListingImage] = useState(null);
   const [listingImagePreview, setListingImagePreview] = useState(null);
   const [uploadingListing, setUploadingListing] = useState(false);
+  const [marketSearch, setMarketSearch] = useState("");
+  const [marketFilter, setMarketFilter] = useState("all");
+  const [selectedListing, setSelectedListing] = useState(null);
+  const [showListingForm, setShowListingForm] = useState(false);
   const [newListing, setNewListing] = useState({
     title: "",
     type: "service",
@@ -324,39 +328,76 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
       )}
 
       {tab === "marketplace" && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="rounded-2xl border border-ccweb-border bg-ccweb-card p-5 backdrop-blur-xl">
-            <h2 className="text-lg font-semibold text-white">Discover</h2>
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {listings.map((l) => (
-                <div key={l.id} className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-transparent transition hover:border-ccweb-cyan/25 hover:shadow-[0_8px_30px_-12px_rgba(34,211,238,0.35)]">
-                  <div className="relative aspect-square w-full overflow-hidden bg-white/5">
-                    {l.imageUrl ? (
-                      <img src={l.imageUrl} alt={l.title} className="h-full w-full object-cover" loading="lazy" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-3xl">📦</div>
-                    )}
-                    <span className="absolute top-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
-                      {l.industry}
-                    </span>
-                  </div>
-                  <div className="p-3">
-                    <p className="line-clamp-2 text-sm font-semibold text-white">{l.title}</p>
-                    <p className="mt-1 text-base font-bold text-ccweb-cyan">${l.priceUsd}</p>
-                    <p className="mt-0.5 truncate text-[11px] text-ccweb-muted">by {l.sellerName}</p>
-                    <button
-                      type="button"
-                      disabled={!user || fwCheckout.isBusy || checkoutListingId === l.id || l.sellerId === user?.id}
-                      className="mt-2 w-full rounded-lg bg-ccweb-green/90 px-3 py-2 text-xs font-semibold text-[#061329] disabled:opacity-40 min-h-[40px]"
-                      onClick={() => startEscrowCheckout(l.id)}
-                      title={l.sellerId === user?.id ? "You cannot buy your own listing" : ""}
-                    >
-                      {checkoutListingId === l.id || fwCheckout.isBusy ? "Opening…" : "Pay with card"}
-                    </button>
-                  </div>
-                </div>
+        <div className="space-y-4">
+          {/* Search & Filter Bar */}
+          <div className="flex flex-wrap gap-2">
+            <input
+              className="flex-1 min-w-[160px] rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-ccweb-muted"
+              placeholder="🔍 Search products..."
+              value={marketSearch || ""}
+              onChange={(e) => setMarketSearch(e.target.value)}
+            />
+            <select
+              className="rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white"
+              value={marketFilter || "all"}
+              onChange={(e) => setMarketFilter(e.target.value)}
+            >
+              <option value="all">All Categories</option>
+              {["e-commerce","real-estate","services","consulting","saas","local-retail"].map(i => (
+                <option key={i} value={i}>{i}</option>
               ))}
-            </div>
+            </select>
+            <button
+              type="button"
+              onClick={() => setShowListingForm(true)}
+              className="rounded-xl bg-gradient-to-r from-ccweb-cyan to-ccweb-violet px-4 py-2 text-sm font-semibold text-[#061329]"
+            >
+              + Sell
+            </button>
+          </div>
+
+          {/* Product Grid */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {listings
+              .filter(l => {
+                const q = (marketSearch || "").toLowerCase();
+                const f = marketFilter || "all";
+                return (!q || l.title?.toLowerCase().includes(q) || l.description?.toLowerCase().includes(q))
+                  && (f === "all" || l.industry === f);
+              })
+              .map((l) => (
+              <div
+                key={l.id}
+                className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-transparent transition hover:border-ccweb-cyan/25 hover:shadow-[0_8px_30px_-12px_rgba(34,211,238,0.35)] cursor-pointer"
+                onClick={() => setSelectedListing(l)}
+              >
+                <div className="relative aspect-[4/3] w-full overflow-hidden bg-white/5">
+                  {l.imageUrl ? (
+                    <img src={l.imageUrl} alt={l.title} className="h-full w-full object-cover" loading="lazy" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-4xl bg-gradient-to-br from-ccweb-cyan/10 to-ccweb-violet/10">📦</div>
+                  )}
+                  <span className="absolute top-2 left-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-medium text-white capitalize">
+                    {l.industry}
+                  </span>
+                  {l.sellerId === user?.id && (
+                    <span className="absolute top-2 right-2 rounded-full bg-ccweb-cyan/80 px-2 py-0.5 text-[10px] font-bold text-[#061329]">
+                      Yours
+                    </span>
+                  )}
+                </div>
+                <div className="p-3">
+                  <p className="line-clamp-2 text-xs font-semibold text-white leading-snug">{l.title}</p>
+                  <p className="mt-1.5 text-sm font-bold text-ccweb-cyan">${l.priceUsd.toLocaleString()}</p>
+                  <div className="mt-1 flex items-center gap-1">
+                    <span className="text-yellow-400 text-[10px]">★★★★★</span>
+                    <span className="text-[10px] text-ccweb-muted">(0)</span>
+                  </div>
+                  <p className="mt-0.5 truncate text-[10px] text-ccweb-muted">{l.sellerName}</p>
+                </div>
+              </div>
+            ))}
+          </div>
             {!fwPublicKey && (
               <p className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
                 Card checkout is not available right now. Browse listings and contact sellers to arrange payment.
@@ -420,7 +461,78 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
                 {uploadingListing ? "Uploading..." : "Publish listing"}
               </button>
             </div>
-          </section>
+          {/* Listing Form Modal */}
+          {showListingForm && (
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 p-4" onClick={() => setShowListingForm(false)}>
+              <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0a0f1e] p-5 space-y-3" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold text-white">List a product or service</h3>
+                  <button type="button" onClick={() => setShowListingForm(false)} className="text-ccweb-muted hover:text-white text-lg">✕</button>
+                </div>
+                <input className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Product/Service title" value={newListing.title} onChange={(e) => setNewListing({ ...newListing, title: e.target.value })} />
+                <select className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" value={newListing.industry} onChange={(e) => setNewListing({ ...newListing, industry: e.target.value })}>
+                  {["e-commerce","real-estate","services","consulting","saas","local-retail"].map(i => <option key={i} value={i}>{i}</option>)}
+                </select>
+                <div className="flex gap-2">
+                  <input type="number" className="flex-1 rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Price (USD)" value={newListing.priceUsd} onChange={(e) => setNewListing({ ...newListing, priceUsd: Number(e.target.value) })} />
+                </div>
+                <textarea className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" rows={3} placeholder="Describe your product/service in detail..." value={newListing.description} onChange={(e) => setNewListing({ ...newListing, description: e.target.value })} />
+                <div className="flex items-center gap-3">
+                  <label className="cursor-pointer flex items-center gap-2 text-xs text-ccweb-cyan border border-ccweb-cyan/30 rounded-lg px-3 py-2 hover:bg-ccweb-cyan/10">
+                    📷 Add photo
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) { setListingImage(f); setListingImagePreview(URL.createObjectURL(f)); } }} />
+                  </label>
+                  {listingImagePreview && <img src={listingImagePreview} alt="preview" className="h-14 w-14 rounded-lg object-cover border border-white/20" />}
+                </div>
+                <button type="button" className="w-full rounded-xl bg-gradient-to-r from-ccweb-cyan to-ccweb-violet py-3 text-sm font-bold text-[#061329] disabled:opacity-50" onClick={async () => { await createListing(); setShowListingForm(false); }} disabled={uploadingListing || !newListing.title.trim()}>
+                  {uploadingListing ? "Publishing..." : "Publish listing"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Product Detail Modal */}
+          {selectedListing && (
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 p-4" onClick={() => setSelectedListing(null)}>
+              <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0a0f1e] overflow-hidden" onClick={e => e.stopPropagation()}>
+                {selectedListing.imageUrl ? (
+                  <img src={selectedListing.imageUrl} alt={selectedListing.title} className="w-full h-56 object-cover" />
+                ) : (
+                  <div className="w-full h-40 flex items-center justify-center text-6xl bg-gradient-to-br from-ccweb-cyan/10 to-ccweb-violet/10">📦</div>
+                )}
+                <div className="p-5 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="text-lg font-bold text-white leading-snug">{selectedListing.title}</h3>
+                    <button type="button" onClick={() => setSelectedListing(null)} className="text-ccweb-muted hover:text-white shrink-0">✕</button>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl font-bold text-ccweb-cyan">${selectedListing.priceUsd?.toLocaleString()}</span>
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs capitalize text-ccweb-muted">{selectedListing.industry}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-yellow-400">★★★★★</span>
+                    <span className="text-xs text-ccweb-muted ml-1">Sold by <span className="text-white">{selectedListing.sellerName}</span></span>
+                  </div>
+                  {selectedListing.description && (
+                    <p className="text-sm text-ccweb-muted leading-relaxed">{selectedListing.description}</p>
+                  )}
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-ccweb-muted space-y-1">
+                    <p>🔒 <span className="text-white font-medium">Secure Escrow</span> — Payment held until delivery confirmed</p>
+                    <p>↩️ <span className="text-white font-medium">Buyer Protection</span> — Dispute resolution available</p>
+                    <p>✓ <span className="text-white font-medium">8% platform fee</span> deducted on successful sale</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!user || fwCheckout.isBusy || checkoutListingId === selectedListing.id || selectedListing.sellerId === user?.id}
+                    className="w-full rounded-xl bg-ccweb-green py-3 text-sm font-bold text-[#061329] disabled:opacity-40"
+                    onClick={() => { startEscrowCheckout(selectedListing.id); setSelectedListing(null); }}
+                  >
+                    {selectedListing.sellerId === user?.id ? "Your listing" : checkoutListingId === selectedListing.id ? "Opening checkout…" : "🛒 Buy Now — Secure Checkout"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

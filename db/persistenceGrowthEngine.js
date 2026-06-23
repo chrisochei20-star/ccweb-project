@@ -231,23 +231,32 @@ async function leaderboards(limit = 25) {
     return { topXp: [], topCredits: [], topReferrers: [] };
   }
   const topXp = await query(
-    `SELECT user_id, xp FROM learning_user_wallet ORDER BY xp DESC NULLS LAST LIMIT $1`,
+    `SELECT w.user_id, w.xp, p.display_name, p.avatar_url
+     FROM learning_user_wallet w
+     LEFT JOIN ccweb_user_profiles p ON p.user_id = w.user_id
+     ORDER BY w.xp DESC NULLS LAST LIMIT $1`,
     [lim]
   );
   const topCredits = await query(
-    `SELECT user_id, credits_cents FROM learning_user_wallet ORDER BY credits_cents DESC NULLS LAST LIMIT $1`,
+    `SELECT w.user_id, w.credits_cents, p.display_name, p.avatar_url
+     FROM learning_user_wallet w
+     LEFT JOIN ccweb_user_profiles p ON p.user_id = w.user_id
+     ORDER BY w.credits_cents DESC NULLS LAST LIMIT $1`,
     [lim]
   );
   const topReferrers = await query(
-    `SELECT referred_by_user_id AS uid, COUNT(*)::int AS cnt
-     FROM ccweb_auth_users WHERE referred_by_user_id IS NOT NULL
-     GROUP BY referred_by_user_id ORDER BY cnt DESC LIMIT $1`,
+    `SELECT a.referred_by_user_id AS uid, COUNT(*)::int AS cnt, p.display_name, p.avatar_url
+     FROM ccweb_auth_users a
+     LEFT JOIN ccweb_user_profiles p ON p.user_id = a.referred_by_user_id
+     WHERE a.referred_by_user_id IS NOT NULL
+     GROUP BY a.referred_by_user_id, p.display_name, p.avatar_url
+     ORDER BY cnt DESC LIMIT $1`,
     [lim]
   );
   return {
-    topXp: topXp.rows.map((r) => ({ userId: r.user_id, xp: Number(r.xp) })),
-    topCredits: topCredits.rows.map((r) => ({ userId: r.user_id, creditsCents: Number(r.credits_cents) })),
-    topReferrers: topReferrers.rows.map((r) => ({ userId: r.uid, referrals: r.cnt })),
+    topXp: topXp.rows.map((r) => ({ userId: r.user_id, displayName: r.display_name || r.user_id.slice(0,8), avatarUrl: r.avatar_url, xp: Number(r.xp) })),
+    topCredits: topCredits.rows.map((r) => ({ userId: r.user_id, displayName: r.display_name || r.user_id.slice(0,8), avatarUrl: r.avatar_url, creditsCents: Number(r.credits_cents) })),
+    topReferrers: topReferrers.rows.map((r) => ({ userId: r.uid, displayName: r.display_name || r.uid.slice(0,8), avatarUrl: r.avatar_url, referrals: r.cnt })),
   };
 }
 

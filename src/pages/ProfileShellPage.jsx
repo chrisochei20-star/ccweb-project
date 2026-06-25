@@ -1,4 +1,4 @@
-import { ExternalLink, Lock, Loader2, LogOut, MessageSquare, Shield, Twitter, Wallet } from "lucide-react";
+import { ExternalLink, Lock, Loader2, LogOut, MessageSquare, Shield, Wallet } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";

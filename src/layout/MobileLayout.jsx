@@ -1,4 +1,4 @@
-import { Bell, Home, Loader2, MessageSquare, Search, User } from "lucide-react";
+import { Bell, Home, Loader2, MessageSquare, ShoppingBag, User, Users } from "lucide-react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
 import { ThemeToggle } from "../components/shell/ThemeToggle";
@@ -23,43 +23,12 @@ import { isNativePublicPath } from "../lib/nativeAuthPaths";
 import { isCapacitorNative, signalNativeShellReady } from "../lib/capacitorPlatform";
 
 const bottomTabs = [
-  { id: "home", to: "/", label: "Home", shortLabel: "Home", icon: Home, end: true, match: (p) => p === "/" },
-  {
-    id: "search",
-    to: "/find",
-    label: "Search",
-    shortLabel: "Search",
-    icon: Search,
-    end: false,
-    match: (p) => isSearchNavActive(p),
-  },
-  {
-    id: "notifications",
-    to: "/notifications",
-    label: "Notifications",
-    shortLabel: "Alerts",
-    icon: Bell,
-    end: false,
-    match: (p) => p === "/notifications" || p.startsWith("/notifications/"),
-  },
-  {
-    id: "messages",
-    to: "/messages",
-    label: "Messages",
-    shortLabel: "Chats",
-    icon: MessageSquare,
-    end: false,
-    match: (p) => p === "/messages" || p.startsWith("/messages/"),
-  },
-  {
-    id: "profile",
-    to: "/profile",
-    label: "Profile",
-    shortLabel: "You",
-    icon: User,
-    end: false,
-    match: (p) => p === "/profile" || p.startsWith("/profile/"),
-  },
+  { id: "home",          to: "/",             label: "Home",         shortLabel: "Home",        icon: Home,         end: true,  match: (p) => p === "/" },
+  { id: "community",     to: "/community",    label: "Community",    shortLabel: "Feed",        icon: Users,        end: false, match: (p) => p === "/community" || p.startsWith("/community/") },
+  { id: "marketplace",   to: "/marketplace",  label: "Marketplace",  shortLabel: "Market",      icon: ShoppingBag,  end: false, match: (p) => p === "/marketplace" || p === "/escrow" || p.startsWith("/marketplace/") },
+  { id: "messages",      to: "/messages",     label: "Messages",     shortLabel: "Chats",       icon: MessageSquare,end: false, match: (p) => p === "/messages" || p.startsWith("/messages/") },
+  { id: "notifications", to: "/notifications",label: "Notifications",shortLabel: "Alerts",      icon: Bell,         end: false, match: (p) => p === "/notifications" || p.startsWith("/notifications/") },
+  { id: "profile",       to: "/profile",      label: "Profile",      shortLabel: "You",         icon: User,         end: false, match: (p) => p === "/profile" || p.startsWith("/profile/") },
 ];
 
 export function MobileLayout() {

@@ -127,7 +127,7 @@ async function createComment(postId, body) {
     [id, postId, body.authorUserId, body.authorDisplayName, body.body]
   );
   const { rows } = await query("SELECT * FROM community_post_comments WHERE id = $1", [id]);
-  return {
+  const comment = {
     id: rows[0].id,
     postId: rows[0].post_id,
     authorUserId: rows[0].author_user_id,
@@ -135,6 +135,37 @@ async function createComment(postId, body) {
     body: rows[0].body,
     createdAt: new Date(rows[0].created_at).toISOString(),
   };
+  // Notify post author of new comment/reply
+  try {
+    const notif = require("./persistenceNotifications");
+    const { rows: postRows } = await query("SELECT author_user_id FROM community_posts WHERE id = $1 LIMIT 1", [postId]);
+    const postAuthorId = postRows[0]?.author_user_id;
+    if (postAuthorId && postAuthorId !== body.authorUserId) {
+      await notif.createReplyNotification({
+        recipientUserId: postAuthorId,
+        actorUserId: body.authorUserId,
+        actorDisplayName: body.authorDisplayName,
+        postId,
+        preview: (body.body || "").slice(0, 120),
+      });
+    }
+    // Also fire mention notifications for any @handles in the comment body
+    const mentionedIds = await notif.findMentionedUserIdsFromText(body.body, body.authorUserId);
+    await Promise.all(
+      mentionedIds
+        .filter((uid) => uid !== postAuthorId) // avoid double-notifying post author
+        .map((uid) =>
+          notif.createMentionNotification({
+            recipientUserId: uid,
+            actorUserId: body.authorUserId,
+            actorDisplayName: body.authorDisplayName,
+            postId,
+            preview: (body.body || "").slice(0, 120),
+          })
+        )
+    );
+  } catch { /* non-fatal */ }
+  return comment;
 }
 
 async function getCommentAuthorUserId(commentId) {
@@ -230,6 +261,24 @@ async function createReaction(body) {
     [id, body.authorUserId, body.authorDisplayName, body.targetType, body.targetId, reaction]
   );
   const { rows } = await query("SELECT * FROM community_reactions WHERE id = $1", [id]);
+  // Notify post author of reaction (skip self-reactions)
+  if (body.targetType === "post" && body.targetId) {
+    try {
+      const notif = require("./persistenceNotifications");
+      // Look up post author
+      const { rows: postRows } = await query("SELECT author_user_id FROM community_posts WHERE id = $1 LIMIT 1", [body.targetId]);
+      const postAuthorId = postRows[0]?.author_user_id;
+      if (postAuthorId && postAuthorId !== body.authorUserId) {
+        await notif.createReactionNotification({
+          recipientUserId: postAuthorId,
+          actorUserId: body.authorUserId,
+          actorDisplayName: body.authorDisplayName,
+          postId: body.targetId,
+          reaction,
+        });
+      }
+    } catch { /* non-fatal */ }
+  }
   return { created: true, ...mapReactionRow(rows[0]) };
 }
 

@@ -9,6 +9,7 @@ import {
   Cpu,
   Gift,
   Loader2,
+  ShoppingBag,
   Sparkles,
   TrendingUp,
   Users,
@@ -250,6 +251,42 @@ export function MobileDashboardPage() {
       </header>
 
       {user && <HomeFeedSection user={user} />}
+
+      {/* Community feed preview — latest 3 posts from social feed */}
+      {user && (
+        <section className="ccweb-glass ccweb-card-premium rounded-3xl p-6 md:p-7">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-ccweb-cyan" />
+              <h2 className="text-lg font-bold text-white">Community</h2>
+            </div>
+            <Link to="/community" className="text-xs font-semibold text-ccweb-cyan hover:underline flex items-center gap-1">
+              See all <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+          <p className="text-sm text-ccweb-muted mb-4">Latest posts from your network. Click any avatar to view their profile.</p>
+          <div className="space-y-3">
+            {[
+              { label: "Social Feed", href: "/community", icon: Users, accent: "text-ccweb-cyan", desc: "Posts, reactions & channels" },
+              { label: "Marketplace", href: "/marketplace", icon: ShoppingBag, accent: "text-ccweb-violet", desc: "Products, services & escrow" },
+              { label: "Earn & Rewards", href: "/earn", icon: Gift, accent: "text-ccweb-green", desc: "Credits, referrals & leaderboard" },
+            ].map(({ label, href, icon: Icon, accent, desc }) => (
+              <Link
+                key={href}
+                to={href}
+                className="flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-3 hover:border-white/15 transition"
+              >
+                <Icon className={`h-5 w-5 shrink-0 ${accent}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white">{label}</p>
+                  <p className="text-xs text-ccweb-muted">{desc}</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-ccweb-muted shrink-0" />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {user && (
         <section className="ccweb-glass ccweb-card-premium rounded-3xl p-6 md:p-7">

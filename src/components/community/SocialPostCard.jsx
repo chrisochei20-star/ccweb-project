@@ -1,6 +1,6 @@
-import { Heart, MessageCircle, Repeat2 } from "lucide-react";
+import { Heart, MessageCircle, Repeat2, Share2 } from "lucide-react";
 import { useCallback, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { createPostReaction, fetchPostReactions } from "../../api/communityApi";
 import { getSessionToken } from "../../session";
 import { toast } from "../../lib/toastBus";
@@ -30,6 +30,7 @@ export function SocialPostCard({
   onCommentDraft,
   onSubmitComment,
 }) {
+  const navigate = useNavigate();
   const [likeBusy, setLikeBusy] = useState(false);
   const [repostBusy, setRepostBusy] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -37,6 +38,15 @@ export function SocialPostCard({
   const [likeBump, setLikeBump] = useState(0);
   const [repostBump, setRepostBump] = useState(0);
   const canInteract = Boolean(getSessionToken());
+
+  function goToAuthorProfile(e) {
+    e.stopPropagation();
+    if (post.authorSlug) {
+      navigate(`/u/${post.authorSlug}`);
+    } else if (post.authorUserId && post.authorUserId === user?.id) {
+      navigate("/profile");
+    }
+  }
 
   const loadReactions = useCallback(async () => {
     try {
@@ -138,16 +148,32 @@ export function SocialPostCard({
     <article className="ccweb-social-post group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-br from-white/[0.06] to-transparent p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition hover:border-ccweb-cyan/25 hover:shadow-[0_12px_40px_-18px_rgba(34,211,238,0.35)]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-ccweb-cyan/40 to-transparent opacity-0 transition group-hover:opacity-100" />
       <div className="flex gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-ccweb-cyan/30 to-ccweb-violet/30 text-xs font-bold text-white ring-2 ring-white/10">
+        {/* Clickable avatar → profile (X-style behavior) */}
+        <button
+          type="button"
+          aria-label={`View ${post.authorDisplayName || "Member"}'s profile`}
+          onClick={goToAuthorProfile}
+          className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-ccweb-cyan/30 to-ccweb-violet/30 text-xs font-bold text-white ring-2 ring-white/10 transition hover:ring-ccweb-cyan/50 focus:outline-none focus:ring-ccweb-cyan/60"
+        >
           {post.authorAvatarUrl ? (
             <img src={post.authorAvatarUrl} alt={post.authorDisplayName || "Member"} className="h-full w-full object-cover" loading="lazy" />
           ) : (
             initials(post.authorDisplayName)
           )}
-        </div>
+        </button>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className="font-semibold text-white">{post.authorDisplayName || "Member"}</span>
+            {/* Clickable name → profile */}
+            <button
+              type="button"
+              onClick={goToAuthorProfile}
+              className="font-semibold text-white hover:text-ccweb-cyan transition focus:outline-none"
+            >
+              {post.authorDisplayName || "Member"}
+            </button>
+            {post.authorSlug && (
+              <span className="text-xs text-ccweb-muted/70">@{post.authorSlug}</span>
+            )}
             <span className="text-xs text-ccweb-muted">· {timeAgo(post.createdAt)}</span>
           </div>
           <h3 className="mt-1 text-[15px] font-semibold leading-snug text-white">{post.title}</h3>
@@ -195,17 +221,19 @@ export function SocialPostCard({
             <button
               type="button"
               onClick={() => {
+                const shareUrl = post.authorSlug
+                  ? `${window.location.origin}/u/${post.authorSlug}`
+                  : window.location.href;
                 if (navigator.share) {
-                  navigator.share({ title: post.title, text: post.content, url: window.location.href });
+                  navigator.share({ title: post.title, text: post.content, url: shareUrl });
                 } else {
-                  navigator.clipboard?.writeText(window.location.href);
+                  navigator.clipboard?.writeText(shareUrl);
+                  toast.success("Link copied!");
                 }
               }}
               className="inline-flex items-center gap-1.5 text-xs font-medium text-ccweb-muted transition hover:text-ccweb-cyan"
             >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
-              </svg>
+              <Share2 className="h-4 w-4" />
             </button>
           </div>
 

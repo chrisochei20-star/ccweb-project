@@ -292,6 +292,114 @@ async function createFollowNotification({ recipientUserId, actorUserId, actorDis
   });
 }
 
+/**
+ * Marketplace notifications — order placed, escrow created, listing sold.
+ * event: "order_placed" | "escrow_created" | "listing_sold" | "order_status"
+ */
+async function createMarketplaceNotification({ recipientUserId, actorUserId, event, listingId, listingTitle, orderId, details }) {
+  const eventLabels = {
+    order_placed: { title: "New order received", body: `Someone ordered: ${(listingTitle || "your listing").slice(0, 100)}` },
+    escrow_created: { title: "Escrow payment held", body: `Funds secured for: ${(listingTitle || "order").slice(0, 100)}` },
+    listing_sold: { title: "Listing sold! 🎉", body: `${(listingTitle || "Your listing").slice(0, 100)} has been sold.` },
+    order_status: { title: "Order update", body: (details || "Your order status changed.").slice(0, 200) },
+  };
+  const label = eventLabels[event] || { title: "Marketplace update", body: (details || "").slice(0, 200) };
+  return insertRow({
+    recipientUserId,
+    kind: "marketplace",
+    title: label.title,
+    body: label.body,
+    payload: { listingId, orderId, listingTitle, event },
+    actorUserId: actorUserId || null,
+    groupKey: orderId ? `order:${orderId}` : (listingId ? `listing:${listingId}` : null),
+  });
+}
+
+/**
+ * Earn/rewards notifications — XP, credits, referral converted.
+ * event: "xp_awarded" | "credits_earned" | "referral_converted" | "reward"
+ */
+async function createEarnNotification({ recipientUserId, event, amount, details }) {
+  const eventLabels = {
+    xp_awarded: { title: "XP earned! ⚡", body: amount ? `+${amount} XP added to your account.` : "You earned XP." },
+    credits_earned: { title: "Credits added 💰", body: amount ? `$${amount} credits added to your balance.` : "Credits added." },
+    referral_converted: { title: "Referral converted! 🎉", body: "Someone you invited just joined CCWeb." },
+    reward: { title: "Reward unlocked", body: (details || "You unlocked a new reward.").slice(0, 200) },
+  };
+  const label = eventLabels[event] || { title: "Earn update", body: (details || "").slice(0, 200) };
+  return insertRow({
+    recipientUserId,
+    kind: "earn",
+    title: label.title,
+    body: label.body,
+    payload: { event, amount, details },
+    actorUserId: null,
+    groupKey: `earn:${event}`,
+  });
+}
+
+/**
+ * Social reaction (like / repost) on a post.
+ */
+async function createReactionNotification({ recipientUserId, actorUserId, actorDisplayName, postId, reaction }) {
+  const r = (reaction || "like").toLowerCase();
+  const verb = r === "repost" ? "reposted" : "liked";
+  return insertRow({
+    recipientUserId,
+    kind: r === "repost" ? "repost" : "like",
+    title: `${(actorDisplayName || "Someone").slice(0, 60)} ${verb} your post`,
+    body: "",
+    payload: { postId, reaction: r, actorId: actorUserId },
+    actorUserId,
+    groupKey: postId ? `post:${postId}:${r === "repost" ? "reposts" : "likes"}` : null,
+  });
+}
+
+/**
+ * Reply to a post.
+ */
+async function createReplyNotification({ recipientUserId, actorUserId, actorDisplayName, postId, preview }) {
+  return insertRow({
+    recipientUserId,
+    kind: "reply",
+    title: `${(actorDisplayName || "Someone").slice(0, 60)} replied to your post`,
+    body: (preview || "").slice(0, 200),
+    payload: { postId, actorId: actorUserId },
+    actorUserId,
+    groupKey: postId ? `post:${postId}:comments` : null,
+  });
+}
+
+/**
+ * Mention in a post or comment.
+ */
+async function createMentionNotification({ recipientUserId, actorUserId, actorDisplayName, postId, preview }) {
+  return insertRow({
+    recipientUserId,
+    kind: "mention",
+    title: `${(actorDisplayName || "Someone").slice(0, 60)} mentioned you`,
+    body: (preview || "").slice(0, 200),
+    payload: { postId, actorId: actorUserId },
+    actorUserId,
+    groupKey: postId ? `post:${postId}:mentions` : null,
+  });
+}
+
+/**
+ * App version update — notify a single user (call for each user from broadcast logic).
+ */
+async function createAppUpdateNotification({ recipientUserId, version, releaseNotes }) {
+  return insertRow({
+    recipientUserId,
+    kind: "app_update",
+    title: `CCWeb ${version || "update"} is available`,
+    body: (releaseNotes || "A new version of CCWeb is ready. Update for the latest features and fixes.").slice(0, 280),
+    payload: { version, releaseNotes },
+    actorUserId: null,
+    groupKey: version ? `app_update:${version}` : "app_update",
+  });
+}
+
 async function findMentionedUserIdsFromText(text, excludeUserId) {
   if (!enabled() || !text) return [];
   const re = /@([a-zA-Z0-9][a-zA-Z0-9_-]{1,40})/g;
@@ -320,5 +428,11 @@ module.exports = {
   createChatMessageNotification,
   createLearnProgressNotification,
   createFollowNotification,
+  createMarketplaceNotification,
+  createEarnNotification,
+  createReactionNotification,
+  createReplyNotification,
+  createMentionNotification,
+  createAppUpdateNotification,
   findMentionedUserIdsFromText,
 };

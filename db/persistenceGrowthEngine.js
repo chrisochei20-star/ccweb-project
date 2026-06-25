@@ -134,6 +134,21 @@ async function maybeRewardReferrer(refereeId, trigger) {
 
   await awardBadge(referrerId, "community_builder");
   await awardBadge(refereeId, "early_supporter");
+
+  // Notify referrer of successful conversion
+  try {
+    const notif = require("./persistenceNotifications");
+    await notif.createEarnNotification({
+      recipientUserId: referrerId,
+      event: "referral_converted",
+      amount: +(REF_CREDIT_CENTS / 100).toFixed(2),
+    });
+    await notif.createEarnNotification({
+      recipientUserId: refereeId,
+      event: "credits_earned",
+      amount: +(REF_CREDIT_CENTS / 100).toFixed(2),
+    });
+  } catch { /* non-fatal */ }
 }
 
 async function awardBadge(userId, badgeId) {
@@ -177,8 +192,28 @@ async function pingDaily(userId) {
     if (next % 7 === 0) {
       bonus = Number(process.env.CCWEB_STREAK_7_BONUS_CENTS || 100);
       await learningPg.addCreditsCents(userId, bonus);
+      // Notify user of weekly streak bonus
+      try {
+        const notif = require("./persistenceNotifications");
+        await notif.createEarnNotification({
+          recipientUserId: userId,
+          event: "credits_earned",
+          amount: +(bonus / 100).toFixed(2),
+          details: `Weekly streak bonus — ${next}-day streak! Keep it up.`,
+        });
+      } catch { /* non-fatal */ }
     }
     await learningPg.addXpDelta(userId, 10 + Math.min(50, next));
+    // Notify user of XP earned on daily login
+    try {
+      const notif = require("./persistenceNotifications");
+      await notif.createEarnNotification({
+        recipientUserId: userId,
+        event: "xp_awarded",
+        amount: 10 + Math.min(50, next),
+        details: `Daily login streak: ${next} days.`,
+      });
+    } catch { /* non-fatal */ }
     await recordEvent(userId, "daily_login", { streak: next });
     return { streak: next, longest, bonusCreditsCents: bonus };
   }

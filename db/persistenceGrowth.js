@@ -186,6 +186,18 @@ async function createOrder({ listingId, buyerId, buyerName, stripeCheckoutSessio
     ]
   );
   const o = await getOrder(id);
+  // Notify seller of new order
+  try {
+    const notif = require("./persistenceNotifications");
+    await notif.createMarketplaceNotification({
+      recipientUserId: listing.sellerId,
+      actorUserId: buyerId || null,
+      event: paidUpfront ? "escrow_created" : "order_placed",
+      listingId,
+      listingTitle: listing.title,
+      orderId: id,
+    });
+  } catch { /* non-fatal */ }
   return o;
 }
 
@@ -252,6 +264,29 @@ async function confirmOrder(orderId) {
      WHERE id = 1`,
     [o.amountUsd, o.sellerPendingUsd, o.platformFeeUsd]
   );
+  // Notify seller that listing was sold / escrow released
+  try {
+    const notif = require("./persistenceNotifications");
+    await notif.createMarketplaceNotification({
+      recipientUserId: o.sellerId,
+      actorUserId: o.buyerId || null,
+      event: "listing_sold",
+      listingId: o.listingId,
+      listingTitle: o.listingTitle,
+      orderId,
+    });
+    // Notify buyer that order is complete
+    if (o.buyerId && o.buyerId !== "buyer-anon") {
+      await notif.createMarketplaceNotification({
+        recipientUserId: o.buyerId,
+        event: "order_status",
+        listingId: o.listingId,
+        listingTitle: o.listingTitle,
+        orderId,
+        details: "Your order has been completed and confirmed.",
+      });
+    }
+  } catch { /* non-fatal */ }
   return { order: await getOrder(orderId) };
 }
 

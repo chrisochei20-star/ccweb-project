@@ -17,6 +17,9 @@ const DEFAULT_NATIVE_CATEGORIES = {
   reactions: true,
   comments: true,
   aiAlerts: true,
+  marketplace: true,
+  earn: true,
+  app_update: true,
 };
 
 function resolvePushCategory({ kind, legacyType }) {
@@ -27,6 +30,9 @@ function resolvePushCategory({ kind, legacyType }) {
   if (k === "follow" || t === "follow") return "follows";
   if (k === "like" || k === "repost" || t === "community_reaction_received") return "reactions";
   if (k === "reply" || t === "community_post_comment") return "comments";
+  if (k === "marketplace" || k === "order" || k === "escrow" || t.includes("marketplace") || t.includes("order") || t.includes("escrow")) return "marketplace";
+  if (k === "earn" || t.includes("growth") || t.includes("referral") || t.includes("xp") || t === "xp_awarded" || t === "earn_reward" || t === "referral_converted" || t === "credits_earned") return "earn";
+  if (k === "app_update") return "app_update";
   if (
     k === "learn" ||
     k === "build" ||
@@ -55,6 +61,16 @@ function buildPushRoute({ kind, payload = {}, legacyType }) {
       return p.postId ? `/community?post=${encodeURIComponent(p.postId)}` : "/community";
     case "earn":
       return "/earn";
+    case "marketplace":
+    case "order":
+    case "escrow":
+      return p.orderId
+        ? `/marketplace?order=${encodeURIComponent(p.orderId)}`
+        : p.listingId
+          ? `/marketplace?listing=${encodeURIComponent(p.listingId)}`
+          : "/marketplace";
+    case "app_update":
+      return "/notifications";
     case "build":
       return p.route || "/ai-tutor";
     case "follow":

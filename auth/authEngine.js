@@ -1,5 +1,6 @@
 /**
- * Auth engine: bcrypt, JWT access/refresh, TOTP 2FA, wallet sign-in, rate limits.
+ * Auth engine: bcrypt, JWT access/refresh, TOTP 2FA, wallet sign-in, rate limits,
+ * device fingerprinting, and anti-duplicate account protection.
  */
 
 const crypto = require("crypto");
@@ -16,6 +17,25 @@ const BCRYPT_ROUNDS = 12;
 const MAX_LOGIN_FAILS = 8;
 const LOCKOUT_MS = 15 * 60 * 1000;
 const NONCE_MS = 10 * 60 * 1000;
+
+/**
+ * Generate a stable device fingerprint from request metadata.
+ * Combines IP, User-Agent, and Accept-Language into an HMAC hash.
+ * This is a server-side proxy fingerprint — not perfect but raises the bar
+ * significantly against duplicate account creation from the same device.
+ */
+function computeDeviceFingerprint({ ip, userAgent, acceptLanguage }) {
+  const secret = process.env.FINGERPRINT_SECRET || "ccweb-fp-default-secret-change-in-prod";
+  const payload = [
+    String(ip || "").trim(),
+    String(userAgent || "").trim().slice(0, 200),
+    String(acceptLanguage || "").trim().slice(0, 80),
+  ].join("|");
+  return crypto.createHmac("sha256", secret).update(payload).digest("hex");
+}
+
+/** In-memory set of known device fingerprints → userId. Persisted to DB on creation. */
+const deviceFingerprintCache = new Map();
 
 /** @type {Map<string, { nonce: string, message: string, expiresAt: number, chainType: string }>} */
 const walletNonces = new Map();
@@ -129,13 +149,34 @@ async function issueTokenPair(row, user) {
   };
 }
 
-async function registerUser(ccwebUsers, buildUserProfile, { email, password, displayName }) {
+async function registerUser(ccwebUsers, buildUserProfile, { email, password, displayName, deviceFingerprint }) {
   const em = authStore.normalizeEmail(email);
   if (!em || !em.includes("@")) return { error: "Valid email is required." };
   if (!password || String(password).length < 8) return { error: "Password must be at least 8 characters." };
 
   const existing = await authStore.findByEmail(em);
   if (existing) return { error: "An account with this email already exists." };
+
+  // Anti-duplicate account check: reject registration if this device fingerprint
+  // is already associated with an existing account.
+  if (deviceFingerprint) {
+    const cached = deviceFingerprintCache.get(deviceFingerprint);
+    if (cached) {
+      logger.warn({ event: "duplicate_account_attempt", deviceFingerprint, email: em });
+      return { error: "An account already exists from this device. Each device may only register one account." };
+    }
+    // Also check DB for persistence across restarts
+    try {
+      const pgUserProfile = require("../db/pgUserProfile");
+      if (pgUserProfile?.findByDeviceFingerprint) {
+        const dbMatch = await pgUserProfile.findByDeviceFingerprint(deviceFingerprint);
+        if (dbMatch) {
+          deviceFingerprintCache.set(deviceFingerprint, dbMatch.userId);
+          return { error: "An account already exists from this device. Each device may only register one account." };
+        }
+      }
+    } catch { /* DB unavailable — continue; fingerprint will be stored on success */ }
+  }
 
   const passwordHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
   const verifyToken = crypto.randomBytes(24).toString("hex");
@@ -160,10 +201,16 @@ async function registerUser(ccwebUsers, buildUserProfile, { email, password, dis
       emailVerifyExpires: Date.now() + 1000 * 60 * 60 * 48,
       passwordResetToken: null,
       passwordResetExpires: null,
+      deviceFingerprint: deviceFingerprint || null,
     });
   } catch (e) {
     if (e.message === "DUPLICATE") return { error: "An account with this email already exists." };
     throw e;
+  }
+
+  // Store fingerprint in cache so subsequent attempts from same device are blocked
+  if (deviceFingerprint) {
+    deviceFingerprintCache.set(deviceFingerprint, userId);
   }
 
   const profile = buildUserProfile(
@@ -595,4 +642,5 @@ module.exports = {
   hashRefreshToken,
   ensureUserProfile,
   persistNewUserProfile,
+  computeDeviceFingerprint,
 };

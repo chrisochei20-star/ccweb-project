@@ -1,4 +1,4 @@
-import { Loader2, LogOut, Shield, Wallet } from "lucide-react";
+import { ExternalLink, Lock, Loader2, LogOut, MessageSquare, Shield, Twitter, Wallet } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
@@ -67,9 +67,12 @@ export function ProfileShellPage() {
   const [msg, setMsg] = useState(null);
   const [err, setErr] = useState(null);
 
+  const [whatsappHandle, setWhatsappHandle] = useState("");
+  const [twitterHandle, setTwitterHandle] = useState("");
+  const [transactions, setTransactions] = useState([]);
+  const [txLoading, setTxLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("posts");
   const [feedItems, setFeedItems] = useState([]);
-  const [feedLoading, setFeedLoading] = useState(false);
   const [feedError, setFeedError] = useState(null);
 
   const [mediaBusy, setMediaBusy] = useState({ avatar: false, banner: false });
@@ -111,6 +114,12 @@ export function ProfileShellPage() {
       setWebsite(user.website || "");
       setPushEnabled(user.pushEnabled !== false);
       setSocialLinks(Array.isArray(user.socialLinks) ? user.socialLinks : []);
+      // Hydrate WhatsApp / X handles from stored social links
+      const links = Array.isArray(user.socialLinks) ? user.socialLinks : [];
+      const wa = links.find((l) => /whatsapp/i.test(l.label));
+      const tw = links.find((l) => /twitter|x\.com/i.test(l.label));
+      if (wa) setWhatsappHandle(wa.url || "");
+      if (tw) setTwitterHandle(tw.url || "");
     }
   }, [user]);
 
@@ -144,9 +153,15 @@ export function ProfileShellPage() {
     setSaveBusy(true);
     const token = getSessionToken();
     try {
-      const links = [...socialLinks];
+      const links = [...socialLinks.filter((l) => !/whatsapp|twitter|x\.com/i.test(l.label))];
       if (socialLinkUrl.trim()) {
         links.push({ label: socialLinkLabel.trim() || "Link", url: socialLinkUrl.trim() });
+      }
+      if (whatsappHandle.trim()) {
+        links.push({ label: "WhatsApp", url: whatsappHandle.trim() });
+      }
+      if (twitterHandle.trim()) {
+        links.push({ label: "X (Twitter)", url: twitterHandle.trim() });
       }
       const bundle = await updateProfile({
         displayName: displayName.trim(),
@@ -155,7 +170,7 @@ export function ProfileShellPage() {
         bio: bio.trim() || null,
         location: location.trim() || null,
         website: website.trim() || null,
-        socialLinks: links.slice(0, 8),
+        socialLinks: links.slice(0, 10),
       });
       applyBundle(bundle);
       setUser(bundle.user);
@@ -408,15 +423,98 @@ export function ProfileShellPage() {
       <ProfileTabs active={activeTab} onChange={setActiveTab} isSelf sticky />
       <ProfileFeedList tab={activeTab} items={feedItems} loading={feedLoading} error={feedError} onRetry={loadFeed} />
 
+      {/* Social Connect section — WhatsApp / X links */}
+      {(user.socialLinks?.length > 0) && (
+        <section className="ccweb-glass rounded-2xl p-5">
+          <h2 className="mb-3 text-sm font-semibold text-white">Connect</h2>
+          <div className="flex flex-wrap gap-2">
+            {user.socialLinks.map((l, i) => {
+              const isWa = /whatsapp/i.test(l.label);
+              const isTw = /twitter|x\.com/i.test(l.label);
+              return (
+                <a
+                  key={i}
+                  href={l.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white hover:border-ccweb-cyan/40 transition"
+                >
+                  {isWa && <span className="text-[#25D366]">📱</span>}
+                  {isTw && <Twitter className="h-3.5 w-3.5 text-[#1DA1F2]" />}
+                  {!isWa && !isTw && <ExternalLink className="h-3.5 w-3.5 text-ccweb-muted" />}
+                  {l.label}
+                </a>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* DM Button — send direct message to yourself (placeholder for public profile) */}
       <section className="ccweb-glass rounded-2xl p-5">
-        <h2 className="flex items-center gap-2 font-semibold text-white">
-          <Wallet className="h-5 w-5 text-ccweb-green" />
-          Wallet
-        </h2>
-        <p className="mt-2 text-sm text-ccweb-muted">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-white">Direct Messages</h2>
+            <p className="mt-0.5 text-xs text-ccweb-muted">Chat privately with connections on CCWeb.</p>
+          </div>
+          <Link
+            to="/messages"
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-ccweb-cyan to-ccweb-violet px-4 py-2.5 text-sm font-semibold text-[#061329]"
+          >
+            <MessageSquare className="h-4 w-4" />
+            Messages
+          </Link>
+        </div>
+      </section>
+
+      {/* Payment / Transaction Dashboard */}
+      <section className="ccweb-glass rounded-2xl p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 font-semibold text-white">
+            <Wallet className="h-5 w-5 text-ccweb-green" />
+            Transactions
+          </h2>
+          <button
+            type="button"
+            className="text-xs text-ccweb-cyan hover:underline"
+            onClick={async () => {
+              setTxLoading(true);
+              try {
+                const res = await apiFetch(apiUrl("/api/growth/orders"));
+                const d = await res.json().catch(() => ({}));
+                setTransactions(d.orders || []);
+              } catch { setTransactions([]); } finally { setTxLoading(false); }
+            }}
+          >
+            {txLoading ? "Loading…" : "Refresh"}
+          </button>
+        </div>
+        {transactions.length === 0 && !txLoading && (
+          <p className="mt-3 text-sm text-ccweb-muted">No transactions yet. Complete a marketplace order to see your history.</p>
+        )}
+        {txLoading && <p className="mt-3 text-sm text-ccweb-muted animate-pulse">Loading transactions…</p>}
+        {transactions.length > 0 && (
+          <ul className="mt-4 space-y-2">
+            {transactions.map((tx) => {
+              const isIncoming = tx.sellerId === user.id;
+              return (
+                <li key={tx.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-white">{tx.listingTitle || tx.id}</p>
+                    <p className="mt-0.5 text-xs text-ccweb-muted capitalize">{tx.status?.replace(/_/g, " ")}</p>
+                  </div>
+                  <span className={`text-sm font-bold ${isIncoming ? "text-ccweb-green" : "text-rose-400"}`}>
+                    {isIncoming ? "+" : "-"}${tx.amountUsd}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <p className="mt-3 text-xs text-ccweb-muted">
           {user.walletAddress || user.walletEvm
-            ? `Linked: ${user.walletAddress || user.walletEvm}`
-            : "Connect from the login screen with MetaMask to link an address."}
+            ? `Wallet: ${(user.walletAddress || user.walletEvm).slice(0, 18)}…`
+            : "No wallet linked. Connect via login screen."}
         </p>
       </section>
 
@@ -541,6 +639,29 @@ export function ProfileShellPage() {
                 ))}
               </ul>
             )}
+          </div>
+          {/* WhatsApp & X (Twitter) quick-connect */}
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
+            <p className="text-xs font-semibold text-ccweb-muted uppercase tracking-wider">Quick connect</p>
+            <div className="flex items-center gap-3">
+              <span className="text-lg">📱</span>
+              <input
+                className="ccweb-input flex-1"
+                placeholder="WhatsApp number or link"
+                value={whatsappHandle}
+                onChange={(e) => setWhatsappHandle(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <Twitter className="h-5 w-5 text-[#1DA1F2]" />
+              <input
+                className="ccweb-input flex-1"
+                placeholder="X / Twitter profile URL"
+                value={twitterHandle}
+                onChange={(e) => setTwitterHandle(e.target.value)}
+              />
+            </div>
+            <p className="text-[10px] text-ccweb-muted">These appear as connect buttons on your public profile.</p>
           </div>
           <label className="flex min-h-[44px] items-center gap-2 text-sm text-ccweb-muted">
             <input type="checkbox" checked={pushEnabled} onChange={(e) => setPushEnabled(e.target.checked)} />

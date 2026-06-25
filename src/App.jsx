@@ -943,55 +943,133 @@ function BlogPage() {
 
 function AboutPage() {
   return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">About Us</h1>
-        <p className="muted">
-          Chrisccwebfoundation is on a mission to democratize crypto and AI
-          education.
+    <section className="mx-auto max-w-3xl space-y-6 px-3 pb-20 pt-4">
+      <header>
+        <p className="text-xs font-semibold uppercase tracking-widest text-ccweb-cyan">Platform</p>
+        <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">About CCWeb</h1>
+        <p className="mt-2 text-sm text-ccweb-muted max-w-2xl">
+          CCWeb is a social commerce and earning platform that combines the best of social networking,
+          decentralized commerce, and real rewards — built for creators, entrepreneurs, and everyday users.
         </p>
       </header>
-      <div className="card-grid">
-        <article className="panel">
-          <h3>Mission</h3>
-          <p className="muted">
-            Make crypto and AI education accessible, affordable, and rewarding.
-          </p>
-        </article>
-        <article className="panel">
-          <h3>Vision</h3>
-          <p className="muted">
-            A world where financial and technical literacy unlocks opportunity.
-          </p>
-        </article>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {[
+          {
+            title: "Social Commerce",
+            body: "Post, share, and sell from a single feed. Your marketplace listings and community content live side by side, making discovery and transactions effortless.",
+            accent: "text-ccweb-cyan",
+          },
+          {
+            title: "Earn Real Rewards",
+            body: "Earn credits and XP through referrals, platform engagement, marketplace sales, and learning milestones. Watch your leaderboard position rise in real time.",
+            accent: "text-ccweb-green",
+          },
+          {
+            title: "Secure Marketplace",
+            body: "Every transaction is protected by escrow. Pay by card, seller delivers, buyer confirms — funds release only when both sides are satisfied.",
+            accent: "text-ccweb-violet",
+          },
+          {
+            title: "Encrypted Messaging",
+            body: "Direct messages are end-to-end encrypted. Order products from the marketplace, negotiate deals, and stay private — all within your inbox.",
+            accent: "text-ccweb-cyan",
+          },
+          {
+            title: "Growth Tools",
+            body: "Run AI-assisted marketing campaigns, generate qualified leads, and track organic pipeline — without spammy automation or rule violations.",
+            accent: "text-ccweb-green",
+          },
+          {
+            title: "Your Identity, Protected",
+            body: "One account per person. Device fingerprinting, 2FA, and rate-limited auth prevent account takeovers and resale. Your profile is yours alone.",
+            accent: "text-ccweb-violet",
+          },
+        ].map(({ title, body, accent }) => (
+          <article key={title} className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-5">
+            <h3 className={`font-semibold ${accent}`}>{title}</h3>
+            <p className="mt-2 text-sm text-ccweb-muted leading-relaxed">{body}</p>
+          </article>
+        ))}
       </div>
+
+      <article className="rounded-2xl border border-ccweb-cyan/20 bg-ccweb-cyan/5 p-6">
+        <h2 className="text-lg font-bold text-white">Our Mission</h2>
+        <p className="mt-2 text-sm text-ccweb-muted leading-relaxed">
+          We believe commerce should be accessible, transparent, and rewarding for everyone — not just big brands.
+          CCWeb gives individuals and small teams the tools to connect, sell, and grow on equal footing,
+          with no hidden fees and no algorithmic gatekeeping.
+        </p>
+        <p className="mt-3 text-xs text-ccweb-muted">
+          Contact: <a href="mailto:hello@chrisccweb.io" className="text-ccweb-cyan underline">hello@chrisccweb.io</a>
+        </p>
+      </article>
     </section>
   );
 }
 
 function FaqPage() {
   const faqs = [
-    "What is Chrisccwebfoundation?",
-    "How do I earn tokens?",
-    "What does the Pro subscription include?",
-    "How does the affiliate program work?",
-    "Is the AI tutor available 24/7?",
-    "Can I cancel my subscription?",
+    {
+      q: "What is CCWeb?",
+      a: "CCWeb is a social commerce and earning platform. You can post on the feed like any social app, list and sell products or services in the Marketplace, chat privately with encrypted DMs, earn rewards through referrals, and track all your transactions in one place.",
+    },
+    {
+      q: "How do I earn on CCWeb?",
+      a: "Earn credits and XP by inviting friends via your personal referral link, completing marketplace sales, engaging with the community, and participating in learning sessions. Your rank on the leaderboard updates in real time.",
+    },
+    {
+      q: "How does Marketplace escrow work?",
+      a: "When you buy a product or service, payment is held in escrow — it is not released to the seller until you confirm delivery. If there is a dispute, our resolution process protects both parties. The platform fee is 8% on successful sales.",
+    },
+    {
+      q: "Are messages private?",
+      a: "Yes. Direct messages on CCWeb are end-to-end encrypted. Only you and the recipient can read the content. You can also order marketplace products directly from within a chat conversation.",
+    },
+    {
+      q: "Can I have more than one account?",
+      a: "No. CCWeb enforces one account per person using device fingerprinting and email uniqueness checks. This protects community integrity and prevents account resale.",
+    },
+    {
+      q: "How do I withdraw my earnings?",
+      a: "Your transaction history and balance appear on the Transactions panel in your Profile. Withdrawal options depend on your linked payment method. Go to Profile → Transactions to manage funds.",
+    },
+    {
+      q: "What is the referral program?",
+      a: "Every account gets a unique referral link in the Earn section. When someone signs up and engages using your link, both of you receive bonus credits. Track conversions and your rank on the leaderboard.",
+    },
+    {
+      q: "How do I link my WhatsApp or X (Twitter)?",
+      a: "Go to Profile → Edit Profile and scroll to Quick Connect. Enter your WhatsApp number or link and your X profile URL. These appear as connect buttons on your public profile.",
+    },
+    {
+      q: "Is my data secure?",
+      a: "CCWeb uses industry-standard bcrypt password hashing, JWT auth with short-lived access tokens, TOTP 2FA, rate-limited login, and device fingerprinting. We never sell your personal data.",
+    },
+    {
+      q: "How do I contact support?",
+      a: "Email us at hello@chrisccweb.io or use the Contact page. We aim to respond within 24 hours on business days.",
+    },
   ];
 
   return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">FAQ</h1>
-        <p className="muted">Got questions? We&apos;ve got answers.</p>
+    <section className="mx-auto max-w-3xl space-y-4 px-3 pb-20 pt-4">
+      <header>
+        <p className="text-xs font-semibold uppercase tracking-widest text-ccweb-cyan">Help Center</p>
+        <h1 className="mt-2 text-2xl font-bold text-white">Frequently Asked Questions</h1>
+        <p className="mt-1 text-sm text-ccweb-muted">Everything you need to know about CCWeb.</p>
       </header>
-      <article className="panel">
-        <ul className="list">
-          {faqs.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </article>
+      <div className="space-y-3">
+        {faqs.map(({ q, a }) => (
+          <details key={q} className="group rounded-2xl border border-white/[0.07] bg-white/[0.04] px-5 py-4 cursor-pointer">
+            <summary className="flex items-center justify-between gap-4 text-sm font-semibold text-white list-none">
+              {q}
+              <span className="shrink-0 text-ccweb-cyan transition group-open:rotate-45">＋</span>
+            </summary>
+            <p className="mt-3 text-sm text-ccweb-muted leading-relaxed">{a}</p>
+          </details>
+        ))}
+      </div>
     </section>
   );
 }
@@ -1165,35 +1243,104 @@ function ContactPage() {
 
 function PrivacyPage() {
   return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">Privacy policy (draft)</h1>
-        <p className="muted">Replace with counsel-reviewed policy before store submission.</p>
+    <section className="mx-auto max-w-3xl space-y-5 px-3 pb-20 pt-4">
+      <header>
+        <p className="text-xs font-semibold uppercase tracking-widest text-ccweb-cyan">Legal</p>
+        <h1 className="mt-2 text-2xl font-bold text-white">Privacy Policy</h1>
+        <p className="mt-1 text-xs text-ccweb-muted">Last updated: June 2026</p>
       </header>
-      <article className="panel">
-        <p className="muted">
-          This prototype may process email and usage data in memory on the server you control. For production, document
-          data categories, retention, subprocessors, and user rights (access, deletion, portability) per GDPR/CCPA and
-          store guidelines.
-        </p>
-      </article>
+      {[
+        {
+          title: "Information We Collect",
+          body: "We collect your email address and display name when you register. We may collect usage data such as pages visited, features used, and session duration to improve the platform. Profile content you voluntarily publish (bio, posts, listings) is stored on our servers.",
+        },
+        {
+          title: "How We Use Your Data",
+          body: "Your data is used to operate and improve CCWeb services, verify your identity, process marketplace transactions, send account notifications, and calculate referral rewards. We do not sell your personal data to third parties.",
+        },
+        {
+          title: "Payments & Transactions",
+          body: "Payment processing is handled by Flutterwave. CCWeb does not store full card numbers. Transaction records (amounts, counterparties, statuses) are retained for dispute resolution and financial reporting.",
+        },
+        {
+          title: "Data Security",
+          body: "Passwords are hashed with bcrypt (12 rounds). Sessions use short-lived JWTs. All connections are encrypted via HTTPS/TLS. We implement rate limiting, device fingerprinting, and optional TOTP 2FA to protect your account.",
+        },
+        {
+          title: "Your Rights",
+          body: "You may request access to, correction of, or deletion of your personal data by emailing hello@chrisccweb.io. We will respond within 30 days. You may also export your post history and transaction records from your Profile.",
+        },
+        {
+          title: "Cookies & Local Storage",
+          body: "We use browser localStorage and sessionStorage to persist your authentication session. No third-party advertising cookies are used. Analytics may be collected first-party for platform improvement only.",
+        },
+        {
+          title: "Changes to This Policy",
+          body: "We will notify you of material changes via an in-app notification before they take effect. Continued use of CCWeb after the effective date constitutes acceptance of the updated policy.",
+        },
+      ].map(({ title, body }) => (
+        <article key={title} className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-5">
+          <h3 className="font-semibold text-white">{title}</h3>
+          <p className="mt-2 text-sm text-ccweb-muted leading-relaxed">{body}</p>
+        </article>
+      ))}
+      <p className="text-xs text-ccweb-muted">
+        Questions? <a href="mailto:hello@chrisccweb.io" className="text-ccweb-cyan underline">hello@chrisccweb.io</a>
+      </p>
     </section>
   );
 }
 
 function TermsPage() {
   return (
-    <section>
-      <header className="page-header">
-        <h1 className="section-title">Terms of service (draft)</h1>
-        <p className="muted">Replace with counsel-reviewed terms before store submission.</p>
+    <section className="mx-auto max-w-3xl space-y-5 px-3 pb-20 pt-4">
+      <header>
+        <p className="text-xs font-semibold uppercase tracking-widest text-ccweb-cyan">Legal</p>
+        <h1 className="mt-2 text-2xl font-bold text-white">Terms of Service</h1>
+        <p className="mt-1 text-xs text-ccweb-muted">Last updated: June 2026</p>
       </header>
-      <article className="panel">
-        <p className="muted">
-          CCWEB provides educational and tooling prototypes. Crypto and AI features output signals, not financial or
-          legal advice. Users accept risks of volatile markets and experimental software.
-        </p>
-      </article>
+      {[
+        {
+          title: "Eligibility",
+          body: "You must be at least 16 years old to use CCWeb. By creating an account you confirm that the information you provide is accurate and that you will maintain one account only. CCWeb reserves the right to terminate accounts found to violate this rule.",
+        },
+        {
+          title: "Acceptable Use",
+          body: "You may not use CCWeb to distribute illegal content, spam other users, impersonate individuals, conduct fraudulent transactions, or engage in activities that harm the platform or its community. Violations may result in immediate account suspension.",
+        },
+        {
+          title: "Marketplace Rules",
+          body: "Sellers must deliver goods or services as described. Buyers must pay promptly. Escrow funds are released upon buyer confirmation or after the dispute window expires (72 hours from delivery confirmation). CCWeb charges an 8% platform fee on completed sales.",
+        },
+        {
+          title: "Content Ownership",
+          body: "You retain ownership of content you post. By publishing on CCWeb you grant us a non-exclusive, royalty-free licence to display and distribute your content within the platform. You may delete your content at any time.",
+        },
+        {
+          title: "Credits & Rewards",
+          body: "CCWeb credits are not cash and have no guaranteed monetary value outside the platform. Credits earned through referrals or engagement may be used for subscriptions or marketplace purchases. Credits cannot be transferred to another user.",
+        },
+        {
+          title: "Limitation of Liability",
+          body: "CCWeb is provided 'as is'. We are not liable for losses arising from marketplace disputes, third-party payment processor errors, or service interruptions. Our maximum aggregate liability for any claim shall not exceed the fees you paid in the 30 days prior to the claim.",
+        },
+        {
+          title: "Governing Law",
+          body: "These terms are governed by applicable law. Disputes shall be resolved by binding arbitration unless prohibited by law. Nothing in these terms limits your statutory consumer rights.",
+        },
+        {
+          title: "Changes to Terms",
+          body: "We may update these terms and will provide at least 14 days notice via in-app notification before material changes take effect. Your continued use after the effective date constitutes acceptance.",
+        },
+      ].map(({ title, body }) => (
+        <article key={title} className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-5">
+          <h3 className="font-semibold text-white">{title}</h3>
+          <p className="mt-2 text-sm text-ccweb-muted leading-relaxed">{body}</p>
+        </article>
+      ))}
+      <p className="text-xs text-ccweb-muted">
+        Questions? <a href="mailto:hello@chrisccweb.io" className="text-ccweb-cyan underline">hello@chrisccweb.io</a>
+      </p>
     </section>
   );
 }

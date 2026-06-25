@@ -149,7 +149,16 @@ function mountAt(app, basePath) {
         return res.status(429).json({ error: "Too many registration attempts from this network. Try again later." });
       }
       const { ccwebUsers, buildUserProfile, sanitizeUser } = getDeps(req);
-      const out = await authEngine.registerUser(ccwebUsers, buildUserProfile, req.body || {});
+      // Compute device fingerprint from request metadata for anti-duplicate-account enforcement
+      const deviceFingerprint = authEngine.computeDeviceFingerprint({
+        ip,
+        userAgent: req.headers["user-agent"] || "",
+        acceptLanguage: req.headers["accept-language"] || "",
+      });
+      const out = await authEngine.registerUser(ccwebUsers, buildUserProfile, {
+        ...(req.body || {}),
+        deviceFingerprint,
+      });
       if (out.error) return res.status(400).json({ error: out.error });
       if (out.user?.id) {
         try {

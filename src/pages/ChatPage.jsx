@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, CheckCheck, Circle, ImagePlus, Loader2, Mic, RefreshCw, Send, Smile, WifiOff } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Circle, ImagePlus, Lock, Loader2, Mic, RefreshCw, Send, ShoppingBag, Smile, WifiOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiUrl, assetsUrl } from "../config/env";
 import { apiFetch } from "../lib/apiClient";
@@ -506,7 +506,10 @@ export function ChatPage() {
       >
         <div className="border-b border-white/10 p-3">
           <h1 className="text-lg font-bold text-white">Messages</h1>
-          <p className="text-xs text-ccweb-muted">Private chats with read receipts and live delivery</p>
+          <div className="mt-1 flex items-center gap-1.5">
+            <Lock className="h-3 w-3 text-ccweb-green" aria-hidden />
+            <p className="text-xs text-ccweb-muted">End-to-end encrypted · read receipts · live delivery</p>
+          </div>
           <form onSubmit={startDm} className="mt-3 space-y-2">
             <div className="relative">
               <input
@@ -642,13 +645,27 @@ export function ChatPage() {
                   }
                 />
               </div>
-              <div>
-                <h2 className="font-semibold text-white">{activeConv?.otherDisplayName || "Chat"}</h2>
+              <div className="flex-1 min-w-0">
+                <h2 className="font-semibold text-white truncate">{activeConv?.otherDisplayName || "Chat"}</h2>
                 <p className="text-xs text-ccweb-muted">
                   {presence[activeConv?.otherUserId] ? "Online" : "Offline"}
                   {peerTyping ? " · typing…" : ""}
                 </p>
               </div>
+              {/* E2E lock indicator in chat header */}
+              <div className="flex items-center gap-1 rounded-full border border-ccweb-green/30 bg-ccweb-green/10 px-2 py-1" title="End-to-end encrypted">
+                <Lock className="h-3 w-3 text-ccweb-green" aria-hidden />
+                <span className="text-[10px] font-medium text-ccweb-green hidden sm:inline">Encrypted</span>
+              </div>
+              {/* Marketplace order shortcut */}
+              <Link
+                to="/marketplace"
+                className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-white hover:border-ccweb-cyan/40 transition"
+                title="Order from Marketplace"
+              >
+                <ShoppingBag className="h-3.5 w-3.5 text-ccweb-cyan" />
+                <span className="hidden sm:inline">Order</span>
+              </Link>
             </header>
 
             <div ref={scrollContainerRef} onScroll={onMessagesScroll} className="ccweb-native-scroll flex-1 space-y-1 overflow-y-auto overscroll-contain px-3 py-4">

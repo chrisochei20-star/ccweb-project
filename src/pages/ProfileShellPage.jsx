@@ -74,6 +74,7 @@ export function ProfileShellPage() {
   const [activeTab, setActiveTab] = useState("posts");
   const [feedItems, setFeedItems] = useState([]);
   const [feedError, setFeedError] = useState(null);
+  const [feedLoading, setFeedLoading] = useState(false);
 
   const [mediaBusy, setMediaBusy] = useState({ avatar: false, banner: false });
   const [mediaProgress, setMediaProgress] = useState({ avatar: null, banner: null });

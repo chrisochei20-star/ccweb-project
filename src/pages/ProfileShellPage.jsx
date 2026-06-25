@@ -441,7 +441,7 @@ export function ProfileShellPage() {
                   className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white hover:border-ccweb-cyan/40 transition"
                 >
                   {isWa && <span className="text-[#25D366]">📱</span>}
-                  {isTw && <Twitter className="h-3.5 w-3.5 text-[#1DA1F2]" />}
+                  {isTw && <span className="text-[#1DA1F2]">X</span>}
                   {!isWa && !isTw && <ExternalLink className="h-3.5 w-3.5 text-ccweb-muted" />}
                   {l.label}
                 </a>
@@ -654,7 +654,7 @@ export function ProfileShellPage() {
               />
             </div>
             <div className="flex items-center gap-3">
-              <Twitter className="h-5 w-5 text-[#1DA1F2]" />
+              <span className="text-lg text-[#1DA1F2]">X</span>
               <input
                 className="ccweb-input flex-1"
                 placeholder="X / Twitter profile URL"

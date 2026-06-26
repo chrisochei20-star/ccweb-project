@@ -578,6 +578,11 @@ function createPlatformApp(deps) {
   chatRouter.get("/conversations", authJwtMiddleware, async (req, res, next) => {
     try {
       const conversations = await chatPg.listConversations(req.ccwebUserId);
+      console.log("CHAT DEBUG:", {
+        userId: req.ccwebUserId,
+        count: conversations.length,
+        conversations,
+      });
       res.json({ conversations });
     } catch (e) {
       next(e);

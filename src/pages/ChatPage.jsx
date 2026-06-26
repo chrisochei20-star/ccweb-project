@@ -11,6 +11,7 @@ import { useConnectionState, useRealtimeSubscription, useSocketReconnect } from 
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { PullToRefreshContainer } from "../components/mobile/PullToRefreshContainer";
 import { ImageViewerModal } from "../components/media/ImageViewerModal";
+import MarketplaceMessageCard from "../components/chat/MarketplaceMessageCard";
 import { NativeMediaPicker } from "../components/media/NativeMediaPicker";
 import { MediaImage } from "../components/ui/MediaImage";
 import { CcwebBrandAvatarFallback } from "../components/brand/CcwebBrandMark";
@@ -751,9 +752,11 @@ export function ChatPage() {
                               <p className="mt-1 text-[10px] opacity-80">Voice message</p>
                             </div>
                           </div>
-                        ) : (
-                          <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                        )}
+                        ) : m.type === "marketplace" ? (
+  <MarketplaceMessageCard product={m.metadata?.product} />
+) : (
+  <p className="whitespace-pre-wrap break-words">{m.body}</p>
+)}
                         {Array.isArray(m.metadata?.reactions) && m.metadata.reactions.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1">
                             {m.metadata.reactions.map((r) => (

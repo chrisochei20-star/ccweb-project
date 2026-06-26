@@ -622,6 +622,32 @@ export function ChatPage() {
             <h2 className="text-2xl font-bold text-white">Welcome to CCWEB Chat</h2>
             <p className="mt-2 text-center text-sm text-ccweb-muted max-w-md">Send secure direct messages, share photos, voice notes, marketplace orders and collaborate with the CCWEB community in real time.</p>
             <p className="mt-6 text-xs text-ccweb-muted">Start a conversation from the left panel to begin chatting.</p>
+<div className="mt-8 grid w-full max-w-3xl grid-cols-2 gap-4">
+  <div className="rounded-2xl border border-cyan-500/20 bg-white/5 p-4 text-center">
+    <div className="text-2xl">💬</div>
+    <h3 className="mt-2 font-semibold text-white">New Chat</h3>
+    <p className="mt-1 text-xs text-ccweb-muted">Start a secure conversation.</p>
+  </div>
+
+  <div className="rounded-2xl border border-cyan-500/20 bg-white/5 p-4 text-center">
+    <div className="text-2xl">🤖</div>
+    <h3 className="mt-2 font-semibold text-white">AI Assistant</h3>
+    <p className="mt-1 text-xs text-ccweb-muted">Ask AI for help anytime.</p>
+  </div>
+
+  <div className="rounded-2xl border border-cyan-500/20 bg-white/5 p-4 text-center">
+    <div className="text-2xl">🛒</div>
+    <h3 className="mt-2 font-semibold text-white">Marketplace</h3>
+    <p className="mt-1 text-xs text-ccweb-muted">Order directly from chat.</p>
+  </div>
+
+  <div className="rounded-2xl border border-cyan-500/20 bg-white/5 p-4 text-center">
+    <div className="text-2xl">📁</div>
+    <h3 className="mt-2 font-semibold text-white">Shared Media</h3>
+    <p className="mt-1 text-xs text-ccweb-muted">Photos and files will appear here.</p>
+  </div>
+</div>
+
           </div>
         ) : (
           <>

@@ -41,6 +41,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
   const [marketSearch, setMarketSearch] = useState("");
   const [marketFilter, setMarketFilter] = useState("all");
   const [selectedListing, setSelectedListing] = useState(null);
+  const [searchParams] = useSearchParams();
   const [showListingForm, setShowListingForm] = useState(false);
   const [newListing, setNewListing] = useState({
     title: "",
@@ -79,6 +80,11 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
       const [o, l, cmp] = await Promise.all([j("/overview"), j("/listings"), j("/campaigns")]);
       setOverview(o);
       setListings(l.listings || []);
+      const listingId = searchParams.get("listing");
+      if (listingId) {
+        const listing = (l.listings || []).find((x) => String(x.id) === listingId);
+        if (listing) setSelectedListing(listing);
+      }
       setCampaigns(cmp.campaigns || []);
       await loadOrders();
       if (user?.id) {

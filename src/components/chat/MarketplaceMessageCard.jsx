@@ -21,7 +21,7 @@ export default function MarketplaceMessageCard({ product }) {
 
       <div className="mt-4 flex gap-2">
         <Link
-          to={`/marketplace/product/${product.id}`}
+          to={`/marketplace?listing=${product.id}`}
           className="flex-1 rounded-xl border border-white/15 py-2 text-center text-sm text-white hover:border-cyan-400"
         >
           View Product

@@ -50,7 +50,6 @@ export function ChatPage() {
   const [chatUploadProgress, setChatUploadProgress] = useState(null);
   const [viewerImage, setViewerImage] = useState(null);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
-  const [marketplacePickerOpen, setMarketplacePickerOpen] = useState(false);
   const [reactionTarget, setReactionTarget] = useState(null);
   const uploadAbortRef = useRef(null);
   const [connectionState, setConnectionState] = useState(() => getRealtimeConnectionState());
@@ -890,14 +889,6 @@ export function ChatPage() {
                 </button>
                 <button
                   type="button"
-                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-white/15 text-cyan-400 hover:bg-white/5"
-                  onClick={() => setMarketplacePickerOpen(true)}
-                  aria-label="Order Product"
-                >
-                  <ShoppingBag className="h-5 w-5" />
-                </button>
-                <button
-                  type="button"
                   className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-white/15 ${showEmoji ? "bg-white/10 text-ccweb-cyan" : "text-ccweb-muted hover:bg-white/5"}`}
                   onClick={() => setShowEmoji((s) => !s)}
                   aria-label="Emoji"
@@ -925,36 +916,7 @@ export function ChatPage() {
           </>
         )}
       </section>
-      {
-marketplacePickerOpen && (
-<>
-<div className="fixed inset-0 z-40 bg-black/70" onClick={() => setMarketplacePickerOpen(false)} />
-<div className="fixed left-1/2 top-1/2 z-50 w-[90%] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-slate-950 p-6 shadow-2xl">
-<h2 className="text-lg font-bold text-white">Marketplace</h2>
-<p className="mt-2 text-sm text-ccweb-muted">
-Marketplace ordering is coming soon.
-</p>
-<div className="mt-6 flex gap-3">
-<button
-type="button"
-className="ccweb-gradient-btn flex-1 py-2"
-onClick={() => window.location.href="/marketplace"}
->
-Browse Marketplace
-</button>
-<button
-type="button"
-className="rounded-xl border border-white/15 px-4 py-2 text-white"
-onClick={() => setMarketplacePickerOpen(false)}
->
-Close
-</button>
-</div>
-</div>
-</>
-)
-}
-<ImageViewerModal src={viewerImage} open={Boolean(viewerImage)} onClose={() => setViewerImage(null)} />
+      <ImageViewerModal src={viewerImage} open={Boolean(viewerImage)} onClose={() => setViewerImage(null)} />
       <NativeMediaPicker
         open={mediaPickerOpen}
         onClose={() => setMediaPickerOpen(false)}

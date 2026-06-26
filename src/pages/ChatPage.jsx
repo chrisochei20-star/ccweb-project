@@ -618,8 +618,10 @@ export function ChatPage() {
       >
         {!activeId ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center text-ccweb-muted">
-            <Circle className="h-10 w-10 opacity-30" />
-            <p className="text-sm">Select a conversation or start a new DM.</p>
+            <Circle className="h-14 w-14 text-cyan-400 opacity-80 mb-4" />
+            <h2 className="text-2xl font-bold text-white">Welcome to CCWEB Chat</h2>
+            <p className="mt-2 text-center text-sm text-ccweb-muted max-w-md">Send secure direct messages, share photos, voice notes, marketplace orders and collaborate with the CCWEB community in real time.</p>
+            <p className="mt-6 text-xs text-ccweb-muted">Start a conversation from the left panel to begin chatting.</p>
           </div>
         ) : (
           <>

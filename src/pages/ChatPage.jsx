@@ -466,7 +466,7 @@ export function ChatPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-8rem)] max-w-5xl flex-col gap-3 px-3 pb-24 pt-3 md:flex-row md:pb-8">
+    <div className="mx-auto flex min-h-[calc(100vh-8rem)] max-w-7xl flex-col gap-3 px-3 pb-24 pt-3 md:flex-row md:pb-8">
       {connectionState !== "connected" && (
         <div className="fixed left-3 right-3 top-16 z-40 flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-950/90 px-3 py-2 text-xs text-amber-100 md:mx-auto md:max-w-md">
           <WifiOff className="h-4 w-4 shrink-0" aria-hidden />
@@ -500,7 +500,7 @@ export function ChatPage() {
 
       <aside
         className={
-          "flex w-full flex-col rounded-2xl border border-white/10 bg-black/30 md:max-w-sm " +
+          "flex w-full flex-col rounded-2xl border border-white/10 bg-black/30 md:max-w-xs " +
           (activeId ? "hidden md:flex" : "flex")
         }
       >

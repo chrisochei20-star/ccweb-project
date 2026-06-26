@@ -1,4 +1,4 @@
-import { Link, useOutletContext } from "react-router-dom";
+import { Link, useOutletContext, useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, ShoppingBag } from "lucide-react";
 import { http } from "./api/http";

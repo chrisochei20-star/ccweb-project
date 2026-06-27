@@ -369,6 +369,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
               onChange={(e) => setMarketFilter(e.target.value)}
             >
               <option value="all">All Categories</option>
+              <option value="favorites">❤️ Favorites</option>
               {["e-commerce","real-estate","services","consulting","saas","local-retail"].map(i => (
                 <option key={i} value={i}>{i}</option>
               ))}
@@ -389,7 +390,7 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
                 const q = (marketSearch || "").toLowerCase();
                 const f = marketFilter || "all";
                 return (!q || l.title?.toLowerCase().includes(q) || l.description?.toLowerCase().includes(q))
-                  && (f === "all" || l.industry === f);
+                  && (f === "all" || (f === "favorites" ? favoriteListings.includes(l.id) : l.industry === f));
               })
               .map((l) => (
               <div

@@ -41,8 +41,28 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
   const [marketSearch, setMarketSearch] = useState("");
   const [marketFilter, setMarketFilter] = useState("all");
   const [selectedListing, setSelectedListing] = useState(null);
+  const [favoriteListings, setFavoriteListings] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("favoriteListings") || "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("favoriteListings", JSON.stringify(favoriteListings));
+  }, [favoriteListings]);
   const [searchParams] = useSearchParams();
   const [showListingForm, setShowListingForm] = useState(false);
+
+  const toggleFavorite = (id) => {
+    setFavoriteListings((prev) =>
+      prev.includes(id)
+        ? prev.filter((x) => x !== id)
+        : [...prev, id]
+    );
+  };
+
   const [newListing, setNewListing] = useState({
     title: "",
     type: "service",
@@ -374,9 +394,16 @@ export function GrowthHubPage({ initialTab = "overview" } = {}) {
               .map((l) => (
               <div
                 key={l.id}
-                className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-transparent transition hover:border-ccweb-cyan/25 hover:shadow-[0_8px_30px_-12px_rgba(34,211,238,0.35)] cursor-pointer"
+                className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-transparent transition hover:border-ccweb-cyan/25 hover:shadow-[0_8px_30px_-12px_rgba(34,211,238,0.35)] cursor-pointer"
                 onClick={() => setSelectedListing(l)}
               >
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); toggleFavorite(l.id); }}
+                  className="absolute right-2 top-2 z-10 rounded-full bg-black/70 px-2 py-1 text-lg"
+                >
+                  {favoriteListings.includes(l.id) ? "❤️" : "🤍"}
+                </button>
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-white/5">
                   {l.imageUrl ? (
                     <img src={l.imageUrl} alt={l.title} className="h-full w-full object-cover" loading="lazy" />

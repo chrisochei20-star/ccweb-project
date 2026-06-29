@@ -9,7 +9,7 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { Suspense, lazy, useEffect, useState } from "react";
-import { GrowthHubPage } from "./GrowthHubPage";
+import GrowthHubPage from "./GrowthHubPage";
 import { MobileLayout } from "./layout/MobileLayout";
 import { ProtectedLayout } from "./layout/ProtectedLayout";
 import { LoginPage, SignupPage } from "./pages/AuthPages";

@@ -60,6 +60,8 @@ const VisualDappBuilderPage = lazy(() =>
 );
 const TokenDetailPage = lazy(() => import("./TokenDetailPage").then((m) => ({ default: m.TokenDetailPage })));
 
+const AiAgentsRedesignPage = lazy(() => import("./AiAgentsRedesignPage"));
+const WorkflowAutomationPage = lazy(() => import("./WorkflowAutomationPage"));
 function RouteFallback() {
   return (
     <div className="mx-auto flex min-h-[50vh] max-w-lg flex-col items-center justify-center gap-5 px-4 py-16">
@@ -115,11 +117,9 @@ function App() {
           <Route path="ai-streaming" element={<AiStreamingPage />} />
           <Route path="early-signals" element={<AiSurfaceErrorBoundary><EarlySignalsDashboard /></AiSurfaceErrorBoundary>} />
           <Route path="token/:slug" element={<TokenDetailPage />} />
-          <Route path="developers" element={<DeveloperPlatformPage />} />
-          <Route path="developers/onboarding" element={<DeveloperOnboardingPage />} />
-          <Route path="dapp-builder" element={<VisualDappBuilderPage />} />
           <Route path="dapp-dashboard" element={<DappDashboardPage />} />
-          <Route path="ai-agents" element={<AiAgentsPage />} />
+          <Route path="ai-agents" element={<AiAgentsRedesignPage />} />
+          <Route path="workflows" element={<WorkflowAutomationPage />} />
           <Route path="growth-hub" element={<GrowthHubPage />} />
           <Route path="pricing" element={<PricingPage />} />
           <Route path="tokens" element={<Navigate to="/earn" replace />} />
@@ -191,7 +191,7 @@ function HomePage() {
         <Link to="/build" className="pillar-card pillar-build">
           <div className="pillar-icon">🏗️</div>
           <h3>BUILD</h3>
-          <p>DApp Builder, AI Agents, Business Automation Hub, and workflow operator system.</p>
+          <p>AI Agents and Workflow Automation — connected to the same APIs you use in production.</p>
           <span className="pillar-link">Start Building →</span>
         </Link>
         <Link to="/marketplace" className="pillar-card pillar-build" style={{ borderStyle: "dashed", opacity: 0.95 }}>

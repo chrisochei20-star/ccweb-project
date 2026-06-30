@@ -256,7 +256,7 @@ function AiStreamingPage() {
     if (normalized === "blockchain") {
       return ["Blockchain Fundamentals", "Smart Contracts", "Web3 Product Development"];
     }
-    if (normalized === "web3") {
+    if (normalized === "blockchain") {
       return ["Web3 Product Development", "Smart Contracts", "Digital Business Systems"];
     }
     if (normalized === "crypto") {
@@ -313,7 +313,7 @@ function AiStreamingPage() {
     if (key === "blockchain") {
       return 5.1;
     }
-    if (key === "web3") {
+    if (key === "blockchain") {
       return 4.9;
     }
     if (key === "crypto") {

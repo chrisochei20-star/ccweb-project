@@ -33,7 +33,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 const MODES = [
   { id: "general", label: "General", icon: BookOpen },
   { id: "startup", label: "Startup", icon: Rocket },
-  { id: "web3", label: "Web3", icon: Globe2 },
+  { id: "blockchain", label: "Blockchain & Digital Finance", icon: Globe2 },
   { id: "proposal", label: "Proposals", icon: Briefcase },
 ];
 

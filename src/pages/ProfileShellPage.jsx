@@ -512,11 +512,6 @@ export function ProfileShellPage() {
             })}
           </ul>
         )}
-        <p className="mt-3 text-xs text-ccweb-muted">
-          {user.walletAddress || user.walletEvm
-            ? `Wallet: ${(user.walletAddress || user.walletEvm).slice(0, 18)}…`
-            : "No wallet linked. Connect via login screen."}
-        </p>
       </section>
 
       <section className="ccweb-glass rounded-2xl p-5">

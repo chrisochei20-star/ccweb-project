@@ -257,7 +257,7 @@ export function ProfileHeader({
         </div>
       </div>
       <CreatorStatsCard social={social} stats={stats} creator={creator} monetization={monetization} isSelf={isSelf} />
-      {(isSelf && user?.walletAddress) || (isSelf && monetization?.subscription?.status) ? (
+      {isSelf && monetization?.subscription?.status ? (
         <div className="border-t border-white/10 bg-black/40 px-4 py-3 text-xs text-ccweb-muted md:px-6">
           {isSelf && monetization?.tier && monetization.tier !== "free" && (
             <p>
@@ -265,7 +265,6 @@ export function ProfileHeader({
               {monetization.subscription?.status ? ` · ${monetization.subscription.status}` : ""}
             </p>
           )}
-          {isSelf && user?.walletAddress && <p className="mt-1 break-all font-mono">Wallet: {user.walletAddress}</p>}
         </div>
       ) : null}
     </section>

@@ -637,57 +637,6 @@ export function FindPage({ initialTab = "scanner" }) {
 
       {tab === "wallets" && (
         <div className="find-wallets-tab">
-          <div className="panel glass-panel find-wallet-scan-panel">
-            <h3>Wallet risk scanner</h3>
-            <p className="muted">
-              Scam-adjacency probabilities, pattern flags, and cluster estimates. Paste any EVM address; example addresses in the API return illustrative patterns for QA.
-            </p>
-            <div className="find-scan-form">
-              <input
-                type="text"
-                value={walletInput}
-                onChange={(e) => setWalletInput(e.target.value)}
-                placeholder="0x wallet address"
-                onKeyDown={(e) => e.key === "Enter" && scanWallet()}
-              />
-              <button type="button" className="btn btn-primary" onClick={scanWallet} disabled={walletLoading}>
-                {walletLoading ? "Scanning…" : "Scan wallet"}
-              </button>
-              <button type="button" className="btn btn-outline" onClick={trackWallet}>
-                Track wallet
-              </button>
-            </div>
-            {walletTrackMsg && <p className="muted small-print">{walletTrackMsg}</p>}
-            {walletErr ? <ApiErrorPanel message={walletErr} onRetry={scanWallet} className="mt-3" /> : null}
-            {walletScan && (
-              <div className="find-wallet-scan-result">
-                <div className="find-scan-header">
-                  <div>
-                    <strong>{walletScan.label}</strong>
-                    <p className="muted find-mono">{walletScan.address}</p>
-                  </div>
-                  <div className={`find-score-badge ${scoreColor(100 - walletScan.walletRiskScore)}`}>
-                    danger {walletScan.walletRiskScore}/100
-                  </div>
-                </div>
-                <p className="muted">
-                  Safety tier: <strong>{walletScan.safetyTier}</strong> · Scam-link probability ~{" "}
-                  {fmtProbPct(walletScan.scamLinkedProbability)}
-                </p>
-                <ul className="find-bullet-list">
-                  {walletScan.suspiciousPatterns?.map((p) => (
-                    <li key={p.type}>
-                      {p.type.replace(/_/g, " ")} — p ≈ {(p.probability * 100).toFixed(0)}%
-                    </li>
-                  ))}
-                </ul>
-                <p className="muted small-print">
-                  Cluster {walletScan.cluster?.id} · ~{walletScan.cluster?.relatedWalletsEstimate} related wallets (estimate)
-                </p>
-                {walletScan.disclaimer && <p className="find-disclaimer inline">{walletScan.disclaimer}</p>}
-              </div>
-            )}
-          </div>
 
           {loadingSm && <p className="muted">Loading smart money panel…</p>}
           {smErr ? <ApiErrorPanel message={smErr} onRetry={loadSmartMoney} className="mb-3" /> : null}

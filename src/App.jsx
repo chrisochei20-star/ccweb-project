@@ -52,12 +52,6 @@ const EarlySignalsDashboard = lazy(() =>
 const DeveloperOnboardingPage = lazy(() =>
   import("./DeveloperOnboardingPage").then((m) => ({ default: m.DeveloperOnboardingPage }))
 );
-const DeveloperPlatformPage = lazy(() =>
-  import("./DeveloperPlatformPage").then((m) => ({ default: m.DeveloperPlatformPage }))
-);
-const VisualDappBuilderPage = lazy(() =>
-  import("./VisualDappBuilderPage").then((m) => ({ default: m.VisualDappBuilderPage }))
-);
 const TokenDetailPage = lazy(() => import("./TokenDetailPage").then((m) => ({ default: m.TokenDetailPage })));
 
 const AiAgentsRedesignPage = lazy(() => import("./AiAgentsRedesignPage"));

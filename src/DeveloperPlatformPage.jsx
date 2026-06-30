@@ -297,7 +297,7 @@ export function DeveloperPlatformPage() {
           </a>{" "}
           · Sandbox: <code className="text-ccweb-cyan">POST /api/developer/sandbox/echo</code>,{" "}
           <code className="text-ccweb-cyan">POST /api/developer/sandbox/workflow</code> ·{" "}
-          <Link to="/dapp-builder" className="text-ccweb-cyan underline">
+          <Link to="/workflows" className="text-ccweb-cyan underline">
             DApp builder UI
           </Link>{" "}
           ·{" "}

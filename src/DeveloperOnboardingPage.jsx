@@ -400,8 +400,8 @@ export function DeveloperOnboardingPage() {
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {pathChoice === "dapp" && (
-                <Link to="/dapp-builder" className="rounded-xl bg-ccweb-green/90 px-4 py-2 text-sm font-semibold text-[#061329]">
-                  Open DApp builder
+                <Link to="/workflows" className="rounded-xl bg-ccweb-green/90 px-4 py-2 text-sm font-semibold text-[#061329]">
+                  Open Workflow Automation
                 </Link>
               )}
               {pathChoice === "agent" && (

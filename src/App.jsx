@@ -1495,7 +1495,7 @@ function DappDashboardPage() {
         <h1 className="section-title">Deployment Dashboard</h1>
         <p className="muted">View deployed DApps, transaction history, and track deployment status.</p>
         <div style={{ marginTop: "0.8rem", display: "flex", gap: "0.6rem" }}>
-          <Link to="/dapp-builder" className="btn btn-primary btn-sm">Deploy New DApp</Link>
+          <Link to="/workflows" className="btn btn-primary btn-sm">Open Workflow Automation</Link>
           <button className="btn btn-outline btn-sm" onClick={loadAll}>Refresh</button>
         </div>
       </header>
@@ -1607,7 +1607,7 @@ function DappDashboardPage() {
           {deployments.length === 0 ? (
             <div className="panel" style={{ textAlign: "center", padding: "2rem" }}>
               <p className="muted">No deployments yet.</p>
-              <Link to="/dapp-builder" className="btn btn-primary">Deploy Your First DApp</Link>
+              <Link to="/workflows" className="btn btn-primary">Open Workflow Automation</Link>
             </div>
           ) : (
             <div className="dash-deploy-table">

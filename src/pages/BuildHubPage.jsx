@@ -14,11 +14,11 @@ export function BuildHubPage() {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Link
-          to="/dapp-builder"
+          to="/workflows"
           className="ccweb-glass group flex flex-col rounded-2xl p-5 transition hover:border-ccweb-cyan/45"
         >
           <LayoutDashboard className="h-8 w-8 text-ccweb-cyan" />
-          <h2 className="mt-3 text-lg font-semibold text-white">DApp Builder</h2>
+          <h2 className="mt-3 text-lg font-semibold text-white">Workflow Automation</h2>
           <p className="mt-1 text-sm text-ccweb-muted">Drag-and-drop canvas, templates, deploy flow.</p>
           <span className="mt-4 text-sm font-medium text-ccweb-cyan group-hover:underline">Open builder →</span>
         </Link>

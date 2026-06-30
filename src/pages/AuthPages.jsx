@@ -1,7 +1,6 @@
-import { Wallet } from "lucide-react";
+
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
-import { BrowserProvider, getAddress } from "ethers";
 import { setSession } from "../session";
 import { CcwebBrandMark } from "../components/brand/CcwebBrandMark";
 import { apiUrl, getApiBaseUrl } from "../config/env";
@@ -248,60 +247,7 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
     } finally {
       setLoading(false);
     }
-  }
 
-  async function connectWallet() {
-    setError(null);
-    if (!window.ethereum) {
-      setError("MetaMask or another injected wallet is required.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const provider = new BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const address = await signer.getAddress();
-      const nonceRes = await apiFetch(
-        apiUrl("/api/auth/wallet/nonce"),
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ address }),
-        },
-        { networkRetries: 2 }
-      );
-      const nonceJson = await nonceRes.json();
-      if (!nonceRes.ok) throw new Error(nonceJson.error || "Nonce failed");
-      const { message } = nonceJson;
-      const signature = await signer.signMessage(message);
-      const verifyRes = await apiFetch(
-        apiUrl("/api/auth/wallet/connect"),
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            address: getAddress(address),
-            message,
-            signature,
-            chainType: "evm",
-            referralCode: refFromUrl || undefined,
-            utm_source: utmSource || undefined,
-          }),
-        },
-        { networkRetries: 2 }
-      );
-      const data = await verifyRes.json();
-      if (!verifyRes.ok) throw new Error(data.error || "Wallet verification failed");
-      const access = data.accessToken || data.token;
-      setSession(access, data.user, data.refreshToken);
-      setUser(data.user);
-      navigate("/", { replace: true });
-    } catch (e) {
-      setError(e.shortMessage || mapNetworkError(e));
-    } finally {
-      setLoading(false);
-    }
   }
 
   const nativeAuth = isCapacitorNative();
@@ -384,10 +330,6 @@ function AuthPage({ mode, title, subtitle, action, prompt, promptHref, promptLab
               </p>
             )}
 
-            <button type="button" className="mt-6 flex w-full items-center justify-center gap-2 ccweb-outline-btn" disabled={loading} onClick={connectWallet}>
-              <Wallet className="h-4 w-4 shrink-0" aria-hidden />
-              Connect MetaMask
-            </button>
 
             <p className="mt-8 text-center text-sm text-ccweb-muted">
               {prompt}{" "}

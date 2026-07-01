@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 
 const MOCK_SELLERS = {
   "ochei-christian": { id: "ochei-christian", name: "Ochei Christian", avatar: null, initials: "OC", verified: true, rating: 4.8, reviewCount: 124, totalListings: 18, totalSales: 312, memberSince: "Jan 2024", bio: "Web3 educator, digital marketer & community builder. Helping you earn and learn in the decentralized economy.", location: "Lagos, Nigeria", responseTime: "< 2 hrs", categories: ["Services", "E-Commerce", "Crypto"] },

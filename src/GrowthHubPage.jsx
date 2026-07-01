@@ -69,6 +69,7 @@ const SellerProfileModal = ({ sellerId, onClose, onViewListings }) => {
   const listings = MOCK_LISTINGS.filter((l) => l.sellerId === sellerId);
   const [contacted, setContacted] = useState(false);
   if (!seller) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-[#0f1117] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -138,6 +139,7 @@ const ListingCard = ({ listing, onSellerClick, liked, onLike }) => {
   const seller = MOCK_SELLERS[listing.sellerId];
   const [escrowOpen, setEscrowOpen] = useState(false);
   const [purchased, setPurchased] = useState(false);
+
   return (
     <>
       <div className="bg-[#0f1117] border border-white/8 rounded-2xl overflow-hidden hover:border-blue-500/30 transition-all group">
@@ -233,6 +235,7 @@ const EscrowTab = () => (
 
 const CampaignsTab = () => {
   const [creating, setCreating] = useState(false);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -307,6 +310,10 @@ const WalletDashboard = ({ onClose }) => {
     setBalance((b) => ({ ...b }));
   }, []);
 
+  const handleWalletConfirm = async () => {
+    setStep("done");
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-[#0a0c12] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -375,7 +382,7 @@ const WalletDashboard = ({ onClose }) => {
               </div>
               <div className="flex gap-3">
                 <button onClick={() => setStep("form")} className="flex-1 py-3 rounded-xl border border-white/20 text-white/60 text-sm">Back</button>
-                <button onClick={() => setStep("done")} className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-semibold">Confirm</button>
+                <button onClick={handleWalletConfirm} className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-semibold">Confirm</button>
               </div>
             </div>
           )}
@@ -424,6 +431,7 @@ export default function GrowthHubPage() {
     setLikedIds((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   }, []);
   const tabs = [{ id: "overview", label: "Overview" }, { id: "marketplace", label: "Marketplace" }, { id: "escrow", label: "Escrow" }, { id: "campaigns", label: "Campaigns" }, { id: "leads", label: "Leads" }];
+
   return (
     <div className="min-h-screen bg-[#080a10] text-white">
       <div className="px-4 pt-5 pb-2">

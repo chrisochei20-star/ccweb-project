@@ -54,6 +54,7 @@ export function ProfileShellPage() {
   const user = storeUser || shellUser;
 
   const [editOpen, setEditOpen] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [location, setLocation] = useState("");
@@ -424,6 +425,7 @@ export function ProfileShellPage() {
         <button
           type="button"
           className="ccweb-glass flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-500/30 px-4 py-3 text-white hover:border-blue-400/50"
+            onClick={() => setWalletOpen(true)}
         >
           <Wallet className="h-5 w-5 text-ccweb-green" />
           <span>My Wallet</span>
@@ -550,13 +552,6 @@ export function ProfileShellPage() {
               onChange={(e) => setTotpCode(e.target.value)}
             />
 
-        <button
-          type="button"
-          className="ccweb-glass flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-500/30 px-4 py-3 text-white hover:border-blue-400/50"
-        >
-          <Wallet className="h-5 w-5 text-ccweb-green" />
-          <span>My Wallet</span>
-        </button>
 
             <button type="button" className="ccweb-gradient-btn min-h-[44px] text-sm" onClick={confirmTotp}>
               Confirm &amp; enable
@@ -620,13 +615,6 @@ export function ProfileShellPage() {
               onChange={(e) => setBetaSlug(e.target.value)}
             />
 
-        <button
-          type="button"
-          className="ccweb-glass flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-500/30 px-4 py-3 text-white hover:border-blue-400/50"
-        >
-          <Wallet className="h-5 w-5 text-ccweb-green" />
-          <span>My Wallet</span>
-        </button>
 
             <p className="mt-1 text-[11px] text-ccweb-muted">Becomes /u/your-slug</p>
           </div>
@@ -640,13 +628,6 @@ export function ProfileShellPage() {
                 onChange={(e) => setSocialLinkLabel(e.target.value)}
               />
 
-        <button
-          type="button"
-          className="ccweb-glass flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-500/30 px-4 py-3 text-white hover:border-blue-400/50"
-        >
-          <Wallet className="h-5 w-5 text-ccweb-green" />
-          <span>My Wallet</span>
-        </button>
 
               <input
                 className="ccweb-input sm:flex-[2]"
@@ -655,13 +636,6 @@ export function ProfileShellPage() {
                 onChange={(e) => setSocialLinkUrl(e.target.value)}
               />
 
-        <button
-          type="button"
-          className="ccweb-glass flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-500/30 px-4 py-3 text-white hover:border-blue-400/50"
-        >
-          <Wallet className="h-5 w-5 text-ccweb-green" />
-          <span>My Wallet</span>
-        </button>
 
             </div>
             {socialLinks.length > 0 && (
@@ -693,13 +667,6 @@ export function ProfileShellPage() {
                 onChange={(e) => setWhatsappHandle(e.target.value)}
               />
 
-        <button
-          type="button"
-          className="ccweb-glass flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-500/30 px-4 py-3 text-white hover:border-blue-400/50"
-        >
-          <Wallet className="h-5 w-5 text-ccweb-green" />
-          <span>My Wallet</span>
-        </button>
 
             </div>
             <div className="flex items-center gap-3">
@@ -711,13 +678,6 @@ export function ProfileShellPage() {
                 onChange={(e) => setTwitterHandle(e.target.value)}
               />
 
-        <button
-          type="button"
-          className="ccweb-glass flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-500/30 px-4 py-3 text-white hover:border-blue-400/50"
-        >
-          <Wallet className="h-5 w-5 text-ccweb-green" />
-          <span>My Wallet</span>
-        </button>
 
             </div>
             <p className="text-[10px] text-ccweb-muted">These appear as connect buttons on your public profile.</p>

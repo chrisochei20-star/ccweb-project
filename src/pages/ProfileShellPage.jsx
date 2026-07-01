@@ -425,7 +425,7 @@ export function ProfileShellPage() {
         <button
           type="button"
           className="ccweb-glass flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-500/30 px-4 py-3 text-white hover:border-blue-400/50"
-            onClick={() => setWalletOpen(true)}
+            onClick={() => navigate("/growth-hub")}
         >
           <Wallet className="h-5 w-5 text-ccweb-green" />
           <span>My Wallet</span>

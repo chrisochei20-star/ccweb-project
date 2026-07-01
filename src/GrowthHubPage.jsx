@@ -303,6 +303,7 @@ const WalletDashboard = ({ onClose }) => {
   const [tab, setTab] = useState("overview");
   const [depositAmount, setDepositAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("Bank Transfer");
   const [step, setStep] = useState("form");
   const [action, setAction] = useState(null);
   const [balance, setBalance] = useState({ ngn: 13800, usdt: 12.4 });
@@ -311,7 +312,16 @@ const WalletDashboard = ({ onClose }) => {
   }, []);
 
   const handleWalletConfirm = async () => {
-    setStep("done");
+    try {
+      await http.post(action === "deposit" ? "/api/wallet/deposit" : "/api/wallet/withdraw", {
+        amount: Number(action === "deposit" ? depositAmount : withdrawAmount),
+        method: paymentMethod,
+      });
+      setStep("done");
+    } catch (err) {
+      console.error(err);
+      alert("Wallet request failed.");
+    }
   };
 
   return (
@@ -356,7 +366,7 @@ const WalletDashboard = ({ onClose }) => {
               </div>
               <div>
                 <label className="text-white/50 text-xs mb-1.5 block">Payment Method</label>
-                <div className="space-y-2">{["Bank Transfer", "USDT (TRC-20)", "Card Payment"].map((m) => <label key={m} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3 cursor-pointer hover:border-blue-500/30 transition-all"><input type="radio" name="method" className="accent-blue-500" defaultChecked={m === "Bank Transfer"} /><span className="text-white/70 text-sm">{m}</span></label>)}</div>
+                <div className="space-y-2">{["Bank Transfer", "USDT (TRC-20)", "Card Payment"].map((m) => <label key={m} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3 cursor-pointer hover:border-blue-500/30 transition-all"><input type="radio" name="method" className="accent-blue-500" checked={paymentMethod === m} onChange={() => setPaymentMethod(m)} /><span className="text-white/70 text-sm">{m}</span></label>)}</div>
               </div>
               <button onClick={() => { setAction("deposit"); setStep("confirm"); }} className="w-full py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white font-semibold transition-all">Deposit ₦{depositAmount || "0"}</button>
             </div>

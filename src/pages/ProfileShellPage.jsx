@@ -435,49 +435,6 @@ export function ProfileShellPage() {
       <ProfileTabs active={activeTab} onChange={setActiveTab} isSelf sticky />
       <ProfileFeedList tab={activeTab} items={feedItems} loading={feedLoading} error={feedError} onRetry={loadFeed} />
 
-      {/* Social Connect section — WhatsApp / X links */}
-      {(user.socialLinks?.length > 0) && (
-        <section className="ccweb-glass rounded-2xl p-5">
-          <h2 className="mb-3 text-sm font-semibold text-white">Connect</h2>
-          <div className="flex flex-wrap gap-2">
-            {user.socialLinks.map((l, i) => {
-              const isWa = /whatsapp/i.test(l.label);
-              const isTw = /twitter|x\.com/i.test(l.label);
-              return (
-                <a
-                  key={i}
-                  href={l.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white hover:border-ccweb-cyan/40 transition"
-                >
-                  {isWa && <span className="text-[#25D366]">📱</span>}
-                  {isTw && <span className="text-[#1DA1F2]">X</span>}
-                  {!isWa && !isTw && <ExternalLink className="h-3.5 w-3.5 text-ccweb-muted" />}
-                  {l.label}
-                </a>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* DM Button — send direct message to yourself (placeholder for public profile) */}
-      <section className="ccweb-glass rounded-2xl p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="font-semibold text-white">Direct Messages</h2>
-            <p className="mt-0.5 text-xs text-ccweb-muted">Chat privately with connections on CCWeb.</p>
-          </div>
-          <Link
-            to="/messages"
-            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-ccweb-cyan to-ccweb-violet px-4 py-2.5 text-sm font-semibold text-[#061329]"
-          >
-            <MessageSquare className="h-4 w-4" />
-            Messages
-          </Link>
-        </div>
-      </section>
 
       {/* Payment / Transaction Dashboard */}
       <section className="ccweb-glass rounded-2xl p-5">

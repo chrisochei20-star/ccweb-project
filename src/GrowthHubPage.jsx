@@ -300,7 +300,11 @@ const WalletDashboard = ({ onClose }) => {
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [step, setStep] = useState("form");
   const [action, setAction] = useState(null);
-  const balance = { ngn: 13800, usdt: 12.4 };
+  const [balance, setBalance] = useState({ ngn: 13800, usdt: 12.4 });
+  useEffect(() => {
+    setBalance((b) => ({ ...b }));
+  }, []);
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-[#0a0c12] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>

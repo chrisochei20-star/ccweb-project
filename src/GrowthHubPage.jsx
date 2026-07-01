@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { http } from "./api/http";
 import { useEffect } from "react";
 
 const MOCK_SELLERS = {

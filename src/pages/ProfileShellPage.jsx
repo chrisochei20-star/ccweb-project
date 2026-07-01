@@ -421,6 +421,15 @@ export function ProfileShellPage() {
         }}
       />
 
+        <button
+          type="button"
+          className="ccweb-glass flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-500/30 px-4 py-3 text-white hover:border-blue-400/50"
+        >
+          <Wallet className="h-5 w-5 text-ccweb-green" />
+          <span>My Wallet</span>
+        </button>
+
+
       <ProfileTabs active={activeTab} onChange={setActiveTab} isSelf sticky />
       <ProfileFeedList tab={activeTab} items={feedItems} loading={feedLoading} error={feedError} onRetry={loadFeed} />
 
@@ -540,6 +549,15 @@ export function ProfileShellPage() {
               value={totpCode}
               onChange={(e) => setTotpCode(e.target.value)}
             />
+
+        <button
+          type="button"
+          className="ccweb-glass flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-500/30 px-4 py-3 text-white hover:border-blue-400/50"
+        >
+          <Wallet className="h-5 w-5 text-ccweb-green" />
+          <span>My Wallet</span>
+        </button>
+
             <button type="button" className="ccweb-gradient-btn min-h-[44px] text-sm" onClick={confirmTotp}>
               Confirm &amp; enable
             </button>
@@ -601,6 +619,15 @@ export function ProfileShellPage() {
               value={betaSlug}
               onChange={(e) => setBetaSlug(e.target.value)}
             />
+
+        <button
+          type="button"
+          className="ccweb-glass flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-500/30 px-4 py-3 text-white hover:border-blue-400/50"
+        >
+          <Wallet className="h-5 w-5 text-ccweb-green" />
+          <span>My Wallet</span>
+        </button>
+
             <p className="mt-1 text-[11px] text-ccweb-muted">Becomes /u/your-slug</p>
           </div>
           <div>
@@ -612,12 +639,30 @@ export function ProfileShellPage() {
                 value={socialLinkLabel}
                 onChange={(e) => setSocialLinkLabel(e.target.value)}
               />
+
+        <button
+          type="button"
+          className="ccweb-glass flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-500/30 px-4 py-3 text-white hover:border-blue-400/50"
+        >
+          <Wallet className="h-5 w-5 text-ccweb-green" />
+          <span>My Wallet</span>
+        </button>
+
               <input
                 className="ccweb-input sm:flex-[2]"
                 placeholder="https://…"
                 value={socialLinkUrl}
                 onChange={(e) => setSocialLinkUrl(e.target.value)}
               />
+
+        <button
+          type="button"
+          className="ccweb-glass flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-500/30 px-4 py-3 text-white hover:border-blue-400/50"
+        >
+          <Wallet className="h-5 w-5 text-ccweb-green" />
+          <span>My Wallet</span>
+        </button>
+
             </div>
             {socialLinks.length > 0 && (
               <ul className="mt-2 space-y-1 text-xs text-ccweb-muted">
@@ -647,6 +692,15 @@ export function ProfileShellPage() {
                 value={whatsappHandle}
                 onChange={(e) => setWhatsappHandle(e.target.value)}
               />
+
+        <button
+          type="button"
+          className="ccweb-glass flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-500/30 px-4 py-3 text-white hover:border-blue-400/50"
+        >
+          <Wallet className="h-5 w-5 text-ccweb-green" />
+          <span>My Wallet</span>
+        </button>
+
             </div>
             <div className="flex items-center gap-3">
               <span className="text-lg text-[#1DA1F2]">X</span>
@@ -656,6 +710,15 @@ export function ProfileShellPage() {
                 value={twitterHandle}
                 onChange={(e) => setTwitterHandle(e.target.value)}
               />
+
+        <button
+          type="button"
+          className="ccweb-glass flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-500/30 px-4 py-3 text-white hover:border-blue-400/50"
+        >
+          <Wallet className="h-5 w-5 text-ccweb-green" />
+          <span>My Wallet</span>
+        </button>
+
             </div>
             <p className="text-[10px] text-ccweb-muted">These appear as connect buttons on your public profile.</p>
           </div>

@@ -319,7 +319,7 @@ useEffect(() => {
 }, []);
   const handleWalletConfirm = async () => {
     try {
-      await http.post(action === "deposit" ? "/api/wallet/deposit" : "/api/wallet/withdraw", {
+      await http.post(action === "deposit" ? "/wallet/deposit" : "/wallet/withdraw", {
         amount: Number(action === "deposit" ? depositAmount : withdrawAmount),
         method: paymentMethod,
       });

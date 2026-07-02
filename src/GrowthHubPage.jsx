@@ -312,10 +312,10 @@ const [transactions, setTransactions] = useState([]);
 useEffect(() => {
   http.get("/wallet/balance")
     .then((res) => setBalance(res.data))
-    .catch(console.error);
+    .catch((err) => {  console.error("Wallet balance error:", err);  alert(`Wallet balance error: ${err.message}`);});
   http.get("/wallet/transactions")
     .then((res) => setTransactions(res.data))
-    .catch(console.error);
+    .catch((err) => {  console.error("Wallet balance error:", err);  alert(`Wallet balance error: ${err.message}`);});
 }, []);
   const handleWalletConfirm = async () => {
     try {

@@ -308,10 +308,13 @@ const WalletDashboard = ({ onClose }) => {
   const [action, setAction] = useState(null);
 
 const [balance, setBalance] = useState({ ngn: 13800, usdt: 12.4 });
-
+const [transactions, setTransactions] = useState([]);
 useEffect(() => {
   http.get("/wallet/balance")
     .then((res) => setBalance(res.data))
+    .catch(console.error);
+  http.get("/wallet/transactions")
+    .then((res) => setTransactions(res.data))
     .catch(console.error);
 }, []);
   const handleWalletConfirm = async () => {

@@ -340,7 +340,7 @@ useEffect(() => {
         <div className="px-6 py-5">
           <div className="bg-gradient-to-br from-blue-600/30 to-purple-600/20 border border-blue-500/20 rounded-2xl p-5">
             <p className="text-white/50 text-xs mb-1">Total Balance</p>
-            <p className="text-white font-bold text-3xl">₦{balance.ngn.toLocaleString()}</p>
+            <p className="text-white font-bold text-3xl">₦{Number(balance?.ngn ?? 0).toLocaleString()}</p>
             <p className="text-white/40 text-sm mt-0.5">≈ {balance.usdt} USDT</p>
             <div className="flex gap-2 mt-4">
               <button onClick={() => { setTab("deposit"); setStep("form"); }} className="flex-1 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-sm font-semibold transition-all">⬇ Deposit</button>
@@ -379,7 +379,7 @@ useEffect(() => {
           )}
           {tab === "withdraw" && step === "form" && (
             <div className="space-y-4">
-              <div className="bg-white/5 rounded-xl p-3 flex justify-between text-sm"><span className="text-white/50">Available</span><span className="text-green-400 font-bold">₦{balance.ngn.toLocaleString()}</span></div>
+              <div className="bg-white/5 rounded-xl p-3 flex justify-between text-sm"><span className="text-white/50">Available</span><span className="text-green-400 font-bold">₦{Number(balance?.ngn ?? 0).toLocaleString()}</span></div>
               <div>
                 <label className="text-white/50 text-xs mb-1.5 block">Amount (₦)</label>
                 <input value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white text-lg font-bold placeholder-white/20 outline-none focus:border-blue-500/50" placeholder="0.00" type="number" />

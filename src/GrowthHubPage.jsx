@@ -341,7 +341,7 @@ useEffect(() => {
           <div className="bg-gradient-to-br from-blue-600/30 to-purple-600/20 border border-blue-500/20 rounded-2xl p-5">
             <p className="text-white/50 text-xs mb-1">Total Balance</p>
             <p className="text-white font-bold text-3xl">₦{Number(balance?.ngn ?? 0).toLocaleString()}</p>
-            <p className="text-white/40 text-sm mt-0.5">≈ {balance.usdt} USDT</p>
+            <p className="text-white/40 text-sm mt-0.5">≈ {Number(balance?.usdt ?? 0).toFixed(2)} USDT</p>
             <div className="flex gap-2 mt-4">
               <button onClick={() => { setTab("deposit"); setStep("form"); }} className="flex-1 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-sm font-semibold transition-all">⬇ Deposit</button>
               <button onClick={() => { setTab("withdraw"); setStep("form"); }} className="flex-1 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-sm font-semibold transition-all">⬆ Withdraw</button>

@@ -210,7 +210,88 @@ function createGrowthApp() {
       res.status(500).json({ error: e.message || "Server error" });
     }
   });
+// Wallet API
+const walletStore = new Map();
 
+app.get("/wallet/balance", (req, res) => {
+  const uid = requireUser(req, res);
+  if (!uid) return;
+
+  const wallet = walletStore.get(uid) || {
+    ngn: 13800,
+    usdt: 12.4,
+    transactions: [],
+  };
+
+  res.json(wallet);
+});
+
+app.get("/wallet/transactions", (req, res) => {
+  const uid = requireUser(req, res);
+  if (!uid) return;
+
+  const wallet = walletStore.get(uid) || {
+    ngn: 13800,
+    usdt: 12.4,
+    transactions: [],
+  };
+
+  res.json(wallet.transactions);
+});
+
+app.post("/wallet/deposit", (req, res) => {
+  const uid = requireUser(req, res);
+  if (!uid) return;
+
+  const amount = Number(req.body.amount || 0);
+
+  const wallet = walletStore.get(uid) || {
+    ngn: 13800,
+    usdt: 12.4,
+    transactions: [],
+  };
+
+  wallet.ngn += amount;
+  wallet.transactions.unshift({
+    type: "deposit",
+    amount,
+    status: "completed",
+    createdAt: new Date().toISOString(),
+  });
+
+  walletStore.set(uid, wallet);
+  res.json(wallet);
+});
+
+app.post("/wallet/withdraw", (req, res) => {
+  const uid = requireUser(req, res);
+  if (!uid) return;
+
+  const amount = Number(req.body.amount || 0);
+
+  const wallet = walletStore.get(uid) || {
+    ngn: 13800,
+    usdt: 12.4,
+    transactions: [],
+  };
+
+  if (wallet.ngn < amount) {
+    return res.status(400).json({
+      error: "Insufficient balance",
+    });
+  }
+
+  wallet.ngn -= amount;
+  wallet.transactions.unshift({
+    type: "withdraw",
+    amount,
+    status: "completed",
+    createdAt: new Date().toISOString(),
+  });
+
+  walletStore.set(uid, wallet);
+  res.json(wallet);
+});
   app.use((req, res) => {
     res.status(404).json({ error: "Growth hub route not found", path: req.originalUrl || req.url });
   });

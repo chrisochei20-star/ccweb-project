@@ -297,7 +297,7 @@ const LeadsTab = () => (
       ))}
     </div>
   </div>
-);
+)
 
 const WalletDashboard = ({ onClose }) => {
   const [tab, setTab] = useState("overview");
@@ -306,11 +306,14 @@ const WalletDashboard = ({ onClose }) => {
   const [paymentMethod, setPaymentMethod] = useState("Bank Transfer");
   const [step, setStep] = useState("form");
   const [action, setAction] = useState(null);
-  const [balance, setBalance] = useState({ ngn: 13800, usdt: 12.4 });
-  useEffect(() => {
-    setBalance((b) => ({ ...b }));
-  }, []);
 
+const [balance, setBalance] = useState({ ngn: 13800, usdt: 12.4 });
+
+useEffect(() => {
+  http.get("/wallet/balance")
+    .then((res) => setBalance(res.data))
+    .catch(console.error);
+}, []);
   const handleWalletConfirm = async () => {
     try {
       await http.post(action === "deposit" ? "/api/wallet/deposit" : "/api/wallet/withdraw", {

@@ -257,7 +257,7 @@ app.get("/wallet/balance", (req, res) => {
     transactions: [],
   };
 
-  res.json(wallet);
+  const NGN_PER_USDT = 1500;res.json({  ...wallet,  usdt: Number((wallet.ngn / NGN_PER_USDT).toFixed(2)),  rate: NGN_PER_USDT,});
 });
 
 app.get("/wallet/transactions", (req, res) => {
@@ -293,7 +293,7 @@ app.post("/wallet/deposit", (req, res) => {
 });
 
   walletStore.set(uid, wallet);
-  res.json(wallet);
+  const NGN_PER_USDT = 1500;res.json({  ...wallet,  usdt: Number((wallet.ngn / NGN_PER_USDT).toFixed(2)),  rate: NGN_PER_USDT,});
 });
 
 app.post("/wallet/withdraw", (req, res) => {
@@ -323,7 +323,7 @@ recordWalletTransaction(uid, {
 });
 
   walletStore.set(uid, wallet);
-  res.json(wallet);
+  const NGN_PER_USDT = 1500;res.json({  ...wallet,  usdt: Number((wallet.ngn / NGN_PER_USDT).toFixed(2)),  rate: NGN_PER_USDT,});
 });
   app.use((req, res) => {
     res.status(404).json({ error: "Growth hub route not found", path: req.originalUrl || req.url });

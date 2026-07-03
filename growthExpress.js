@@ -213,6 +213,20 @@ function createGrowthApp() {
 // Wallet API
 const walletStore = new Map();
 
+function recordWalletTransaction(uid, transaction) {
+  const wallet = walletStore.get(uid) || {
+    ngn: 13800,
+    usdt: 12.4,
+    transactions: [],
+  };
+
+  wallet.transactions.unshift({
+    ...transaction,
+    createdAt: new Date().toISOString(),
+  });
+
+  walletStore.set(uid, wallet);
+}
 app.get("/wallet/balance", (req, res) => {
   const uid = requireUser(req, res);
   if (!uid) return;
@@ -252,12 +266,11 @@ app.post("/wallet/deposit", (req, res) => {
   };
 
   wallet.ngn += amount;
-  wallet.transactions.unshift({
-    type: "deposit",
-    amount,
-    status: "completed",
-    createdAt: new Date().toISOString(),
-  });
+  recordWalletTransaction(uid, {
+  type: "deposit",
+  amount,
+  status: "completed",
+});
 
   walletStore.set(uid, wallet);
   res.json(wallet);
@@ -282,12 +295,12 @@ app.post("/wallet/withdraw", (req, res) => {
   }
 
   wallet.ngn -= amount;
-  wallet.transactions.unshift({
-    type: "withdraw",
-    amount,
-    status: "completed",
-    createdAt: new Date().toISOString(),
-  });
+
+recordWalletTransaction(uid, {
+  type: "withdraw",
+  amount,
+  status: "completed",
+});
 
   walletStore.set(uid, wallet);
   res.json(wallet);

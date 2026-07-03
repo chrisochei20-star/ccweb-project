@@ -27,6 +27,31 @@ function requireUser(req, res) {
   return uid;
 }
 
+let cachedRate = 1500;
+let lastRateUpdate = 0;
+
+async function getUsdtRate() {
+  if (Date.now() - lastRateUpdate < 5 * 60 * 1000) {
+    return cachedRate;
+  }
+
+  try {
+    const response = await fetch(
+      "https://api.binance.com/api/v3/ticker/price?symbol=USDTNGN"
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      cachedRate = Number(data.price);
+      lastRateUpdate = Date.now();
+    }
+  } catch (e) {
+    console.error("Unable to update USDT rate:", e.message);
+  }
+
+  return cachedRate;
+}
+
 function createGrowthApp() {
   const app = express();
   applyExpressSecurity(app);
@@ -247,7 +272,7 @@ function recordWalletTransaction(uid, transaction) {
 
   walletStore.set(uid, wallet);
 }
-app.get("/wallet/balance", (req, res) => {
+app.get("/wallet/balance", async (req, res) => {
   const uid = requireUser(req, res);
   if (!uid) return;
 
@@ -257,7 +282,7 @@ app.get("/wallet/balance", (req, res) => {
     transactions: [],
   };
 
-  const NGN_PER_USDT = 1500;res.json({  ...wallet,  usdt: Number((wallet.ngn / NGN_PER_USDT).toFixed(2)),  rate: NGN_PER_USDT,});
+  const NGN_PER_USDT = await getUsdtRate();res.json({  ...wallet,  usdt: Number((wallet.ngn / NGN_PER_USDT).toFixed(2)),  rate: NGN_PER_USDT,});
 });
 
 app.get("/wallet/transactions", (req, res) => {
@@ -273,7 +298,7 @@ app.get("/wallet/transactions", (req, res) => {
   res.json(wallet.transactions);
 });
 
-app.post("/wallet/deposit", (req, res) => {
+app.post("/wallet/deposit", async (req, res) => {
   const uid = requireUser(req, res);
   if (!uid) return;
 
@@ -293,10 +318,10 @@ app.post("/wallet/deposit", (req, res) => {
 });
 
   walletStore.set(uid, wallet);
-  const NGN_PER_USDT = 1500;res.json({  ...wallet,  usdt: Number((wallet.ngn / NGN_PER_USDT).toFixed(2)),  rate: NGN_PER_USDT,});
+  const NGN_PER_USDT = await getUsdtRate();res.json({  ...wallet,  usdt: Number((wallet.ngn / NGN_PER_USDT).toFixed(2)),  rate: NGN_PER_USDT,});
 });
 
-app.post("/wallet/withdraw", (req, res) => {
+app.post("/wallet/withdraw", async (req, res) => {
   const uid = requireUser(req, res);
   if (!uid) return;
 
@@ -323,7 +348,7 @@ recordWalletTransaction(uid, {
 });
 
   walletStore.set(uid, wallet);
-  const NGN_PER_USDT = 1500;res.json({  ...wallet,  usdt: Number((wallet.ngn / NGN_PER_USDT).toFixed(2)),  rate: NGN_PER_USDT,});
+  const NGN_PER_USDT = await getUsdtRate();res.json({  ...wallet,  usdt: Number((wallet.ngn / NGN_PER_USDT).toFixed(2)),  rate: NGN_PER_USDT,});
 });
   app.use((req, res) => {
     res.status(404).json({ error: "Growth hub route not found", path: req.originalUrl || req.url });

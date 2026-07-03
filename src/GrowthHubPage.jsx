@@ -310,21 +310,19 @@ const WalletDashboard = ({ onClose }) => {
   const [balance, setBalance] = useState({ ngn: 13800, usdt: 12.4 });
   const [transactions, setTransactions] = useState([]);
 
-  useEffect(() => {
-    http.get("/api/growth/wallet/balance")
-      .then((res) => setBalance(res.data))
-      .catch((err) => {
-        console.error("Wallet balance error:", err);
-        alert(`Wallet balance error: ${err.message}`);
-      });
+  const loadWallet = async () => {
+  const [balanceRes, txRes] = await Promise.all([
+    http.get("/api/growth/wallet/balance"),
+    http.get("/api/growth/wallet/transactions"),
+  ]);
 
-    http.get("/api/growth/wallet/transactions")
-      .then((res) => setTransactions(res.data))
-      .catch((err) => {
-        console.error("Wallet balance error:", err);
-        alert(`Wallet balance error: ${err.message}`);
-      });
-  }, []);
+  setBalance(balanceRes.data);
+  setTransactions(txRes.data);
+};
+
+useEffect(() => {
+  loadWallet().catch(console.error);
+}, []);
 
   const handleWalletConfirm = async () => {
     try {
@@ -337,6 +335,7 @@ const WalletDashboard = ({ onClose }) => {
           method: paymentMethod,
         }
       );
+      await loadWallet();
       setStep("done");
     } catch (err) {
       console.error(err);

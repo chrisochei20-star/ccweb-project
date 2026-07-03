@@ -117,7 +117,7 @@ export function HomeFeedSection({ user }) {
       {/* Stories row */}
       <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1">
         <Link
-          to="/community"
+          to={user?.id ? `/u/${user.id}` : "/profile"}
           className="flex min-w-[4.5rem] shrink-0 snap-start flex-col items-center gap-1.5"
         >
           <span className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-dashed border-ccweb-cyan/50 bg-ccweb-cyan/10 text-ccweb-cyan">
@@ -180,7 +180,7 @@ export function HomeFeedSection({ user }) {
             {suggested.map((s) => (
               <Link
                 key={s.id}
-                to="/community"
+                to={`/u/${encodeURIComponent(s.id)}`}
                 className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-xs text-white hover:border-ccweb-cyan/30"
               >
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-ccweb-cyan/30 to-ccweb-violet/30 text-[10px] font-bold">

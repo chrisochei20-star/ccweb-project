@@ -425,7 +425,7 @@ useEffect(() => {
           )}
           {tab === "history" && step === "form" && (
             <div className="space-y-3">
-              {MOCK_TRANSACTIONS.map((tx) => (
+              {transactions.map((tx) => (
                 <div key={tx.id} className="flex items-center gap-3 bg-white/5 rounded-xl p-3">
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center text-lg ${tx.type === "deposit" ? "bg-green-500/20" : tx.type === "withdrawal" ? "bg-red-500/20" : "bg-blue-500/20"}`}>{tx.type === "deposit" ? "⬇" : tx.type === "withdrawal" ? "⬆" : "🛒"}</div>
                   <div className="flex-1 min-w-0"><p className="text-white/80 text-sm capitalize font-medium">{tx.type}</p><p className="text-white/30 text-xs">{tx.method} · {tx.date}</p></div>

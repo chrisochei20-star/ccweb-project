@@ -86,7 +86,17 @@ function createGrowthApp() {
         body.buyerName = body.buyerDisplayName || "Buyer";
       }
       const out = usePg() ? await pg.createOrder(body) : hub.createOrder(body);
-      if (out.error) return res.status(400).json(out);
+
+   if (!out.error) {
+   recordWalletTransaction(uid, {
+    type: "purchase",
+    amount: Number(body.amount || body.price || 0),
+    method: "Marketplace",
+    status: "completed",
+  });
+}  
+
+    if (out.error) return res.status(400).json(out);
       res.status(201).json(out);
     } catch (e) {
       res.status(500).json({ error: e.message || "Server error" });
@@ -120,6 +130,16 @@ function createGrowthApp() {
       if (!order) return res.status(404).json({ error: "Order not found." });
       if (order.buyerId !== uid) return res.status(403).json({ error: "Only the buyer can confirm release." });
       const out = usePg() ? await pg.confirmOrder(req.params.id) : hub.confirmOrder(req.params.id);
+
+     if (!out.error && order) {
+     recordWalletTransaction(order.sellerId, {
+     type: "sale",
+     amount: Number(order.amount || order.price || 0),
+     method: "Marketplace",
+     status: "completed",
+   });
+ }
+
       if (out.error) return res.status(400).json(out);
       res.json(out);
     } catch (e) {

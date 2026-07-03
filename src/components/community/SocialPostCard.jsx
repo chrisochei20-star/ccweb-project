@@ -176,6 +176,25 @@ export function SocialPostCard({
             )}
             <span className="text-xs text-ccweb-muted">· {timeAgo(post.createdAt)}</span>
           </div>
+      
+    <div className="mt-2 flex items-center gap-2">
+  <button
+    type="button"
+    onClick={goToAuthorProfile}
+    className="rounded-full border border-white/10 px-3 py-1 text-xs font-medium text-white hover:border-ccweb-cyan hover:text-ccweb-cyan"
+  >
+    View Profile
+  </button>
+
+  <button
+    type="button"
+    onClick={() => navigate(`/chat?user=${post.authorUserId}`)}
+    className="rounded-full bg-ccweb-cyan px-3 py-1 text-xs font-semibold text-black hover:opacity-90"
+  >
+    Message
+  </button>
+</div>
+
           <h3 className="mt-1 text-[15px] font-semibold leading-snug text-white">{post.title}</h3>
           <p className="mt-1.5 whitespace-pre-wrap text-[14px] leading-relaxed text-slate-300/95">{post.content}</p>
           {post.imageUrl && (

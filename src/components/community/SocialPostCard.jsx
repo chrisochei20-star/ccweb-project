@@ -254,20 +254,37 @@ export function SocialPostCard({
                   <SkeletonText lines={2} />
                 </div>
               )}
-              {!commentsLoading && (comments || []).map((c) => (
-                <div key={c.id} className="flex gap-3 border-b border-white/5 px-1 py-3 last:border-0">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ccweb-cyan/30 to-ccweb-violet/30 text-[10px] font-bold text-white">
-                    {initials(c.authorDisplayName)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-sm font-semibold text-white">{c.authorDisplayName}</span>
-                      <span className="text-[11px] text-ccweb-muted">{timeAgo(c.createdAt)}</span>
-                    </div>
-                    <p className="mt-0.5 text-sm text-white/85 leading-relaxed">{c.body}</p>
-                  </div>
-                </div>
-              ))}
+{!commentsLoading && (comments || []).map((c) => (
+  <div key={c.id} className="flex gap-3 border-b border-white/5 px-1 py-3 last:border-0">
+    <button
+      type="button"
+      onClick={() => c.authorSlug && navigate(`/u/${c.authorSlug}`)}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ccweb-cyan/30 to-ccweb-violet/30 text-[10px] font-bold text-white"
+    >
+      {initials(c.authorDisplayName)}
+    </button>
+
+    <div className="min-w-0 flex-1">
+      <div className="flex items-baseline gap-2">
+        <button
+          type="button"
+          onClick={() => c.authorSlug && navigate(`/u/${c.authorSlug}`)}
+          className="text-sm font-semibold text-white hover:text-ccweb-cyan transition"
+        >
+          {c.authorDisplayName}
+        </button>
+
+        <span className="text-[11px] text-ccweb-muted">
+          {timeAgo(c.createdAt)}
+        </span>
+      </div>
+
+      <p className="mt-0.5 text-sm text-white/85 leading-relaxed">
+        {c.body}
+      </p>
+    </div>
+  </div>
+))}
               {!commentsLoading && (comments || []).length === 0 && (
                 <p className="py-3 text-center text-xs text-ccweb-muted">No replies yet — be first!</p>
               )}

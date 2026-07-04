@@ -18,6 +18,7 @@ const { getPool } = require("./db/pool");
 const pgGrowth = require("./db/persistenceGrowth");
 const learningPg = require("./db/persistenceLearning");
 const growthEngine = require("./db/persistenceGrowthEngine");
+const persistenceBeta = require("./db/persistenceBeta");
 const { migrate } = require("./db/migrate");
 const { validateOrExit } = require("./productionGate");
 const { logger } = require("./logging/logger");
@@ -1427,14 +1428,16 @@ async function handleCreatePostComment(req, res, postId) {
     return;
   }
   const author = ensureUser(actor.userId, { displayName: actor.displayName });
-
+  const authorSlug = await persistenceBeta.getSlugForUser(author.id);
   if (useCommunityPg()) {
     try {
-      const row = await communityPg.createComment(postId, {
-        authorUserId: author.id,
-        authorDisplayName: author.displayName,
-        body: text.slice(0, 2000),
-      });
+  const row = await communityPg.createComment(postId, {
+  authorUserId: author.id,
+  authorDisplayName: author.displayName,
+  authorSlug,
+  body: text.slice(0, 2000),
+  });
+
       const post = (await communityPg.getPostWithComments(postId)).post;
       createNotification({
         type: "community_post_comment",

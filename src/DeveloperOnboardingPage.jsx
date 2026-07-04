@@ -236,7 +236,7 @@ export function DeveloperOnboardingPage() {
               <button
                 type="button"
                 className="ml-3 text-xs text-ccweb-muted underline"
-                onClick={() => navigate("/profile")}
+                onClick={() => navigate(`/u/${user.slug}`)}
               >
                 Profile
               </button>

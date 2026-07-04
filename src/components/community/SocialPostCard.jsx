@@ -44,7 +44,7 @@ export function SocialPostCard({
     if (post.authorSlug) {
       navigate(`/u/${post.authorSlug}`);
     } else if (post.authorUserId && post.authorUserId === user?.id) {
-      navigate("/profile");
+      navigate(`/u/${post.authorSlug}`);
     }
   }
 

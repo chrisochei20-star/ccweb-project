@@ -17,6 +17,7 @@ async function listPosts(limit = 80, offset = 0) {
      FROM community_posts p
      LEFT JOIN (SELECT post_id, COUNT(*)::int AS cnt FROM community_post_comments GROUP BY post_id) c ON c.post_id = p.id
      LEFT JOIN ccweb_user_profiles up ON up.user_id = p.author_user_id
+     LEFT JOIN users u ON u.id = p.author_user_id
      ORDER BY p.created_at DESC
      LIMIT $1 OFFSET $2`,
     [lim, off]
@@ -75,6 +76,7 @@ function mapPost(r, commentCount) {
     id: r.id,
     authorUserId: r.author_user_id,
     authorDisplayName: r.author_display_name,
+    authorSlug: r.slug || null,
     title: r.title,
     content: r.content,
     tags: tagArr,
@@ -89,15 +91,26 @@ function mapPost(r, commentCount) {
 async function getPostWithComments(postId) {
   const { rows: pr } = await query("SELECT * FROM community_posts WHERE id = $1", [postId]);
   if (!pr[0]) return null;
-  const { rows: cr } = await query(
-    "SELECT * FROM community_post_comments WHERE post_id = $1 ORDER BY created_at ASC",
-    [postId]
-  );
+const { rows: cr } = await query(
+  `SELECT c.*,
+          up.avatar_url AS author_avatar_url,
+          u.slug
+   FROM community_post_comments c
+   LEFT JOIN ccweb_user_profiles up
+     ON up.user_id = c.author_user_id
+   LEFT JOIN users u
+     ON u.id = c.author_user_id
+   WHERE c.post_id = $1
+   ORDER BY c.created_at ASC`,
+  [postId]
+);
   const comments = cr.map((c) => ({
     id: c.id,
     postId: c.post_id,
     authorUserId: c.author_user_id,
-    authorDisplayName: c.author_display_name,
+    authorDisplayName: c.author_display_name, 
+    authorSlug: c.slug || null,
+    authorAvatarUrl: c.author_avatar_url || null,
     body: c.body,
     createdAt: new Date(c.created_at).toISOString(),
   }));
@@ -105,19 +118,25 @@ async function getPostWithComments(postId) {
 }
 
 async function listComments(postId) {
-  const { rows } = await query(
-    "SELECT * FROM community_post_comments WHERE post_id = $1 ORDER BY created_at ASC",
-    [postId]
-  );
+const { rows: pr } = await query(
+  `SELECT p.*, up.avatar_url AS author_avatar_url, u.slug
+   FROM community_posts p
+   LEFT JOIN ccweb_user_profiles up ON up.user_id = p.author_user_id
+   LEFT JOIN users u ON u.id = p.author_user_id
+   WHERE p.id = $1`,
+  [postId]
+);
   return rows.map((c) => ({
     id: c.id,
     postId: c.post_id,
     authorUserId: c.author_user_id,
     authorDisplayName: c.author_display_name,
     body: c.body,
+    authorSlug: c.slug || null,
+    authorAvatarUrl: c.author_avatar_url || null,
     createdAt: new Date(c.created_at).toISOString(),
-  }));
-}
+    }));
+    }
 
 async function createComment(postId, body) {
   const id = newId("cmt");

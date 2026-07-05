@@ -39,14 +39,18 @@ export function SocialPostCard({
   const [repostBump, setRepostBump] = useState(0);
   const canInteract = Boolean(getSessionToken());
 
-  function goToAuthorProfile(e) {
-    e.stopPropagation();
-    if (post.authorSlug) {
-      navigate(`/u/${post.authorSlug}`);
-    } else if (post.authorUserId && post.authorUserId === user?.id) {
-      navigate(`/u/${post.authorSlug}`);
-    }
+function goToAuthorProfile(e) {
+  e.stopPropagation();
+
+  if (post.authorSlug) {
+    navigate(`/u/${post.authorSlug}`);
+    return;
   }
+
+  if (post.authorUserId) {
+    navigate(`/u/${post.authorUserId}`);
+  }
+}
 
   const loadReactions = useCallback(async () => {
     try {

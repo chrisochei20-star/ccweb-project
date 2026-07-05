@@ -9,6 +9,7 @@ import {
   fetchCommunityPosts,
   fetchPostComments,
 } from "../api/communityApi";
+import { apiUrl } from "../config/env";
 import { SocialPostCard } from "../components/community/SocialPostCard";
 import { Skeleton } from "../components/ui/Skeleton";
 import { composerPaddingBottom, useKeyboardInset } from "../hooks/useKeyboardInset";
@@ -223,7 +224,7 @@ export function CommunityShellPage() {
         const fd = new FormData();
         fd.append("file", postImage);
         const token = localStorage.getItem("ccweb_session_token") || sessionStorage.getItem("ccweb_session_token");
-    const up = await fetch("https://ccweb-api-production-a82c.up.railway.app/api/v1/uploads/media?folder=posts", {
+        const up = await fetch(apiUrl("/api/v1/uploads/media?folder=posts"), {
   method: "POST",
   headers: { Authorization: `Bearer ${token}` },
   body: fd

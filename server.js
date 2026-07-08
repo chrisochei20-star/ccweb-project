@@ -1455,9 +1455,13 @@ async function handleCreatePostComment(req, res, postId) {
         broadcastCommunityUpdate({ kind: "comment", postId });
       } catch (_) {}
       sendJson(res, 201, row, req);
-    } catch (e) {
-      sendJson(res, 500, { error: e.message }, req);
-    }
+    }  catch (e) {
+  console.error(e);
+  sendJson(res, 500, {
+    error: e.message,
+    stack: e.stack,
+  }, req);
+}
     return;
   }
 

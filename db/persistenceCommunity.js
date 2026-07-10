@@ -13,11 +13,14 @@ async function listPosts(limit = 80, offset = 0) {
   const lim = Math.min(100, Math.max(1, Number(limit) || 80));
   const off = Math.max(0, Number(offset) || 0);
   const { rows } = await query(
-    `SELECT p.*, COALESCE(c.cnt, 0)::int AS comment_count, up.avatar_url AS author_avatar_url
+      `SELECT p.*,
+       COALESCE(c.cnt, 0)::int AS comment_count,
+       up.avatar_url AS author_avatar_url,
+       u.slug
      FROM community_posts p
      LEFT JOIN (SELECT post_id, COUNT(*)::int AS cnt FROM community_post_comments GROUP BY post_id) c ON c.post_id = p.id
      LEFT JOIN ccweb_user_profiles up ON up.user_id = p.author_user_id
-     LEFT JOIN ccweb_profiles u ON u.user_id = p.author_user_id
+     LEFT JOIN ccweb_users u ON u.id = p.author_user_id
      ORDER BY p.created_at DESC
      LIMIT $1 OFFSET $2`,
     [lim, off]
@@ -65,7 +68,18 @@ async function createPost(body) {
       body.imageUrl || null,
     ]
   );
-  const { rows } = await query("SELECT * FROM community_posts WHERE id = $1", [id]);
+  const { rows } = await query(
+  `SELECT p.*,
+    up.avatar_url AS author_avatar_url,
+    u.slug
+   FROM community_posts p
+   LEFT JOIN ccweb_user_profiles up
+     ON up.user_id = p.author_user_id
+   LEFT JOIN ccweb_users u
+     ON u.id = p.author_user_id
+   WHERE p.id = $1`,
+  [id]
+);
   return mapPost(rows[0], 0);
 }
 
@@ -98,8 +112,8 @@ const { rows: cr } = await query(
    FROM community_post_comments c
    LEFT JOIN ccweb_user_profiles up
      ON up.user_id = c.author_user_id
-   LEFT JOIN ccweb_profiles u
-   ON u.user_id = c.author_user_id
+   LEFT JOIN ccweb_users u
+   ON u.id = c.author_user_id
    WHERE c.post_id = $1
    ORDER BY c.created_at ASC`,
   [postId]
@@ -122,7 +136,7 @@ const { rows: pr } = await query(
   `SELECT p.*, up.avatar_url AS author_avatar_url, u.slug
    FROM community_posts p
    LEFT JOIN ccweb_user_profiles up ON up.user_id = p.author_user_id
-   LEFT JOIN ccweb_profiles u ON u.user_id = p.author_user_id
+   LEFT JOIN ccweb_users u ON u.id = p.author_user_id
    WHERE p.id = $1`,
   [postId]
 );
